@@ -31,4 +31,4 @@ Tests run against real SQLite databases in temporary directories, and federation
 
 ## Pull requests
 
-Keep each one to one change, with a description of what it does and why. By contributing, you agree that your work is licensed under the same terms as the project: MIT or Apache 2.0, at the user's option.
+Keep each one to one change, with a description of what it does and why. By contributing, you agree that your work is licensed under MIT.

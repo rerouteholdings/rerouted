@@ -99,4 +99,4 @@ Before you send a change, read [CONTRIBUTING.md](CONTRIBUTING.md). To report a v
 
 ## License
 
-You can use rerouted under the MIT license or the Apache License 2.0, whichever you choose. See [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE). Reroute Holdings LLC also pledges never to assert its patents against Tieroute implementations: see [PATENTS.md](PATENTS.md).
+You can use rerouted under the MIT license. See [LICENSE](LICENSE-MIT). Reroute Holdings LLC also pledges never to assert its patents against Tieroute implementations: see [PATENTS.md](PATENTS.md).

@@ -2,3 +2,5 @@
 /.env
 /rerouted
 /dist/
+cmd/.DS_Store
+.DS_Store
