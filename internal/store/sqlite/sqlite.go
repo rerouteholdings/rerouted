@@ -683,6 +683,7 @@ func (c contacts) Delete(ctx context.Context, owner, other string) error {
 }
 
 func (c contacts) List(ctx context.Context, owner string, after string, limit int) ([]store.Contact, string, error) {
+	limit = max(limit, 1) // pages hold at least one item, so the next cursor is always one of them
 	rows, err := c.db.QueryContext(ctx, "SELECT other, state, since, request FROM contacts WHERE owner = ? AND other > ? AND state != 'declined' ORDER BY other LIMIT ?", owner, after, limit+1)
 	if err != nil {
 		return nil, "", err
@@ -750,6 +751,7 @@ func (x inbox) Append(ctx context.Context, owner string, it store.Item) (string,
 }
 
 func (x inbox) List(ctx context.Context, owner string, device []byte, after string, limit int) ([]store.Item, string, bool, error) {
+	limit = max(limit, 1) // pages hold at least one item, so the next cursor is always one of them
 	from, err := strconv.ParseInt(after, 10, 64)
 	if after == "" || err != nil {
 		from = 0

@@ -517,7 +517,15 @@ func (s *Server) allowed(ctx context.Context, d delivery, to, origin string) boo
 // ---- inbox (SPEC §9.4) ----
 
 func (s *Server) getInbox(w http.ResponseWriter, r *http.Request, sess session) {
-	items, next, gap, _ := s.st.Inbox().List(r.Context(), sess.id, sess.device, r.URL.Query().Get("after"), int(queryInt(r, "limit", 100)))
+	limit, ok := pageLimit(w, r)
+	if !ok {
+		return
+	}
+	items, next, gap, err := s.st.Inbox().List(r.Context(), sess.id, sess.device, r.URL.Query().Get("after"), limit)
+	if err != nil {
+		s.unavailableRead(w, "reading an inbox", err)
+		return
+	}
 	out := []map[string]any{}
 	for _, it := range items {
 		m := map[string]any{"cursor": it.Cursor, "ts": it.TS}

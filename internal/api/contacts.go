@@ -39,6 +39,28 @@ func queryInt(r *http.Request, key string, def int64) int64 {
 	return def
 }
 
+// maxPage is the most items one page of a list returns, and defaultPage how many it
+// returns when the request doesn't say (GET inbox, GET contacts).
+const (
+	maxPage     = 500
+	defaultPage = 100
+)
+
+// pageLimit reads a list's `limit` parameter. It writes a 400 itself and returns false
+// for anything but a positive whole number; numbers over maxPage get maxPage.
+func pageLimit(w http.ResponseWriter, r *http.Request) (int, bool) {
+	v := r.URL.Query().Get("limit")
+	if v == "" {
+		return defaultPage, true
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || n < 1 {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "limit must be a whole number from 1 up")
+		return 0, false
+	}
+	return int(min(n, maxPage)), true
+}
+
 // notify puts a server notice in a user's inbox (spec/api/client-stage1.md).
 func (s *Server) notify(ctx context.Context, owner string, notice map[string]any) {
 	b, err := wire.Marshal(notice)
@@ -291,7 +313,15 @@ func (s *Server) contactAccept(w http.ResponseWriter, r *http.Request, sess sess
 }
 
 func (s *Server) listContacts(w http.ResponseWriter, r *http.Request, sess session) {
-	cs, next, _ := s.st.Contacts().List(r.Context(), sess.id, r.URL.Query().Get("after"), int(queryInt(r, "limit", 100)))
+	limit, ok := pageLimit(w, r)
+	if !ok {
+		return
+	}
+	cs, next, err := s.st.Contacts().List(r.Context(), sess.id, r.URL.Query().Get("after"), limit)
+	if err != nil {
+		s.unavailableRead(w, "listing contacts", err)
+		return
+	}
 	items := []map[string]any{}
 	for _, c := range cs {
 		m := map[string]any{"id": c.ID, "state": c.State, "since": c.Since}

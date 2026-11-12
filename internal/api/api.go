@@ -317,6 +317,13 @@ func writeError(w http.ResponseWriter, status int, code, msg string) {
 	writeBody(w, status, wire.Error{Code: code, Msg: msg})
 }
 
+// unavailableRead answers a request whose storage failed with 503, so the client
+// retries, instead of an answer that would look complete.
+func (s *Server) unavailableRead(w http.ResponseWriter, what string, err error) {
+	s.log.Error(what, "err", err)
+	writeError(w, http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "")
+}
+
 func notImplemented(w http.ResponseWriter, r *http.Request) {
 	writeError(w, http.StatusNotImplemented, wire.ErrCodeNotImplemented, r.Method+" "+r.URL.Path)
 }
