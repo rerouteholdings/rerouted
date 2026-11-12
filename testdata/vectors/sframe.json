@@ -1,0 +1,97 @@
+{
+  "cipher_suite": 4,
+  "description": "SFrame for calls (SPEC §15.2, RFC 9605), cipher suite AES_128_GCM_SHA256_128 (0x0004). rfc9605: the RFC's own Appendix C.3 case for this suite. headers: KID and CTR encodings (§4.3). tieroute: KID = (leaf_index \u003c\u003c 4) + (epoch % 16), keys from base_key, empty metadata. base_key stands in for MLS-Exporter(\"SFrame 1.0 Tieroute call\", call, 16).",
+  "headers": [
+    {
+      "ctr": 0,
+      "header_hex": "00",
+      "kid": 0
+    },
+    {
+      "ctr": 1,
+      "header_hex": "01",
+      "kid": 0
+    },
+    {
+      "ctr": 255,
+      "header_hex": "08ff",
+      "kid": 0
+    },
+    {
+      "ctr": 7,
+      "header_hex": "77",
+      "kid": 7
+    },
+    {
+      "ctr": 0,
+      "header_hex": "8008",
+      "kid": 8
+    },
+    {
+      "ctr": 17767,
+      "header_hex": "9901234567",
+      "kid": 291
+    },
+    {
+      "ctr": 1000,
+      "header_hex": "891003e8",
+      "kid": 16
+    },
+    {
+      "ctr": 1099511627776,
+      "header_hex": "9d0f9e010000000000",
+      "kid": 3998
+    }
+  ],
+  "notice": "Test vectors for Tieroute v1 (draft). These keys are public: never use them for anything real.",
+  "rfc9605": {
+    "base_key_hex": "000102030405060708090a0b0c0d0e0f",
+    "ciphertext_hex": "9901234567b7412c2513a1b66dbb48841bbaf17f598751176ad847681a69c6d0b091c07018ce4adb34eb",
+    "ctr": 17767,
+    "kid": 291,
+    "metadata_hex": "4945544620534672616d65205747",
+    "plaintext_hex": "64726166742d696574662d736672616d652d656e63",
+    "sframe_key_hex": "d34f547f4ca4f9a7447006fe7fcbf768",
+    "sframe_salt_hex": "75234edefe07819026751816"
+  },
+  "tieroute": {
+    "base_key_hex": "404142434445464748494a4b4c4d4e4f",
+    "call_id_hex": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+    "cases": [
+      {
+        "ciphertext_hex": "100583200d3ec21e1289f5af08b992413bf05580bb620486be6eebee69f73d723c5e2fa663e19447c0424139a19c",
+        "ctr": 0,
+        "epoch": 1,
+        "header_hex": "10",
+        "kid": 1,
+        "leaf_index": 0,
+        "plaintext": "an Opus frame, 20 ms of audio",
+        "sframe_key_hex": "dee773ab7cd6ae2c2b8c020d0734b9f5",
+        "sframe_salt_hex": "a6067c638e119f8a959da382"
+      },
+      {
+        "ciphertext_hex": "8731cb6803899a8a3890989af0a4d652c6300fe49f3a3822ecfc4b642165c77814ea2f25484dfdf3e2338d7842e414",
+        "ctr": 7,
+        "epoch": 17,
+        "header_hex": "8731",
+        "kid": 49,
+        "leaf_index": 3,
+        "plaintext": "an Opus frame, 20 ms of audio",
+        "sframe_key_hex": "6868e90558ce9deff13fec3f3104231e",
+        "sframe_salt_hex": "ef6d447c80752c70f4f97ef3"
+      },
+      {
+        "ciphertext_hex": "990f9e03e8c04437ed2d191679c3df010751a1c08f1bd555d4a2c1aab8f35843150e4d095962b0f159f683a4b495d2b51967",
+        "ctr": 1000,
+        "epoch": 30,
+        "header_hex": "990f9e03e8",
+        "kid": 3998,
+        "leaf_index": 249,
+        "plaintext": "an Opus frame, 20 ms of audio",
+        "sframe_key_hex": "d3232ac2f89967ba3617783d6b8e15e3",
+        "sframe_salt_hex": "15b3ed32602a2408b58fbb4d"
+      }
+    ],
+    "exporter_label": "SFrame 1.0 Tieroute call"
+  }
+}

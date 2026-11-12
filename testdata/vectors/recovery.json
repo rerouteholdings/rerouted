@@ -1,0 +1,19 @@
+{
+  "code_hex": "000102030405060708090a0b0c0d0e0f",
+  "code_words": "abandon amount liar amount expire adjust cage candy arch gather drum buyer",
+  "derivation": "prk = HKDF-Extract(salt=\"tieroute recovery\", ikm=code); seed_i = HKDF-Expand(prk, \"signing\" || uint32_be(i), 32); wrap = HKDF-Expand(prk, \"account wrap\", 16); commitment = SHA-256(public key)",
+  "description": "Recovery code derivation with pre-rotation (SPEC §6.1, §6.3).",
+  "notice": "Test vectors for Tieroute v1 (draft). These keys are public: never use them for anything real.",
+  "prk_hex": "b4e6bd42a033b0c067c3f9ca958a08faa077dff0d2ff1de396239053f6a01542",
+  "recovery_key_1": {
+    "commitment_sha256": "78936dd5e072cac436651a3172543be69ff5497cef4b9a344c7d88364c1f3a4b",
+    "public_hex": "21b0cee5bf31b6d97eab7d9fbf3181707443cb4e4788f90de7010f4944a09357",
+    "seed_hex": "f3fe926abb75d05f8ec1335f125d9f60cd38d54052889d2642b545d7103f1772"
+  },
+  "recovery_key_2": {
+    "commitment_sha256": "9490e14f17abab22f73b766f4d7f69b914f030b742505f2be19a60c9cee221aa",
+    "public_hex": "76cfbececb5f350f0404495d6d7af94697223cad3844cd0bc3e9ae48635739a4",
+    "seed_hex": "5433202c685f9933dd06e2722cc1ca354b0de0ad5c95aa46e85e79055e91565c"
+  },
+  "recovery_wrap_hex": "2937473c680c3fd9ded155e0da424527"
+}

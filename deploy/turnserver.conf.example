@@ -1,0 +1,49 @@
+# coturn as the call relay for a rerouted homeserver (SPEC §15.1). Install as
+# /etc/turnserver.conf. rerouted hands out time-limited credentials for it (GET turn),
+# signed with the shared secret below, which must match REROUTED_TURN_SECRET.
+#
+# Replace HOST_IP with the relay host's public address, and TURN_SECRET with a long random
+# secret. TURN can't go through an HTTP proxy: clients reach this host directly.
+
+listening-port=3478
+listening-ip=HOST_IP
+relay-ip=HOST_IP
+# Relayed media uses these UDP ports: about two per person in a call.
+min-port=49160
+max-port=49399
+
+use-auth-secret
+static-auth-secret=TURN_SECRET
+realm=chat.example
+fingerprint
+
+# Never relay into this host or any private network: with credentials, a caller could
+# otherwise reach services that only listen inside (Docker networks, localhost).
+no-multicast-peers
+denied-peer-ip=0.0.0.0-0.255.255.255
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=100.64.0.0-100.127.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.0.0.0-192.0.0.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=198.18.0.0-198.19.255.255
+denied-peer-ip=::1
+denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+
+# Calls only need UDP, and TCP relaying would let a caller open connections to services on
+# this host's public address.
+no-tcp-relay
+
+# Limits, so one account can't use the relay up. max-bps is bytes a second per session.
+user-quota=12
+total-quota=200
+max-bps=750000
+
+no-tls
+no-dtls
+no-cli
+no-software-attribute
+syslog

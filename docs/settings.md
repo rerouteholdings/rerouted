@@ -1,0 +1,68 @@
+# Settings
+
+rerouted reads its settings from environment variables, and from a settings file named by `-env` (`.env` by default). A variable that's already set in the environment wins over the file. [`.env.example`](../.env.example) is a starting point with every setting.
+
+rerouted checks its settings when it starts, and exits with a message naming the problem if one is wrong.
+
+## Server
+
+| Setting | Default | What it does |
+|---|---|---|
+| `REROUTED_NAME` | None: required | This server's DNS name, such as `chat.example`. Never an IP address or a URL (SPEC §5.1). |
+| `REROUTED_LISTEN` | `127.0.0.1:8080` | The address and port rerouted listens on, over plain HTTP. Put a reverse proxy in front for TLS. |
+| `REROUTED_PUBLIC_URL` | `https://` + `REROUTED_NAME` | The origin clients and other servers reach the APIs at. It MUST be `https://` outside dev mode. |
+| `REROUTED_API_PATH` | `/.well-known/tieroute/v1/` | Where the APIs live under the public URL. The server document publishes them, so clients and other servers find them there (SPEC §8.1). |
+| `REROUTED_DATA_DIR` | `./data` | Where the database, files, and server key live. |
+| `REROUTED_STORE` | `sqlite` | `sqlite` keeps everything in `REROUTED_DATA_DIR`. `temp` uses a throwaway database that's deleted on shutdown, for demos. |
+
+## Identities and registration
+
+| Setting | Default | What it does |
+|---|---|---|
+| `REROUTED_HANDLES` | None | The domain to give out handles under, such as `chat.example` for `@kat.chat.example`. It needs wildcard DNS and TLS for its subdomains. |
+| `REROUTED_REGISTRATION` | `closed` | `invite`: people sign up with the registration code. `closed`: nobody can sign up (SPEC §8.2). |
+| `REROUTED_REGISTRATION_CODE` | None | The registration code, at least 10 characters. Required when registration is `invite`. |
+| `REROUTED_REGISTRATION_PUBLIC` | `off` | `on` publishes the code in the server document, so anyone can sign up. |
+| `REROUTED_PAUSE_MOVES` | `off` | `on` refuses device-signed moves to and from this server (SPEC §6.6). Recovery-signed entries still go through. |
+
+## Storage quotas
+
+Sizes are a number of bytes, or a number with a `K`, `M`, or `G` suffix for KiB, MiB, or GiB.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `REROUTED_MEDIA_QUOTA` | `1G` | Bytes of files each identity may store (SPEC §14). |
+| `REROUTED_BACKUP_QUOTA` | `1G` | Bytes of backups each identity may store (SPEC §7.5). |
+
+## Call relay
+
+| Setting | Default | What it does |
+|---|---|---|
+| `REROUTED_TURN_URLS` | None | The relay's `turn:` and `turns:` URLs, comma-separated (SPEC §15.1). Without them, `GET turn` answers `501`. |
+| `REROUTED_TURN_SECRET` | None | The secret shared with the relay (coturn's `static-auth-secret`), at least 16 characters. Required with `REROUTED_TURN_URLS`. |
+
+See [Run a call relay](run-a-call-relay.md).
+
+## Certificates on demand
+
+A reverse proxy that gets certificates on demand, such as Caddy, can ask rerouted at `GET /v0/tls-ask?domain=NAME` whether to issue one. rerouted says yes for its own name, for handles registered on it, and for the names below.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `REROUTED_TLS_ASK_ALLOW` | None | Other hostnames under the handle domain that may get certificates, such as a website at `www.chat.example`. Comma-separated. |
+| `REROUTED_TLS_ASK_ALSO` | None | The base URLs of other rerouted instances on the same host to ask too, such as `http://127.0.0.1:8081`, when the proxy can only ask one. Comma-separated. |
+
+## Public firehose
+
+| Setting | Default | What it does |
+|---|---|---|
+| `REROUTED_PUBLIC_FIREHOSE` | `off` | `on` serves a public feed of the metadata of every delivery stored here. See [Public firehose](public-firehose.md) before turning it on. |
+
+## Development
+
+These let servers on one machine federate over plain HTTP. Never use them on a public server.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `REROUTED_DEV` | `off` | `on` allows `REROUTED_DEV_PEERS`, and a public URL that isn't `https://`. |
+| `REROUTED_DEV_PEERS` | None | Servers to reach over plain HTTP, as `name=URL` pairs, comma-separated, such as `a.test=http://127.0.0.1:18091,b.test=http://127.0.0.1:18092`. |

@@ -1,0 +1,32 @@
+# Caddy in front of one rerouted instance for chat.example, with free handles under it
+# (kat.chat.example). rerouted listens on 127.0.0.1:8080 (REROUTED_LISTEN).
+#
+# Handle subdomains get certificates on demand. Before issuing one, Caddy asks rerouted
+# whether the handle exists, so random subdomains can't use up Let's Encrypt's rate limits.
+{
+	on_demand_tls {
+		ask http://127.0.0.1:8080/v0/tls-ask
+	}
+}
+
+chat.example {
+	@tieroute path /.well-known/tieroute/* /v0/*
+	handle @tieroute {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle {
+		respond 404
+	}
+}
+
+*.chat.example {
+	tls {
+		on_demand
+	}
+	handle /.well-known/tieroute/handle {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle {
+		respond 404
+	}
+}

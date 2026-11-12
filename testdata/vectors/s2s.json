@@ -1,0 +1,25 @@
+{
+  "description": "An S2S request (SPEC §8.3): the POST body is a `signed` envelope with t = \"s2s\", naming the server key by `kid`. The receiver looks `kid` up in the sender's server document, checks the signature, then `to`, `path`, `ts` (within 300 s of its clock), and that it hasn't seen `nonce` from `from` in 600 s.",
+  "notice": "Test vectors for Tieroute v1 (draft). These keys are public: never use them for anything real.",
+  "receiver": "b.example",
+  "receiver_clock": 1794096960,
+  "request": {
+    "body": "{\"body\":{\"id\":\"tr:qd4efvnlgf2nso6tbvq24v3f\"},\"from\":\"a.example\",\"nonce\":\"WlpaWlpaWlpaWlpaWlpaWg\",\"path\":\"identity/fetch\",\"to\":\"b.example\",\"ts\":1794096900}",
+    "sig_input": "[\"tieroute/v1\",\"s2s\",\"{\\\"body\\\":{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\"},\\\"from\\\":\\\"a.example\\\",\\\"nonce\\\":\\\"WlpaWlpaWlpaWlpaWlpaWg\\\",\\\"path\\\":\\\"identity/fetch\\\",\\\"to\\\":\\\"b.example\\\",\\\"ts\\\":1794096900}\"]",
+    "signature_hex": "37aed037dc79a6736e24eb89729bc9d5c10e4ee31594d5c2afd9d8cc85a0b72794017114d60449cc0a55521187ab07ff901ed34a8c597c776cf3e73f5b3b5806",
+    "signed": "{\"b\":\"{\\\"body\\\":{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\"},\\\"from\\\":\\\"a.example\\\",\\\"nonce\\\":\\\"WlpaWlpaWlpaWlpaWlpaWg\\\",\\\"path\\\":\\\"identity/fetch\\\",\\\"to\\\":\\\"b.example\\\",\\\"ts\\\":1794096900}\",\"kid\":\"k1\",\"s\":\"N67QN9x5pnNuJOuJcpvJ1cEOTuMVlNXCr9nYzIWgtyeUAXEU1gRJzApVUhGHqwf_kB7TSoxZfHds8-c_WztYBg\",\"t\":\"s2s\"}",
+    "signed_sha256": "48d75c4cfa20fd9e764bb6d9b75364b47ab291eaa5439decf250d1ef280c5a86",
+    "type": "s2s"
+  },
+  "server_document_key": {
+    "exp": 1801872000,
+    "kid": "k1",
+    "nbf": 1794096000,
+    "pub": "dSnEVtk40rj-kPpsz5FtNGdwpkvLt7UyO2h6zeIM0Aw"
+  },
+  "server_key": {
+    "public_hex": "7529c456d938d2b8fe90fa6ccf916d346770a64bcbb7b5323b687acde20cd00c",
+    "seed_hex": "c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0"
+  },
+  "url_path": "identity/fetch"
+}

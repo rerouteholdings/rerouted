@@ -1,0 +1,228 @@
+{
+  "cases": [
+    {
+      "accepted": 2,
+      "cached": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}"
+      ],
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"home\\\":\\\"c.example\\\",\\\"op\\\":\\\"set-home\\\"}],\\\"prev\\\":\\\"gPhC1asxdNk70w1hrldl8sbd1ueINI-xdVspO4XHEOk\\\",\\\"seq\\\":1,\\\"ts\\\":1794096600}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"1aX-nmBCWvtbcatcj48M0ZeWzgLveqSoO4Sb5fAMwDB2ZI5u_AhEY_l_4wsjGoQrX_iR14-L4Nscxn-ftQWKBQ\",\"t\":\"chain-entry\"}"
+      ],
+      "from": "a.example",
+      "name": "a device move pushed by the previous home itself",
+      "previous_home": {
+        "answers": "unreachable",
+        "server": "a.example"
+      },
+      "why": "the previous home is `from`"
+    },
+    {
+      "accepted": 2,
+      "cached": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}"
+      ],
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"home\\\":\\\"c.example\\\",\\\"op\\\":\\\"set-home\\\"}],\\\"prev\\\":\\\"gPhC1asxdNk70w1hrldl8sbd1ueINI-xdVspO4XHEOk\\\",\\\"seq\\\":1,\\\"ts\\\":1794096600}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"1aX-nmBCWvtbcatcj48M0ZeWzgLveqSoO4Sb5fAMwDB2ZI5u_AhEY_l_4wsjGoQrX_iR14-L4Nscxn-ftQWKBQ\",\"t\":\"chain-entry\"}"
+      ],
+      "from": "c.example",
+      "name": "a device move relayed by the new home, confirmed by the previous home",
+      "previous_home": {
+        "answers": {
+          "chain": [
+            "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}",
+            "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"home\\\":\\\"c.example\\\",\\\"op\\\":\\\"set-home\\\"}],\\\"prev\\\":\\\"gPhC1asxdNk70w1hrldl8sbd1ueINI-xdVspO4XHEOk\\\",\\\"seq\\\":1,\\\"ts\\\":1794096600}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"1aX-nmBCWvtbcatcj48M0ZeWzgLveqSoO4Sb5fAMwDB2ZI5u_AhEY_l_4wsjGoQrX_iR14-L4Nscxn-ftQWKBQ\",\"t\":\"chain-entry\"}"
+          ]
+        },
+        "server": "a.example"
+      },
+      "why": "a.example returns a chain containing it"
+    },
+    {
+      "accepted": 1,
+      "cached": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}"
+      ],
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"home\\\":\\\"c.example\\\",\\\"op\\\":\\\"set-home\\\"}],\\\"prev\\\":\\\"gPhC1asxdNk70w1hrldl8sbd1ueINI-xdVspO4XHEOk\\\",\\\"seq\\\":1,\\\"ts\\\":1794096600}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"1aX-nmBCWvtbcatcj48M0ZeWzgLveqSoO4Sb5fAMwDB2ZI5u_AhEY_l_4wsjGoQrX_iR14-L4Nscxn-ftQWKBQ\",\"t\":\"chain-entry\"}"
+      ],
+      "from": "c.example",
+      "name": "a device move the previous home never appended",
+      "previous_home": {
+        "answers": {
+          "chain": [
+            "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}"
+          ]
+        },
+        "server": "a.example"
+      },
+      "why": "a.example's chain doesn't contain it: the update stops before it"
+    },
+    {
+      "accepted": 1,
+      "cached": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}"
+      ],
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"home\\\":\\\"c.example\\\",\\\"op\\\":\\\"set-home\\\"}],\\\"prev\\\":\\\"gPhC1asxdNk70w1hrldl8sbd1ueINI-xdVspO4XHEOk\\\",\\\"seq\\\":1,\\\"ts\\\":1794096600}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"1aX-nmBCWvtbcatcj48M0ZeWzgLveqSoO4Sb5fAMwDB2ZI5u_AhEY_l_4wsjGoQrX_iR14-L4Nscxn-ftQWKBQ\",\"t\":\"chain-entry\"}"
+      ],
+      "from": "c.example",
+      "name": "a device move whose previous home is gone",
+      "previous_home": {
+        "answers": "unreachable",
+        "server": "a.example"
+      },
+      "why": "it can't be confirmed"
+    },
+    {
+      "accepted": 3,
+      "cached": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}"
+      ],
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"home\\\":\\\"c.example\\\",\\\"op\\\":\\\"set-home\\\"}],\\\"prev\\\":\\\"gPhC1asxdNk70w1hrldl8sbd1ueINI-xdVspO4XHEOk\\\",\\\"seq\\\":1,\\\"ts\\\":1794096600}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"1aX-nmBCWvtbcatcj48M0ZeWzgLveqSoO4Sb5fAMwDB2ZI5u_AhEY_l_4wsjGoQrX_iR14-L4Nscxn-ftQWKBQ\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"aGQ8kOUaMIljEP3obZ7uy-RCRyfdkdijKSf-6VcfHQ4\\\",\\\"seq\\\":2,\\\"ts\\\":1794103200}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"tjt_dsmA8b7hAhyDeAL6O_slHQzrftuT86aC9lJ68aXRvVFW0EJDKrk63r2hDxtXg_162VvIfVsRy-ysAc7AAg\",\"t\":\"chain-entry\"}"
+      ],
+      "from": "c.example",
+      "name": "a recovery-signed entry vouches for the unconfirmed move",
+      "previous_home": {
+        "answers": "unreachable",
+        "server": "a.example"
+      },
+      "why": "the recovery entry vouches for everything before it"
+    },
+    {
+      "accepted": 2,
+      "cached": null,
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"home\\\":\\\"c.example\\\",\\\"op\\\":\\\"set-home\\\"}],\\\"prev\\\":\\\"gPhC1asxdNk70w1hrldl8sbd1ueINI-xdVspO4XHEOk\\\",\\\"seq\\\":1,\\\"ts\\\":1794096600}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"1aX-nmBCWvtbcatcj48M0ZeWzgLveqSoO4Sb5fAMwDB2ZI5u_AhEY_l_4wsjGoQrX_iR14-L4Nscxn-ftQWKBQ\",\"t\":\"chain-entry\"}"
+      ],
+      "from": "c.example",
+      "name": "first fetch: the previous home confirms the move",
+      "previous_home": {
+        "answers": {
+          "chain": [
+            "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}",
+            "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"home\\\":\\\"c.example\\\",\\\"op\\\":\\\"set-home\\\"}],\\\"prev\\\":\\\"gPhC1asxdNk70w1hrldl8sbd1ueINI-xdVspO4XHEOk\\\",\\\"seq\\\":1,\\\"ts\\\":1794096600}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"1aX-nmBCWvtbcatcj48M0ZeWzgLveqSoO4Sb5fAMwDB2ZI5u_AhEY_l_4wsjGoQrX_iR14-L4Nscxn-ftQWKBQ\",\"t\":\"chain-entry\"}"
+          ]
+        },
+        "server": "a.example"
+      },
+      "why": "confirmed"
+    },
+    {
+      "accepted": "reject",
+      "cached": null,
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"home\\\":\\\"c.example\\\",\\\"op\\\":\\\"set-home\\\"}],\\\"prev\\\":\\\"gPhC1asxdNk70w1hrldl8sbd1ueINI-xdVspO4XHEOk\\\",\\\"seq\\\":1,\\\"ts\\\":1794096600}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"1aX-nmBCWvtbcatcj48M0ZeWzgLveqSoO4Sb5fAMwDB2ZI5u_AhEY_l_4wsjGoQrX_iR14-L4Nscxn-ftQWKBQ\",\"t\":\"chain-entry\"}"
+      ],
+      "from": "c.example",
+      "name": "first fetch: the previous home answers without the move",
+      "previous_home": {
+        "answers": {
+          "chain": [
+            "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}"
+          ]
+        },
+        "server": "a.example"
+      },
+      "why": "a backdated move made behind the home's back"
+    },
+    {
+      "accepted": 2,
+      "cached": null,
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"home\\\":\\\"c.example\\\",\\\"op\\\":\\\"set-home\\\"}],\\\"prev\\\":\\\"gPhC1asxdNk70w1hrldl8sbd1ueINI-xdVspO4XHEOk\\\",\\\"seq\\\":1,\\\"ts\\\":1794096600}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"1aX-nmBCWvtbcatcj48M0ZeWzgLveqSoO4Sb5fAMwDB2ZI5u_AhEY_l_4wsjGoQrX_iR14-L4Nscxn-ftQWKBQ\",\"t\":\"chain-entry\"}"
+      ],
+      "from": "c.example",
+      "name": "first fetch: the previous home answers 404",
+      "previous_home": {
+        "answers": "404",
+        "server": "a.example"
+      },
+      "why": "a home that forgot the identity is skipped"
+    },
+    {
+      "accepted": "reject",
+      "cached": null,
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"home\\\":\\\"c.example\\\",\\\"op\\\":\\\"set-home\\\"}],\\\"prev\\\":\\\"gPhC1asxdNk70w1hrldl8sbd1ueINI-xdVspO4XHEOk\\\",\\\"seq\\\":1,\\\"ts\\\":1794096600}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"1aX-nmBCWvtbcatcj48M0ZeWzgLveqSoO4Sb5fAMwDB2ZI5u_AhEY_l_4wsjGoQrX_iR14-L4Nscxn-ftQWKBQ\",\"t\":\"chain-entry\"}"
+      ],
+      "from": "c.example",
+      "name": "first fetch: the previous home is unreachable",
+      "previous_home": {
+        "answers": "unreachable",
+        "server": "a.example"
+      },
+      "why": "an unanswered question isn't a yes: try again later; a home that's gone for good means the move needs the recovery code"
+    },
+    {
+      "accepted": 3,
+      "cached": null,
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"home\\\":\\\"c.example\\\",\\\"op\\\":\\\"set-home\\\"}],\\\"prev\\\":\\\"gPhC1asxdNk70w1hrldl8sbd1ueINI-xdVspO4XHEOk\\\",\\\"seq\\\":1,\\\"ts\\\":1794096600}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"1aX-nmBCWvtbcatcj48M0ZeWzgLveqSoO4Sb5fAMwDB2ZI5u_AhEY_l_4wsjGoQrX_iR14-L4Nscxn-ftQWKBQ\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"aGQ8kOUaMIljEP3obZ7uy-RCRyfdkdijKSf-6VcfHQ4\\\",\\\"seq\\\":2,\\\"ts\\\":1794103200}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"tjt_dsmA8b7hAhyDeAL6O_slHQzrftuT86aC9lJ68aXRvVFW0EJDKrk63r2hDxtXg_162VvIfVsRy-ysAc7AAg\",\"t\":\"chain-entry\"}"
+      ],
+      "from": "c.example",
+      "name": "first fetch: a recovery entry vouches for a move the previous home doesn't know",
+      "previous_home": {
+        "answers": {
+          "chain": [
+            "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}"
+          ]
+        },
+        "server": "a.example"
+      },
+      "why": "vouched for by recovery, so not checked"
+    },
+    {
+      "accepted": "reject",
+      "cached": null,
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"home\\\":\\\"c.example\\\",\\\"op\\\":\\\"set-home\\\"}],\\\"prev\\\":\\\"gPhC1asxdNk70w1hrldl8sbd1ueINI-xdVspO4XHEOk\\\",\\\"seq\\\":1,\\\"ts\\\":1794096600}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"1aX-nmBCWvtbcatcj48M0ZeWzgLveqSoO4Sb5fAMwDB2ZI5u_AhEY_l_4wsjGoQrX_iR14-L4Nscxn-ftQWKBQ\",\"t\":\"chain-entry\"}"
+      ],
+      "from": "a.example",
+      "name": "first fetch from a server the chain doesn't name as home",
+      "previous_home": {
+        "answers": {
+          "chain": [
+            "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}",
+            "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"home\\\":\\\"c.example\\\",\\\"op\\\":\\\"set-home\\\"}],\\\"prev\\\":\\\"gPhC1asxdNk70w1hrldl8sbd1ueINI-xdVspO4XHEOk\\\",\\\"seq\\\":1,\\\"ts\\\":1794096600}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"1aX-nmBCWvtbcatcj48M0ZeWzgLveqSoO4Sb5fAMwDB2ZI5u_AhEY_l_4wsjGoQrX_iR14-L4Nscxn-ftQWKBQ\",\"t\":\"chain-entry\"}"
+          ]
+        },
+        "server": "a.example"
+      },
+      "why": "a first copy must come from the identity's current home"
+    }
+  ],
+  "description": "Who vouches for chain entries (SPEC §6.5). Each case: a receiving server's cached chain (or null, for a first fetch), a candidate chain that arrived from server `from`, and what the previous home, a.example, answers if asked for the chain: a chain, \"unreachable\", or \"404\". `accepted` is how many candidate entries the receiver keeps, or \"reject\" when a first fetch fails. Entries are JCS `signed` text, genesis first.",
+  "entries": {
+    "genesis": "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\\\",\\\"name\\\":\\\"Wen's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"wen.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"_7cs5uyS6eerHx_Y1OnYmA5enCW4jNeVxthPdAsxBa_k2bUWf1Qr4vCbQz25ove18FU1if8VmO70xcJg33PzDg\",\"t\":\"chain-entry\"}",
+    "move_to_c": "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"home\\\":\\\"c.example\\\",\\\"op\\\":\\\"set-home\\\"}],\\\"prev\\\":\\\"gPhC1asxdNk70w1hrldl8sbd1ueINI-xdVspO4XHEOk\\\",\\\"seq\\\":1,\\\"ts\\\":1794096600}\",\"k\":\"C0eCPnEJXdWb54rCccV27zifh7ZFYasHz5pOvNAtIEE\",\"s\":\"1aX-nmBCWvtbcatcj48M0ZeWzgLveqSoO4Sb5fAMwDB2ZI5u_AhEY_l_4wsjGoQrX_iR14-L4Nscxn-ftQWKBQ\",\"t\":\"chain-entry\"}",
+    "recovery_resign": "{\"b\":\"{\\\"id\\\":\\\"tr:qd4efvnlgf2nso6tbvq24v3f\\\",\\\"ops\\\":[{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"aGQ8kOUaMIljEP3obZ7uy-RCRyfdkdijKSf-6VcfHQ4\\\",\\\"seq\\\":2,\\\"ts\\\":1794103200}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"tjt_dsmA8b7hAhyDeAL6O_slHQzrftuT86aC9lJ68aXRvVFW0EJDKrk63r2hDxtXg_162VvIfVsRy-ysAc7AAg\",\"t\":\"chain-entry\"}"
+  },
+  "identity_id": "tr:qd4efvnlgf2nso6tbvq24v3f",
+  "keys": {
+    "device": {
+      "public_hex": "0b47823e71095dd59be78ac271c576ef389f87b64561ab07cf9a4ebcd02d2041",
+      "seed_hex": "a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0"
+    },
+    "recovery": "recovery key 1 from recovery.json (its commitment is in genesis)"
+  },
+  "notice": "Test vectors for Tieroute v1 (draft). These keys are public: never use them for anything real.",
+  "rules": [
+    "A device-signed entry beyond the cache counts if its previous home is `from`, or if the previous home returns a chain that contains it at the same position. Otherwise the update stops before it.",
+    "A recovery-signed entry counts from any server, and vouches for every entry before it.",
+    "With nothing cached, the chain must name `from` as its home, and every device-signed set-home that no later recovery-signed entry vouches for is checked with its previous home: 404 is skipped; unreachable rejects the chain for now (retry later); a returned chain without the entry rejects the whole chain."
+  ]
+}

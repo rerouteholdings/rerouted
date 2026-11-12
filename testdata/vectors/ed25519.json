@@ -1,0 +1,71 @@
+{
+  "cases": [
+    {
+      "message_hex": "746965726f757465206564323535313920766563746f72",
+      "name": "a valid signature",
+      "public_hex": "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664",
+      "signature_hex": "aaf0d0e541acb20995f2d1c21e523385c073ea89470a42eec4cfae883eea6ec642cae74c3c05c808e504f45b87bb17ed7891495ccf2224204f0f75e4b3d7dd0a",
+      "valid": true,
+      "why": ""
+    },
+    {
+      "message_hex": "746965726f757465206564323535313920766563746f72",
+      "name": "S not reduced (S + L)",
+      "public_hex": "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664",
+      "signature_hex": "aaf0d0e541acb20995f2d1c21e523385c073ea89470a42eec4cfae883eea6ec62f9edda95668da60bba1ebfe65b5f6017991495ccf2224204f0f75e4b3d7dd1a",
+      "valid": false,
+      "why": "S \u003e= L"
+    },
+    {
+      "message_hex": "746965726f757465206564323535313920766563746f72",
+      "name": "identity key and identity R, S = 0",
+      "public_hex": "0100000000000000000000000000000000000000000000000000000000000000",
+      "signature_hex": "01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "valid": false,
+      "why": "A and R are small-order; the cofactorless equation alone accepts this for every message"
+    },
+    {
+      "message_hex": "746965726f757465206564323535313920766563746f72",
+      "name": "the same, with the sign bit set on A",
+      "public_hex": "0100000000000000000000000000000000000000000000000000000000000080",
+      "signature_hex": "01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "valid": false,
+      "why": "A is small-order once the top bit is cleared"
+    },
+    {
+      "message_hex": "746965726f757465206564323535313920766563746f72",
+      "name": "a valid key, but R is the identity",
+      "public_hex": "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664",
+      "signature_hex": "01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "valid": false,
+      "why": "R is small-order"
+    },
+    {
+      "message_hex": "746965726f757465206564323535313920766563746f72",
+      "name": "a non-canonical public key",
+      "public_hex": "f0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+      "signature_hex": "aaf0d0e541acb20995f2d1c21e523385c073ea89470a42eec4cfae883eea6ec642cae74c3c05c808e504f45b87bb17ed7891495ccf2224204f0f75e4b3d7dd0a",
+      "valid": false,
+      "why": "A's y, sign bit cleared, is p + 3: not canonical"
+    },
+    {
+      "message_hex": "746965726f757465206564323535313920766563746f72",
+      "name": "a non-canonical R",
+      "public_hex": "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664",
+      "signature_hex": "f0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f42cae74c3c05c808e504f45b87bb17ed7891495ccf2224204f0f75e4b3d7dd0a",
+      "valid": false,
+      "why": "R's y is p + 3: not canonical"
+    }
+  ],
+  "description": "Ed25519 verification rules (SPEC §4.3). Reject S \u003e= L; reject a public key A or signature point R whose encoding, with the top bit of byte 31 cleared, is one of the seven small-order encodings or is not canonical (y \u003e= p = 2^255 - 19); check the cofactorless equation [S]B = R + [k]A. Every implementation must reach `valid` for each case.",
+  "notice": "Test vectors for Tieroute v1 (draft). These keys are public: never use them for anything real.",
+  "small_order_hex": [
+    "0000000000000000000000000000000000000000000000000000000000000000",
+    "0100000000000000000000000000000000000000000000000000000000000000",
+    "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+    "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+    "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+    "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+    "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"
+  ]
+}

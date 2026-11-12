@@ -1,0 +1,40 @@
+# A systemd unit for one rerouted instance. Install as /etc/systemd/system/rerouted.service,
+# with the binary at /usr/local/bin/rerouted and settings in /etc/rerouted/rerouted.env
+# (start from .env.example). Data lives in /var/lib/rerouted.
+[Unit]
+Description=rerouted Tieroute homeserver
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=rerouted
+Group=rerouted
+ExecStart=/usr/local/bin/rerouted -env /etc/rerouted/rerouted.env
+WorkingDirectory=/var/lib/rerouted
+StateDirectory=rerouted
+StateDirectoryMode=0700
+Restart=on-failure
+RestartSec=2
+
+# rerouted only needs its own data directory and the network.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

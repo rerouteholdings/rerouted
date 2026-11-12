@@ -1,0 +1,29 @@
+{
+  "account_data": {
+    "associated_data": "[\"tieroute account data\",\"tr:g6buzlilhz576dzwhcro3bf5\",1]",
+    "ct_hex": "909192939495969798999a9be16e9f5339bde39c42d6a6148a48f28176f696f74ee0b85d59221a245c5916d7726969595f425004da7734ef2781355f2939dcbc0113ac0492801e48c93859478c6dcd9109dc5027daf00a39d74ac2d9c19e9493fcf52e294a79e1637314b2a1641456c7d8608e07f4867ae91962f700074b2c5c5581ccb6db80b5d29bad7449730f1fd1",
+    "nonce_hex": "909192939495969798999a9b",
+    "plaintext": "{\"folders\":[{\"members\":[\"tr:g6buzlilhz576dzwhcro3bf5\"],\"name\":\"Family\"}],\"nicknames\":{},\"settings\":{\"theme\":\"dark\"}}",
+    "version": 1
+  },
+  "account_key_hex": "606162636465666768696a6b6c6d6e6f",
+  "description": "Account key and account data (SPEC §7.4): AES-128-GCM with the 12-byte nonce prepended. The recovery wrap key comes from recovery.json; the identifier from chain.json.",
+  "identifier": "tr:g6buzlilhz576dzwhcro3bf5",
+  "notice": "Test vectors for Tieroute v1 (draft). These keys are public: never use them for anything real.",
+  "staged_wrapped_key": {
+    "associated_data": "[\"tieroute account key\",\"tr:g6buzlilhz576dzwhcro3bf5\",\"recovery-next\",\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\"]",
+    "commit": "eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks",
+    "ct_hex": "a0a1a2a3a4a5a6a7a8a9aaabbb78803e3414f78e30cec0564dd70526cb7afbcb63178ced3387a976532d2832",
+    "key_hex": "2937473c680c3fd9ded155e0da424527",
+    "nonce_hex": "a0a1a2a3a4a5a6a7a8a9aaab",
+    "note": "a recovery-code rotation's staged wrap: via recovery-next, with commit = recovery_key_1's commitment from recovery.json, which goes in the associated data",
+    "via": "recovery-next"
+  },
+  "wrapped_key": {
+    "associated_data": "[\"tieroute account key\",\"tr:g6buzlilhz576dzwhcro3bf5\",\"recovery\"]",
+    "ct_hex": "808182838485868788898a8bd2e7f64188afa53f2ffc7a50594fb98e3c8e5daee77fc3ee504f865c471384f7",
+    "key_hex": "2937473c680c3fd9ded155e0da424527",
+    "nonce_hex": "808182838485868788898a8b",
+    "via": "recovery"
+  }
+}

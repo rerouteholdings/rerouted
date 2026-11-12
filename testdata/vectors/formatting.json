@@ -1,0 +1,447 @@
+{
+  "cases": [
+    {
+      "blocks": [
+        {
+          "p": [
+            "hello"
+          ]
+        }
+      ],
+      "body": "hello",
+      "name": "plain text"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            {
+              "b": [
+                "bold"
+              ]
+            },
+            " and ",
+            {
+              "i": [
+                "it"
+              ]
+            },
+            " and ",
+            {
+              "i": [
+                "it"
+              ]
+            },
+            " and ",
+            {
+              "s": [
+                "gone"
+              ]
+            }
+          ]
+        }
+      ],
+      "body": "**bold** and *it* and _it_ and ~~gone~~",
+      "name": "every span"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            "snake_case_name stays"
+          ]
+        }
+      ],
+      "body": "snake_case_name stays",
+      "name": "underscores inside words stay literal"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            "a * b * c"
+          ]
+        }
+      ],
+      "body": "a * b * c",
+      "name": "spaced asterisks are literal"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            "**unclosed"
+          ]
+        }
+      ],
+      "body": "**unclosed",
+      "name": "unclosed bold is literal"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            {
+              "c": "*not bold*"
+            },
+            " code"
+          ]
+        }
+      ],
+      "body": "`*not bold*` code",
+      "name": "code span hides formatting"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            "*literal* and \\ and \\q"
+          ]
+        }
+      ],
+      "body": "\\*literal\\* and \\\\ and \\q",
+      "name": "escapes"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            "see ",
+            {
+              "a": "https://example.com/a_b_c"
+            },
+            ". ok"
+          ]
+        }
+      ],
+      "body": "see https://example.com/a_b_c. ok",
+      "name": "link with underscores and a trailing period"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            "(",
+            {
+              "a": "https://example.com/x"
+            },
+            ")"
+          ]
+        }
+      ],
+      "body": "(https://example.com/x)",
+      "name": "link in parentheses"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            {
+              "a": "https://en.wikipedia.org/wiki/Foo_(bar)"
+            }
+          ]
+        }
+      ],
+      "body": "https://en.wikipedia.org/wiki/Foo_(bar)",
+      "name": "link keeps a balanced parenthesis"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            "http://plain.example"
+          ]
+        }
+      ],
+      "body": "http://plain.example",
+      "name": "http is not a link"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            "[text](",
+            {
+              "a": "https://evil.example"
+            },
+            ")"
+          ]
+        }
+      ],
+      "body": "[text](https://evil.example)",
+      "name": "markdown links stay literal"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            "trailing ",
+            {
+              "a": "https://example.com/?q=1"
+            },
+            "!"
+          ]
+        }
+      ],
+      "body": "trailing https://example.com/?q=1!",
+      "name": "link trailing punctuation"
+    },
+    {
+      "blocks": [
+        {
+          "quote": [
+            "quoted ",
+            {
+              "i": [
+                "it"
+              ]
+            },
+            {
+              "br": 1
+            },
+            "second"
+          ]
+        }
+      ],
+      "body": "\u003e quoted *it*\n\u003e second",
+      "name": "quote"
+    },
+    {
+      "blocks": [
+        {
+          "quote": [
+            "\u003e nested"
+          ]
+        }
+      ],
+      "body": "\u003e\u003e nested",
+      "name": "only one quote level"
+    },
+    {
+      "blocks": [
+        {
+          "code": "*raw*"
+        },
+        {
+          "p": [
+            "after"
+          ]
+        }
+      ],
+      "body": "```\n*raw*\n```\nafter",
+      "name": "code block"
+    },
+    {
+      "blocks": [
+        {
+          "code": "code"
+        }
+      ],
+      "body": "```js\ncode",
+      "name": "unclosed code block"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            "line one",
+            {
+              "br": 1
+            },
+            "line two"
+          ]
+        },
+        {
+          "blank": 1
+        },
+        {
+          "p": [
+            "new para"
+          ]
+        }
+      ],
+      "body": "line one\nline two\n\nnew para",
+      "name": "paragraphs and blank lines"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            {
+              "i": [
+                "it ",
+                {
+                  "b": [
+                    "bold"
+                  ]
+                },
+                " it"
+              ]
+            }
+          ]
+        }
+      ],
+      "body": "*it **bold** it*",
+      "name": "bold inside italic"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            {
+              "b": [
+                "bold ",
+                {
+                  "i": [
+                    "it"
+                  ]
+                },
+                " bold"
+              ]
+            }
+          ]
+        }
+      ],
+      "body": "**bold *it* bold**",
+      "name": "italic inside bold"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            {
+              "b": [
+                "a"
+              ]
+            },
+            "b**"
+          ]
+        }
+      ],
+      "body": "**a**b**",
+      "name": "bold then stray delimiters"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            {
+              "i": [
+                "under_score"
+              ]
+            }
+          ]
+        }
+      ],
+      "body": "_under_score_",
+      "name": "underscore italic with inner underscore"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            "# heading"
+          ]
+        }
+      ],
+      "body": "# heading",
+      "name": "headings are literal"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            "line",
+            {
+              "br": 1
+            },
+            "windows"
+          ]
+        }
+      ],
+      "body": "line\r\nwindows",
+      "name": "crlf line endings"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            "~single~"
+          ]
+        }
+      ],
+      "body": "~single~",
+      "name": "single tilde is literal"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            "mid",
+            {
+              "b": [
+                "word"
+              ]
+            },
+            "bold"
+          ]
+        }
+      ],
+      "body": "mid**word**bold",
+      "name": "bold inside a word"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            {
+              "i": [
+                "a ",
+                {
+                  "c": "*"
+                },
+                " b"
+              ]
+            }
+          ]
+        }
+      ],
+      "body": "*a `*` b*",
+      "name": "code span inside italic"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            {
+              "i": [
+                "a *b"
+              ]
+            },
+            " c*"
+          ]
+        }
+      ],
+      "body": "*a *b* c*",
+      "name": "no same-kind nesting"
+    },
+    {
+      "blocks": [
+        {
+          "p": [
+            "\u003e not a quote"
+          ]
+        }
+      ],
+      "body": "\\\u003e not a quote",
+      "name": "escaped quote marker"
+    },
+    {
+      "blocks": [],
+      "body": "",
+      "name": "empty body"
+    }
+  ],
+  "description": "Message formatting (SPEC §12.1): each body and the block tree it parses to. Blocks: p, quote (lists of inline nodes), code (text), blank. Inline nodes: text (a string), b, i, s (lists), c (code text), a (link URL), br (a line break). Adjacent text is merged.",
+  "notice": "Test vectors for Tieroute v1 (draft). These keys are public: never use them for anything real."
+}

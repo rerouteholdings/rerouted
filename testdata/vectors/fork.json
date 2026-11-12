@@ -1,0 +1,227 @@
+{
+  "cases": [
+    {
+      "cached": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}"
+      ],
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"home\\\":\\\"evil.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794099600}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"5BUa4PT3Qlx1TOkB4sCT7_kp2DlV2pH90oY_UjYM7TdrqXAKuRjcpWv9XrMOqIvMg-KvAYq_89SvoQkDJyJOBQ\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"iC0Oo7KGTnpYfz5pjOpEWZmDEuZV4F-l6LURnYuqyM0\\\",\\\"name\\\":\\\"thief\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"tg7qU9rssYXGqOMdKTRIbrcG0HqOZShAthqO_Vyd9mQ\\\",\\\"seq\\\":3,\\\"ts\\\":1794103200}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"yV8ijW90HTpgFMEcDnZCLWq9ToZXMOQN-flEvD_sTMAJkLOG4yCf3-j-1QG5bgIOfg88SmThWcVLi4g-PgmoAQ\",\"t\":\"chain-entry\"}"
+      ],
+      "name": "theft extends the cache",
+      "outcome": "extends"
+    },
+    {
+      "cached": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"home\\\":\\\"evil.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794099600}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"5BUa4PT3Qlx1TOkB4sCT7_kp2DlV2pH90oY_UjYM7TdrqXAKuRjcpWv9XrMOqIvMg-KvAYq_89SvoQkDJyJOBQ\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"iC0Oo7KGTnpYfz5pjOpEWZmDEuZV4F-l6LURnYuqyM0\\\",\\\"name\\\":\\\"thief\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"tg7qU9rssYXGqOMdKTRIbrcG0HqOZShAthqO_Vyd9mQ\\\",\\\"seq\\\":3,\\\"ts\\\":1794103200}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"yV8ijW90HTpgFMEcDnZCLWq9ToZXMOQN-flEvD_sTMAJkLOG4yCf3-j-1QG5bgIOfg88SmThWcVLi4g-PgmoAQ\",\"t\":\"chain-entry\"}"
+      ],
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}"
+      ],
+      "name": "an older chain adds nothing",
+      "outcome": "same"
+    },
+    {
+      "cached": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"home\\\":\\\"evil.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794099600}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"5BUa4PT3Qlx1TOkB4sCT7_kp2DlV2pH90oY_UjYM7TdrqXAKuRjcpWv9XrMOqIvMg-KvAYq_89SvoQkDJyJOBQ\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"iC0Oo7KGTnpYfz5pjOpEWZmDEuZV4F-l6LURnYuqyM0\\\",\\\"name\\\":\\\"thief\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"tg7qU9rssYXGqOMdKTRIbrcG0HqOZShAthqO_Vyd9mQ\\\",\\\"seq\\\":3,\\\"ts\\\":1794103200}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"yV8ijW90HTpgFMEcDnZCLWq9ToZXMOQN-flEvD_sTMAJkLOG4yCf3-j-1QG5bgIOfg88SmThWcVLi4g-PgmoAQ\",\"t\":\"chain-entry\"}"
+      ],
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk\\\",\\\"name\\\":\\\"Recovered device\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794132000}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"C2jhO1yFLGI3orCwRjs40vNn0feZdGkE98ILQhuobtx13nf6SBNQAlCMJtaQRGle_MSTlHsns7cw3iqhM9LsAQ\",\"t\":\"chain-entry\"}"
+      ],
+      "final_state": {
+        "devices": [
+          "020bd427446b723424d80d2cad352ba3df3649d0ef8faae0ca7eb25443941b29"
+        ],
+        "head_seq": 2,
+        "head_sha256": "3712eeab9c0b60a7e99e1d7b82c98c9282996860efe282fe1201307ddbe1cfdb",
+        "home": "chat.example",
+        "recovery_commitment": "9490e14f17abab22f73b766f4d7f69b914f030b742505f2be19a60c9cee221aa"
+      },
+      "fork_at": 2,
+      "name": "recovery fork wins though shorter",
+      "outcome": "fork"
+    },
+    {
+      "cached": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk\\\",\\\"name\\\":\\\"Recovered device\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794132000}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"C2jhO1yFLGI3orCwRjs40vNn0feZdGkE98ILQhuobtx13nf6SBNQAlCMJtaQRGle_MSTlHsns7cw3iqhM9LsAQ\",\"t\":\"chain-entry\"}"
+      ],
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"home\\\":\\\"evil.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794099600}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"5BUa4PT3Qlx1TOkB4sCT7_kp2DlV2pH90oY_UjYM7TdrqXAKuRjcpWv9XrMOqIvMg-KvAYq_89SvoQkDJyJOBQ\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"iC0Oo7KGTnpYfz5pjOpEWZmDEuZV4F-l6LURnYuqyM0\\\",\\\"name\\\":\\\"thief\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"tg7qU9rssYXGqOMdKTRIbrcG0HqOZShAthqO_Vyd9mQ\\\",\\\"seq\\\":3,\\\"ts\\\":1794103200}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"yV8ijW90HTpgFMEcDnZCLWq9ToZXMOQN-flEvD_sTMAJkLOG4yCf3-j-1QG5bgIOfg88SmThWcVLi4g-PgmoAQ\",\"t\":\"chain-entry\"}"
+      ],
+      "name": "the overridden branch can't come back",
+      "outcome": "reject"
+    },
+    {
+      "cached": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"home\\\":\\\"evil.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794099600}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"5BUa4PT3Qlx1TOkB4sCT7_kp2DlV2pH90oY_UjYM7TdrqXAKuRjcpWv9XrMOqIvMg-KvAYq_89SvoQkDJyJOBQ\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"iC0Oo7KGTnpYfz5pjOpEWZmDEuZV4F-l6LURnYuqyM0\\\",\\\"name\\\":\\\"thief\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"tg7qU9rssYXGqOMdKTRIbrcG0HqOZShAthqO_Vyd9mQ\\\",\\\"seq\\\":3,\\\"ts\\\":1794103200}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"yV8ijW90HTpgFMEcDnZCLWq9ToZXMOQN-flEvD_sTMAJkLOG4yCf3-j-1QG5bgIOfg88SmThWcVLi4g-PgmoAQ\",\"t\":\"chain-entry\"}"
+      ],
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk\\\",\\\"name\\\":\\\"Recovered device\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794358801}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"pYhCpz-N1zGw9qsZi3rpPiM2DGA5E-azP8nYjgBnydJe0yRkiglA3IgO5-mTY0dUUWMLJl3lIChu3tLToN3qDQ\",\"t\":\"chain-entry\"}"
+      ],
+      "name": "more than 72 hours is too late",
+      "outcome": "reject"
+    },
+    {
+      "cached": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"home\\\":\\\"evil.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794099600}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"5BUa4PT3Qlx1TOkB4sCT7_kp2DlV2pH90oY_UjYM7TdrqXAKuRjcpWv9XrMOqIvMg-KvAYq_89SvoQkDJyJOBQ\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"iC0Oo7KGTnpYfz5pjOpEWZmDEuZV4F-l6LURnYuqyM0\\\",\\\"name\\\":\\\"thief\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"tg7qU9rssYXGqOMdKTRIbrcG0HqOZShAthqO_Vyd9mQ\\\",\\\"seq\\\":3,\\\"ts\\\":1794103200}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"yV8ijW90HTpgFMEcDnZCLWq9ToZXMOQN-flEvD_sTMAJkLOG4yCf3-j-1QG5bgIOfg88SmThWcVLi4g-PgmoAQ\",\"t\":\"chain-entry\"}"
+      ],
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794132000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GynmZVsKQuGnVGPoz3j7Jsbvw97zQV3SRy0ahjN7SsSMbZO7pyJ_ltA3nm4yHGcJwpqROs4wxPQNTYraeAWnCA\",\"t\":\"chain-entry\"}"
+      ],
+      "name": "a device-signed fork is rejected",
+      "outcome": "reject"
+    },
+    {
+      "cached": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk\\\",\\\"name\\\":\\\"Recovered device\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794358801}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"pYhCpz-N1zGw9qsZi3rpPiM2DGA5E-azP8nYjgBnydJe0yRkiglA3IgO5-mTY0dUUWMLJl3lIChu3tLToN3qDQ\",\"t\":\"chain-entry\"}"
+      ],
+      "candidate": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"home\\\":\\\"evil.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794099600}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"5BUa4PT3Qlx1TOkB4sCT7_kp2DlV2pH90oY_UjYM7TdrqXAKuRjcpWv9XrMOqIvMg-KvAYq_89SvoQkDJyJOBQ\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"iC0Oo7KGTnpYfz5pjOpEWZmDEuZV4F-l6LURnYuqyM0\\\",\\\"name\\\":\\\"thief\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"tg7qU9rssYXGqOMdKTRIbrcG0HqOZShAthqO_Vyd9mQ\\\",\\\"seq\\\":3,\\\"ts\\\":1794103200}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"yV8ijW90HTpgFMEcDnZCLWq9ToZXMOQN-flEvD_sTMAJkLOG4yCf3-j-1QG5bgIOfg88SmThWcVLi4g-PgmoAQ\",\"t\":\"chain-entry\"}"
+      ],
+      "fork_at": 2,
+      "name": "a late recovery gives way to the final device branch, whichever came first",
+      "outcome": "fork"
+    }
+  ],
+  "description": "The fork rule (SPEC §6.4.1, §6.5). Each case gives a cached chain and a candidate (`signed` entries as JCS text, genesis first). An implementation compares them and must reach `outcome`: \"extends\" (accept), \"same\" (nothing new), \"fork\" (accept, replacing cached entries from `fork_at` on), or \"reject\". Length never decides: a valid recovery fork is often shorter.",
+  "entries": {
+    "dev_fork": {
+      "note": "device 1 signs a conflicting seq 2",
+      "signed": {
+        "body": "{\"id\":\"tr:g6buzlilhz576dzwhcro3bf5\",\"ops\":[{\"key\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"op\":\"remove-device\"}],\"prev\":\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\",\"seq\":2,\"ts\":1794132000}",
+        "sig_input": "[\"tieroute/v1\",\"chain-entry\",\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794132000}\"]",
+        "signature_hex": "1b29e6655b0a42e1a75463e8cf78fb26c6efc3def3415dd2472d1a86337b4ac48c6d93bba7227f96d0379e6e321c6709c29a913ace30c4f40d4d8ada7805a708",
+        "signed": "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794132000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GynmZVsKQuGnVGPoz3j7Jsbvw97zQV3SRy0ahjN7SsSMbZO7pyJ_ltA3nm4yHGcJwpqROs4wxPQNTYraeAWnCA\",\"t\":\"chain-entry\"}",
+        "signed_sha256": "60f7a67069dca6b6ade9567899d6fa37ee470865e09f3cb40d3d75af15d43e62",
+        "type": "chain-entry"
+      },
+      "signer": "device_1",
+      "ts": 1794132000
+    },
+    "entry_1": {
+      "note": "chain.json entry 1: device 1 adds device 2",
+      "signed": {
+        "body": "{\"id\":\"tr:g6buzlilhz576dzwhcro3bf5\",\"ops\":[{\"key\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"name\":\"Kat's Desktop\",\"op\":\"add-device\"}],\"prev\":\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\",\"seq\":1,\"ts\":1794096060}",
+        "sig_input": "[\"tieroute/v1\",\"chain-entry\",\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\"]",
+        "signature_hex": "bd09f892fce24bd5c448b04147537afbb96dfdf8073169b0f8bfeb917e43e8b219a68bb1054570924814fe13c91ea43926ff44e865bf9ef45d5d3440c8cd9d02",
+        "signed": "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}",
+        "signed_sha256": "eeb24383470add80f7f57db68a4845b062e89db01065835e4c829ce45f68de74",
+        "type": "chain-entry"
+      },
+      "ts": 1794096060
+    },
+    "genesis": {
+      "note": "chain.json entry 0",
+      "signed": {
+        "body": "{\"ops\":[{\"key\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"name\":\"Kat's Laptop\",\"op\":\"add-device\"},{\"home\":\"chat.example\",\"op\":\"set-home\"},{\"handle\":\"kat.chat.example\",\"op\":\"set-handle\"},{\"next\":\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\",\"op\":\"set-recovery\"}],\"seq\":0,\"ts\":1794096000}",
+        "sig_input": "[\"tieroute/v1\",\"chain-entry\",\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\"]",
+        "signature_hex": "18d542ef3ea2322ed8569a5a726d6a77f54efccc43cc2e2ecd70cd8a2b3e43ae996dc8e1b99c4f766ed9e7fd8ebdbbfda525cb5b25bb64049935bc4a63429900",
+        "signed": "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "signed_sha256": "37834cad0b3e7bff0f3638a2ed84bdb8686b705cb0eb18ad443893d2e556f16e",
+        "type": "chain-entry"
+      },
+      "ts": 1794096000
+    },
+    "late": {
+      "note": "the same recovery, 72 hours and 1 second after theft_a",
+      "signed": {
+        "body": "{\"id\":\"tr:g6buzlilhz576dzwhcro3bf5\",\"ops\":[{\"key\":\"AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk\",\"name\":\"Recovered device\",\"op\":\"add-device\"},{\"key\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"op\":\"remove-device\"},{\"key\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"op\":\"remove-device\"},{\"next\":\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\",\"op\":\"set-recovery\"}],\"prev\":\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\",\"seq\":2,\"ts\":1794358801}",
+        "sig_input": "[\"tieroute/v1\",\"chain-entry\",\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk\\\",\\\"name\\\":\\\"Recovered device\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794358801}\"]",
+        "signature_hex": "a58842a73f8dd731b0f6ab198b7ae93e23360c603913e6b33fc9d88e0067c9d25ed324648a0940dc880ee7e99363475451630b265de520286eded2d3a0ddea0d",
+        "signed": "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk\\\",\\\"name\\\":\\\"Recovered device\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794358801}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"pYhCpz-N1zGw9qsZi3rpPiM2DGA5E-azP8nYjgBnydJe0yRkiglA3IgO5-mTY0dUUWMLJl3lIChu3tLToN3qDQ\",\"t\":\"chain-entry\"}",
+        "signed_sha256": "d3fb79eb3dc889c26b54c6898eb5c74f32ca1ba69045b566d5143619f8bc676c",
+        "type": "chain-entry"
+      },
+      "signer": "recovery_key_1",
+      "ts": 1794358801
+    },
+    "recovery": {
+      "note": "recovery key 1, forking after entry 1: adds device 5, removes devices 1 and 2, commits to recovery key 2",
+      "signed": {
+        "body": "{\"id\":\"tr:g6buzlilhz576dzwhcro3bf5\",\"ops\":[{\"key\":\"AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk\",\"name\":\"Recovered device\",\"op\":\"add-device\"},{\"key\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"op\":\"remove-device\"},{\"key\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"op\":\"remove-device\"},{\"next\":\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\",\"op\":\"set-recovery\"}],\"prev\":\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\",\"seq\":2,\"ts\":1794132000}",
+        "sig_input": "[\"tieroute/v1\",\"chain-entry\",\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk\\\",\\\"name\\\":\\\"Recovered device\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794132000}\"]",
+        "signature_hex": "0b68e13b5c852c6237a2b0b0463b38d2f367d1f799746904f7c20b421ba86edc75de77fa48135002508c26d69044695efcc493947b27b3b730de2aa133d2ec01",
+        "signed": "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk\\\",\\\"name\\\":\\\"Recovered device\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794132000}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"C2jhO1yFLGI3orCwRjs40vNn0feZdGkE98ILQhuobtx13nf6SBNQAlCMJtaQRGle_MSTlHsns7cw3iqhM9LsAQ\",\"t\":\"chain-entry\"}",
+        "signed_sha256": "3712eeab9c0b60a7e99e1d7b82c98c9282996860efe282fe1201307ddbe1cfdb",
+        "type": "chain-entry"
+      },
+      "signer": "recovery_key_1",
+      "ts": 1794132000
+    },
+    "theft_a": {
+      "note": "device 2 (stolen) moves the account to evil.example and removes device 1",
+      "signed": {
+        "body": "{\"id\":\"tr:g6buzlilhz576dzwhcro3bf5\",\"ops\":[{\"home\":\"evil.example\",\"op\":\"set-home\"},{\"key\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"op\":\"remove-device\"}],\"prev\":\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\",\"seq\":2,\"ts\":1794099600}",
+        "sig_input": "[\"tieroute/v1\",\"chain-entry\",\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"home\\\":\\\"evil.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794099600}\"]",
+        "signature_hex": "e4151ae0f4f7425c754ce901e2c093eff929d83955da91fdd2863f52360ced376ba9700ab918dca56bfd5eb30ea88bcc83e2af018abff3d4afa1090327224e05",
+        "signed": "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"home\\\":\\\"evil.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794099600}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"5BUa4PT3Qlx1TOkB4sCT7_kp2DlV2pH90oY_UjYM7TdrqXAKuRjcpWv9XrMOqIvMg-KvAYq_89SvoQkDJyJOBQ\",\"t\":\"chain-entry\"}",
+        "signed_sha256": "b60eea53daecb185c6a8e31d2934486eb706d07a8e652840b61a8efd5c9df664",
+        "type": "chain-entry"
+      },
+      "signer": "device_2",
+      "ts": 1794099600
+    },
+    "theft_b": {
+      "note": "device 2 adds the thief's device 4",
+      "signed": {
+        "body": "{\"id\":\"tr:g6buzlilhz576dzwhcro3bf5\",\"ops\":[{\"key\":\"iC0Oo7KGTnpYfz5pjOpEWZmDEuZV4F-l6LURnYuqyM0\",\"name\":\"thief\",\"op\":\"add-device\"}],\"prev\":\"tg7qU9rssYXGqOMdKTRIbrcG0HqOZShAthqO_Vyd9mQ\",\"seq\":3,\"ts\":1794103200}",
+        "sig_input": "[\"tieroute/v1\",\"chain-entry\",\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"iC0Oo7KGTnpYfz5pjOpEWZmDEuZV4F-l6LURnYuqyM0\\\",\\\"name\\\":\\\"thief\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"tg7qU9rssYXGqOMdKTRIbrcG0HqOZShAthqO_Vyd9mQ\\\",\\\"seq\\\":3,\\\"ts\\\":1794103200}\"]",
+        "signature_hex": "c95f228d6f741d3a6014c11c0e76422d6abd4e865730e40df9f944bc3fec4cc00990b386e3209fdfe8fed501b96e020e7e0f3c4a64e159c54b8b883e3e09a801",
+        "signed": "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"iC0Oo7KGTnpYfz5pjOpEWZmDEuZV4F-l6LURnYuqyM0\\\",\\\"name\\\":\\\"thief\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"tg7qU9rssYXGqOMdKTRIbrcG0HqOZShAthqO_Vyd9mQ\\\",\\\"seq\\\":3,\\\"ts\\\":1794103200}\",\"k\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"s\":\"yV8ijW90HTpgFMEcDnZCLWq9ToZXMOQN-flEvD_sTMAJkLOG4yCf3-j-1QG5bgIOfg88SmThWcVLi4g-PgmoAQ\",\"t\":\"chain-entry\"}",
+        "signed_sha256": "bac43fe5f6f2f081fd0cbe78ff7a734b7a36720204aaf66de177cb1fe39f9b46",
+        "type": "chain-entry"
+      },
+      "signer": "device_2",
+      "ts": 1794103200
+    }
+  },
+  "keys": {
+    "device_1": "see chain.json (Kat's laptop)",
+    "device_2": "see chain.json (Kat's desktop, stolen)",
+    "device_4": {
+      "name": "thief",
+      "public_hex": "882d0ea3b2864e7a587f3e698cea4459998312e655e05fa5e8b5119d8baac8cd",
+      "seed_hex": "6162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80"
+    },
+    "device_5": {
+      "name": "Recovered device",
+      "public_hex": "020bd427446b723424d80d2cad352ba3df3649d0ef8faae0ca7eb25443941b29",
+      "seed_hex": "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"
+    },
+    "recovery": "recovery key 1 from recovery.json"
+  },
+  "notice": "Test vectors for Tieroute v1 (draft). These keys are public: never use them for anything real.",
+  "rule": "Find the first index where the chains differ. If the candidate's entry there is signed by the committed recovery key, and every cached entry from there on is device-signed with ts at most 259200 seconds (72 hours) before the candidate's entry, the candidate wins. The same comparison decides the other way round, so the outcome never depends on which branch arrived first: if the cached entry there is the recovery-signed one, the candidate's entries from there on are all device-signed, and one of them is more than 72 hours older than it, the candidate wins (the recovery entry was made without seeing them, and they're final). Otherwise reject."
+}

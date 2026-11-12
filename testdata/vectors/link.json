@@ -1,0 +1,56 @@
+{
+  "also_accepted": [
+    "LINK AIF5 IJ2E NNZD IJGY BUWK 2NJL UPPT MSOQ 56H2 VYGK P2ZF IQ4U DMUQ",
+    "LINK-AIF5IJ2ENNZDIJGYBUWK2NJLUPPTMSOQ56H2VYGKP2ZFIQ4UDMUQ"
+  ],
+  "confirmation_normalization": {
+    "examples": [
+      [
+        "9ys5-gebk",
+        "9YS5GEBK"
+      ],
+      [
+        "9YS5 GEBK",
+        "9YS5GEBK"
+      ],
+      [
+        "ab0d-1jkm",
+        "AB0D1JKM"
+      ],
+      [
+        "abod-ijkm",
+        "AB0D1JKM"
+      ],
+      [
+        "il01",
+        "1101"
+      ]
+    ],
+    "rule": "uppercase; drop everything but A-Z and 0-9; O -\u003e 0; I and L -\u003e 1"
+  },
+  "description": "Signing in with another device (spec/api/client-stage3.md): the link code for a device key, how typed confirmation codes normalize, and a link proof.",
+  "device": {
+    "public_hex": "020bd427446b723424d80d2cad352ba3df3649d0ef8faae0ca7eb25443941b29",
+    "seed_hex": "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0"
+  },
+  "full": {
+    "home": "chat.example",
+    "hpke_public": "1216 bytes of 0x6b (a stand-in)",
+    "hpke_sha256_hex": "50261bf1b65b5f5a0dd890a477b74831ae918f682f798c9e656359ff20814572",
+    "link_code": "link-aif5-ij2e-nnzd-ijgy-buwk-2njl-uppt-msoq-56h2-vygk-p2zf-iq4u-dmuv-ajq3-6g3f-wx22-bxmj-bjdx-w5ed-dlur-r5uc-66mm-tzsw-gwp7-ecau-k4q@chat.example",
+    "rule": "\"link-\" || lowercase base32 (no padding) of device key || SHA-256(HPKE public key), in groups of 4 joined by \"-\", then \"@\" || home (SPEC §7.2)"
+  },
+  "identity_id": "tr:g6buzlilhz576dzwhcro3bf5",
+  "link_code": "link-aif5-ij2e-nnzd-ijgy-buwk-2njl-uppt-msoq-56h2-vygk-p2zf-iq4u-dmuq",
+  "link_code_rule": "\"link-\" || lowercase RFC 4648 base32 (no padding) of the 32-byte device key, in groups of 4 joined by \"-\"",
+  "notice": "Test vectors for Tieroute v1 (draft). These keys are public: never use them for anything real.",
+  "proof": {
+    "body": "{\"code\":\"9YS5GEBK\",\"id\":\"tr:g6buzlilhz576dzwhcro3bf5\",\"ts\":1794096600}",
+    "sig_input": "[\"tieroute/v1\",\"link-proof\",\"{\\\"code\\\":\\\"9YS5GEBK\\\",\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ts\\\":1794096600}\"]",
+    "signature_hex": "c959506e54b678199bc495dc3e8f80a2c865f43269a6feedb74510502475fee306427cf3c302c75aa040b17f02a6a02ca99b0e477e3b5d533c4332b907776e0f",
+    "signed": "{\"b\":\"{\\\"code\\\":\\\"9YS5GEBK\\\",\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ts\\\":1794096600}\",\"k\":\"AgvUJ0RrcjQk2A0srTUro982SdDvj6rgyn6yVEOUGyk\",\"s\":\"yVlQblS2eBmbxJXcPo-Aoshl9DJppv7tt0UQUCR1_uMGQnzzwwLHWqBAsX8CpqAsqZsOR347XVM8QzK5B3duDw\",\"t\":\"link-proof\"}",
+    "signed_sha256": "34d9378430aeb9421e69772d53cf2e91a8bc447dd92f3988627d40720a3cbc4f",
+    "type": "link-proof"
+  },
+  "proof_note": "t = \"link-proof\", k = the new device's key, body {id, code (normalized), ts}"
+}

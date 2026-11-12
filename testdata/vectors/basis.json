@@ -1,0 +1,431 @@
+{
+  "cases": [
+    {
+      "basis": {
+        "hash": "uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE",
+        "seq": 1,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "764532455ea49bb6425496187e5437d35a98adbcf8da8761adb5115ea7664ecf",
+        "kind": "device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "valid",
+      "floor": null,
+      "name": "an older copy: the tail carries the addition",
+      "why": "the tail joins the copy at genesis; K is a device at add_k"
+    },
+    {
+      "basis": {
+        "hash": "uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE",
+        "seq": 1,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "764532455ea49bb6425496187e5437d35a98adbcf8da8761adb5115ea7664ecf",
+        "kind": "device"
+      },
+      "copy": null,
+      "expected": "pending",
+      "floor": null,
+      "name": "no copy at all",
+      "why": "nothing to join the tail to"
+    },
+    {
+      "basis": {
+        "hash": "c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI",
+        "seq": 0,
+        "tail": [
+          "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "764532455ea49bb6425496187e5437d35a98adbcf8da8761adb5115ea7664ecf",
+        "kind": "device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456060}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"0RRrLcs0fSMIuRImUXB_46E46p8Sd5NYNc79v5Ap7HarFnqC5vxkttodvLJonKbiKYjJS5f53zj5FicUA9MRCQ\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "invalid",
+      "floor": null,
+      "name": "a head from before the addition",
+      "why": "K isn't a device at genesis, whatever the copy holds"
+    },
+    {
+      "basis": {
+        "hash": "YPHK8tv-94fuYFA_N_bYCjlj0BwWLbX2UPNZTZMYTvI",
+        "seq": 2,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456060}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"0RRrLcs0fSMIuRImUXB_46E46p8Sd5NYNc79v5Ap7HarFnqC5vxkttodvLJonKbiKYjJS5f53zj5FicUA9MRCQ\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "764532455ea49bb6425496187e5437d35a98adbcf8da8761adb5115ea7664ecf",
+        "kind": "not-device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "valid",
+      "floor": null,
+      "name": "a Remove binding the removal",
+      "why": "K was a device, and isn't at remove_k"
+    },
+    {
+      "basis": {
+        "hash": "uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE",
+        "seq": 1,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "764532455ea49bb6425496187e5437d35a98adbcf8da8761adb5115ea7664ecf",
+        "kind": "not-device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456060}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"0RRrLcs0fSMIuRImUXB_46E46p8Sd5NYNc79v5Ap7HarFnqC5vxkttodvLJonKbiKYjJS5f53zj5FicUA9MRCQ\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "invalid",
+      "floor": null,
+      "name": "a Remove binding a head from before the removal",
+      "why": "K is still a device at add_k"
+    },
+    {
+      "basis": {
+        "hash": "YPHK8tv-94fuYFA_N_bYCjlj0BwWLbX2UPNZTZMYTvI",
+        "seq": 2,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456060}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"0RRrLcs0fSMIuRImUXB_46E46p8Sd5NYNc79v5Ap7HarFnqC5vxkttodvLJonKbiKYjJS5f53zj5FicUA9MRCQ\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "764532455ea49bb6425496187e5437d35a98adbcf8da8761adb5115ea7664ecf",
+        "kind": "not-device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "valid",
+      "floor": {
+        "hash": "uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE",
+        "seq": 1
+      },
+      "name": "the floor is older",
+      "why": "the bound chain contains the floor"
+    },
+    {
+      "basis": {
+        "hash": "uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE",
+        "seq": 1,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "764532455ea49bb6425496187e5437d35a98adbcf8da8761adb5115ea7664ecf",
+        "kind": "device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456060}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"0RRrLcs0fSMIuRImUXB_46E46p8Sd5NYNc79v5Ap7HarFnqC5vxkttodvLJonKbiKYjJS5f53zj5FicUA9MRCQ\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "invalid",
+      "floor": {
+        "hash": "YPHK8tv-94fuYFA_N_bYCjlj0BwWLbX2UPNZTZMYTvI",
+        "seq": 2
+      },
+      "name": "the floor is newer: a stale head",
+      "why": "add_k is below the floor remove_k"
+    },
+    {
+      "basis": {
+        "hash": "v-VMS5nqX6g0b8UdX7e3NNXYdc29EHoATHgMMxrpu1I",
+        "rec": 2,
+        "seq": 2,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"qGzGyUXPpDudNn7r5_A8g_GWpLUO4vod70W1ri4w8t8\\\",\\\"name\\\":\\\"Recovered\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794459600}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"zNqjkZpV83CSRY0rm7eDiLhK8jpS7FWR2gDnIhY6YcpRhU1gqbRj2SWB1ThAJqAJftdDeVHMHsY3sodbgUmlCg\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "764532455ea49bb6425496187e5437d35a98adbcf8da8761adb5115ea7664ecf",
+        "kind": "not-device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456060}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"0RRrLcs0fSMIuRImUXB_46E46p8Sd5NYNc79v5Ap7HarFnqC5vxkttodvLJonKbiKYjJS5f53zj5FicUA9MRCQ\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "valid",
+      "floor": {
+        "hash": "YPHK8tv-94fuYFA_N_bYCjlj0BwWLbX2UPNZTZMYTvI",
+        "seq": 2
+      },
+      "name": "a recovery fork moved the history past the floor",
+      "why": "recovery is newer than any recovery entry the floor had"
+    },
+    {
+      "basis": {
+        "hash": "uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE",
+        "seq": 1,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "764532455ea49bb6425496187e5437d35a98adbcf8da8761adb5115ea7664ecf",
+        "kind": "device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"qGzGyUXPpDudNn7r5_A8g_GWpLUO4vod70W1ri4w8t8\\\",\\\"name\\\":\\\"Recovered\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794459600}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"zNqjkZpV83CSRY0rm7eDiLhK8jpS7FWR2gDnIhY6YcpRhU1gqbRj2SWB1ThAJqAJftdDeVHMHsY3sodbgUmlCg\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "valid",
+      "floor": null,
+      "name": "a dropped head, judged by a member holding the recovered chain",
+      "why": "the tail carries add_k; genesis is common"
+    },
+    {
+      "basis": {
+        "hash": "v-VMS5nqX6g0b8UdX7e3NNXYdc29EHoATHgMMxrpu1I",
+        "rec": 2,
+        "seq": 2,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"qGzGyUXPpDudNn7r5_A8g_GWpLUO4vod70W1ri4w8t8\\\",\\\"name\\\":\\\"Recovered\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794459600}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"zNqjkZpV83CSRY0rm7eDiLhK8jpS7FWR2gDnIhY6YcpRhU1gqbRj2SWB1ThAJqAJftdDeVHMHsY3sodbgUmlCg\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "a86cc6c945cfa43b9d367eebe7f03c83f196a4b50ee2fa1def45b5ae2e30f2df",
+        "kind": "device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456060}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"0RRrLcs0fSMIuRImUXB_46E46p8Sd5NYNc79v5Ap7HarFnqC5vxkttodvLJonKbiKYjJS5f53zj5FicUA9MRCQ\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "valid",
+      "floor": null,
+      "name": "the recovered head, judged by a member holding the dropped branch",
+      "why": "the tail joins at genesis"
+    },
+    {
+      "basis": {
+        "hash": "3R7l1EsXRtx48Te8tUhltaooKMPhvDrXlTB5GLTbtc8",
+        "rec": 2,
+        "seq": 3,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"Jyu_7XU_d0yB0b4lh4J_C6XYFfSTLGsu7k2iy3FEtLA\\\",\\\"name\\\":\\\"Ana's new phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"v-VMS5nqX6g0b8UdX7e3NNXYdc29EHoATHgMMxrpu1I\\\",\\\"seq\\\":3,\\\"ts\\\":1794463200}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"DaujzML17Ecc94tMjai8neOvVzsCRlCmcmBJPKJHxuxGY9TjZgxYn1VlXGcNF58cfFFYyuyHWJD1ysCkPnFuBw\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "272bbfed753f774c81d1be2587827f0ba5d815f4932c6b2eee4da2cb7144b4b0",
+        "kind": "device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456060}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"0RRrLcs0fSMIuRImUXB_46E46p8Sd5NYNc79v5Ap7HarFnqC5vxkttodvLJonKbiKYjJS5f53zj5FicUA9MRCQ\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "pending",
+      "floor": null,
+      "name": "a tail joined to a copy that differs where it can't be overridden",
+      "why": "the copy has remove_k at seq 2, the tail needs recovery: conflicting histories, not a verdict"
+    },
+    {
+      "basis": {
+        "hash": "3R7l1EsXRtx48Te8tUhltaooKMPhvDrXlTB5GLTbtc8",
+        "rec": 2,
+        "seq": 3,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"Jyu_7XU_d0yB0b4lh4J_C6XYFfSTLGsu7k2iy3FEtLA\\\",\\\"name\\\":\\\"Ana's new phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"v-VMS5nqX6g0b8UdX7e3NNXYdc29EHoATHgMMxrpu1I\\\",\\\"seq\\\":3,\\\"ts\\\":1794463200}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"DaujzML17Ecc94tMjai8neOvVzsCRlCmcmBJPKJHxuxGY9TjZgxYn1VlXGcNF58cfFFYyuyHWJD1ysCkPnFuBw\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "272bbfed753f774c81d1be2587827f0ba5d815f4932c6b2eee4da2cb7144b4b0",
+        "kind": "device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"qGzGyUXPpDudNn7r5_A8g_GWpLUO4vod70W1ri4w8t8\\\",\\\"name\\\":\\\"Recovered\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794459600}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"zNqjkZpV83CSRY0rm7eDiLhK8jpS7FWR2gDnIhY6YcpRhU1gqbRj2SWB1ThAJqAJftdDeVHMHsY3sodbgUmlCg\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "valid",
+      "floor": null,
+      "name": "the same, with the recovered chain",
+      "why": "joined at recovery"
+    },
+    {
+      "basis": {
+        "hash": "YPHK8tv-94fuYFA_N_bYCjlj0BwWLbX2UPNZTZMYTvI",
+        "seq": 2,
+        "tail": [
+          "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}",
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456060}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"0RRrLcs0fSMIuRImUXB_46E46p8Sd5NYNc79v5Ap7HarFnqC5vxkttodvLJonKbiKYjJS5f53zj5FicUA9MRCQ\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "764532455ea49bb6425496187e5437d35a98adbcf8da8761adb5115ea7664ecf",
+        "kind": "not-device"
+      },
+      "copy": null,
+      "expected": "invalid",
+      "floor": null,
+      "name": "a tail that isn't linked",
+      "why": "remove_k's prev isn't genesis"
+    },
+    {
+      "basis": {
+        "hash": "v-VMS5nqX6g0b8UdX7e3NNXYdc29EHoATHgMMxrpu1I",
+        "seq": 2,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"qGzGyUXPpDudNn7r5_A8g_GWpLUO4vod70W1ri4w8t8\\\",\\\"name\\\":\\\"Recovered\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794459600}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"zNqjkZpV83CSRY0rm7eDiLhK8jpS7FWR2gDnIhY6YcpRhU1gqbRj2SWB1ThAJqAJftdDeVHMHsY3sodbgUmlCg\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "764532455ea49bb6425496187e5437d35a98adbcf8da8761adb5115ea7664ecf",
+        "kind": "not-device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "invalid",
+      "floor": null,
+      "name": "rec left out",
+      "why": "recovery is recovery-signed, so rec must be 2"
+    },
+    {
+      "basis": {
+        "hash": "uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE",
+        "seq": 2,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456060}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"0RRrLcs0fSMIuRImUXB_46E46p8Sd5NYNc79v5Ap7HarFnqC5vxkttodvLJonKbiKYjJS5f53zj5FicUA9MRCQ\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "764532455ea49bb6425496187e5437d35a98adbcf8da8761adb5115ea7664ecf",
+        "kind": "not-device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "invalid",
+      "floor": null,
+      "name": "a hash that isn't the tail's last entry",
+      "why": "the tail ends at remove_k"
+    },
+    {
+      "basis": {
+        "hash": "2yM9LGV_8khv9FogPvO6jLFdeSM-vfkJSlIB6wi4LhY",
+        "seq": 2,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"qGzGyUXPpDudNn7r5_A8g_GWpLUO4vod70W1ri4w8t8\\\",\\\"name\\\":\\\"thief\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456030}\",\"k\":\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\",\"s\":\"1Rz0v8m-1phLrZNPTqrcJ5zPsVxGcJdjCublHCWpZVkP0NHcDksA2IpE-D0iG5LkbCiMohXkdQQKXtFMlEcvAw\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "a86cc6c945cfa43b9d367eebe7f03c83f196a4b50ee2fa1def45b5ae2e30f2df",
+        "kind": "device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "valid",
+      "floor": null,
+      "name": "a private branch, with no floor",
+      "why": "snapshot: valid by its own history; device sync removes T once the real chain is bound"
+    },
+    {
+      "basis": {
+        "hash": "2yM9LGV_8khv9FogPvO6jLFdeSM-vfkJSlIB6wi4LhY",
+        "seq": 2,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"qGzGyUXPpDudNn7r5_A8g_GWpLUO4vod70W1ri4w8t8\\\",\\\"name\\\":\\\"thief\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456030}\",\"k\":\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\",\"s\":\"1Rz0v8m-1phLrZNPTqrcJ5zPsVxGcJdjCublHCWpZVkP0NHcDksA2IpE-D0iG5LkbCiMohXkdQQKXtFMlEcvAw\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "a86cc6c945cfa43b9d367eebe7f03c83f196a4b50ee2fa1def45b5ae2e30f2df",
+        "kind": "device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+        "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456060}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"0RRrLcs0fSMIuRImUXB_46E46p8Sd5NYNc79v5Ap7HarFnqC5vxkttodvLJonKbiKYjJS5f53zj5FicUA9MRCQ\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "invalid",
+      "floor": {
+        "hash": "YPHK8tv-94fuYFA_N_bYCjlj0BwWLbX2UPNZTZMYTvI",
+        "seq": 2
+      },
+      "name": "a private branch, below a floor on the real chain",
+      "why": "private doesn't contain remove_k, and has no recovery entry"
+    },
+    {
+      "basis": {
+        "hash": "YPHK8tv-94fuYFA_N_bYCjlj0BwWLbX2UPNZTZMYTvI",
+        "seq": 2,
+        "tail": [
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+          "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456060}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"0RRrLcs0fSMIuRImUXB_46E46p8Sd5NYNc79v5Ap7HarFnqC5vxkttodvLJonKbiKYjJS5f53zj5FicUA9MRCQ\",\"t\":\"chain-entry\"}"
+        ]
+      },
+      "check": {
+        "key_hex": "a86cc6c945cfa43b9d367eebe7f03c83f196a4b50ee2fa1def45b5ae2e30f2df",
+        "kind": "not-device"
+      },
+      "copy": [
+        "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}"
+      ],
+      "expected": "invalid",
+      "floor": null,
+      "name": "a Remove without a floor of a key the chain never had",
+      "why": "T was never a device in this history"
+    }
+  ],
+  "description": "Snapshot authorization (SPEC §7.1, [PROPOSED]). A commit binds, per identity, a chain entry (`seq`, `hash` of the signed entry, `rec`: the seq of the newest recovery-signed entry at or before it, absent if none) with a `tail` of signed entries ending at it. A member joins the tail to its own `copy` of the chain (or can't), validates the whole, checks it against the group's `floor` for the identity, and makes one check on the bound state: `device` (the key is a device: an added leaf, an approval signer, the committer) or `not-device` (a Remove by a member who isn't an admin). Entries are JCS `signed` text, genesis first.",
+  "entries": {
+    "add_k": "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"name\\\":\\\"Ana's phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"c_UE3Dw1JEUrFiAJUGVBz8Bl5b9-Ct393itWNwVYOvI\\\",\\\"seq\\\":1,\\\"ts\\\":1794456000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"LFaM9OFZw5V6Ts7rwMdZ7H3Suo4NB8ZPLgbrEHfMR6wFUFeRCrWLkR0DbS6UzZpQwy4sAAIiD1C4pswPsSN8Cw\",\"t\":\"chain-entry\"}",
+    "after_recovery": "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"Jyu_7XU_d0yB0b4lh4J_C6XYFfSTLGsu7k2iy3FEtLA\\\",\\\"name\\\":\\\"Ana's new phone\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"v-VMS5nqX6g0b8UdX7e3NNXYdc29EHoATHgMMxrpu1I\\\",\\\"seq\\\":3,\\\"ts\\\":1794463200}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"DaujzML17Ecc94tMjai8neOvVzsCRlCmcmBJPKJHxuxGY9TjZgxYn1VlXGcNF58cfFFYyuyHWJD1ysCkPnFuBw\",\"t\":\"chain-entry\"}",
+    "genesis": "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\\\",\\\"name\\\":\\\"Ana's laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"a.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"ana.a.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"TJEhM6Bb6W5H8Dv5qkNONb6byDLHsY3QEd4spmpIWrbZWslpQUHyU25tM-Yg9uDduL1naiA7KQvpJGNUQOv_Ag\",\"t\":\"chain-entry\"}",
+    "private": "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"qGzGyUXPpDudNn7r5_A8g_GWpLUO4vod70W1ri4w8t8\\\",\\\"name\\\":\\\"thief\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456030}\",\"k\":\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\",\"s\":\"1Rz0v8m-1phLrZNPTqrcJ5zPsVxGcJdjCublHCWpZVkP0NHcDksA2IpE-D0iG5LkbCiMohXkdQQKXtFMlEcvAw\",\"t\":\"chain-entry\"}",
+    "recovery": "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"qGzGyUXPpDudNn7r5_A8g_GWpLUO4vod70W1ri4w8t8\\\",\\\"name\\\":\\\"Recovered\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794459600}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"zNqjkZpV83CSRY0rm7eDiLhK8jpS7FWR2gDnIhY6YcpRhU1gqbRj2SWB1ThAJqAJftdDeVHMHsY3sodbgUmlCg\",\"t\":\"chain-entry\"}",
+    "remove_k": "{\"b\":\"{\\\"id\\\":\\\"tr:op2qjxb4gusekkyweaevazkb\\\",\\\"ops\\\":[{\\\"key\\\":\\\"dkUyRV6km7ZCVJYYflQ301qYrbz42odhrbURXqdmTs8\\\",\\\"op\\\":\\\"remove-device\\\"}],\\\"prev\\\":\\\"uNPTLb3RfdnFHrA3sLQ3vgDKoWnpsGGGQqKeOAg5AbE\\\",\\\"seq\\\":2,\\\"ts\\\":1794456060}\",\"k\":\"1u7Ylj-LweItSzCWYpirh9BALvuFmc0cIOuH0diRlpo\",\"s\":\"0RRrLcs0fSMIuRImUXB_46E46p8Sd5NYNc79v5Ap7HarFnqC5vxkttodvLJonKbiKYjJS5f53zj5FicUA9MRCQ\",\"t\":\"chain-entry\"}"
+  },
+  "identity_id": "tr:op2qjxb4gusekkyweaevazkb",
+  "keys": {
+    "device_a": "d6eed8963f8bc1e22d4b30966298ab87d0402efb8599cd1c20eb87d1d891969a",
+    "device_k": "764532455ea49bb6425496187e5437d35a98adbcf8da8761adb5115ea7664ecf",
+    "device_t": "a86cc6c945cfa43b9d367eebe7f03c83f196a4b50ee2fa1def45b5ae2e30f2df",
+    "device_u": "272bbfed753f774c81d1be2587827f0ba5d815f4932c6b2eee4da2cb7144b4b0",
+    "recovery": "recovery keys 1 and 2 from recovery.json (genesis commits to key 1)"
+  },
+  "notice": "Test vectors for Tieroute v1 (draft). These keys are public: never use them for anything real.",
+  "rules": [
+    "The tail has 1 to 16 entries with consecutive seq, each one's prev the hash of the one before, the last one's hash equal to `hash` and its seq to `seq`. Otherwise: invalid.",
+    "If the tail starts after genesis, the member needs entries 0 to tail[0].seq - 1 whose last hashes to tail[0].prev. If its copy (or anything it can fetch) has them: joined. If its copy has a different entry at that seq: pending (conflicting histories). If it has nothing that far: pending.",
+    "The joined chain must validate (SPEC §6.4 rules 1 to 4, ts non-decreasing; no clock or vouching checks), belong to `identity_id`, and have `rec` right. Otherwise: invalid.",
+    "With a floor: the joined chain contains it (the entry at floor.seq hashes to floor.hash), or its newest recovery-signed entry has a seq greater than floor.rec (or there's one, and floor.rec is absent). Otherwise: invalid.",
+    "`device`: the key is a device after the last entry. `not-device`: it isn't, and without a floor it must have been a device somewhere in the chain. Otherwise: invalid."
+  ]
+}

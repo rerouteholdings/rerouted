@@ -1,0 +1,80 @@
+{
+  "description": "A valid four-entry identity chain (SPEC §6.2 to §6.4). Validating all entries in order must succeed and give the final state below.",
+  "entries": [
+    {
+      "note": "genesis, signed by device 1, commits to recovery key 1",
+      "signed": {
+        "body": "{\"ops\":[{\"key\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"name\":\"Kat's Laptop\",\"op\":\"add-device\"},{\"home\":\"chat.example\",\"op\":\"set-home\"},{\"handle\":\"kat.chat.example\",\"op\":\"set-handle\"},{\"next\":\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\",\"op\":\"set-recovery\"}],\"seq\":0,\"ts\":1794096000}",
+        "sig_input": "[\"tieroute/v1\",\"chain-entry\",\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\"]",
+        "signature_hex": "18d542ef3ea2322ed8569a5a726d6a77f54efccc43cc2e2ecd70cd8a2b3e43ae996dc8e1b99c4f766ed9e7fd8ebdbbfda525cb5b25bb64049935bc4a63429900",
+        "signed": "{\"b\":\"{\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"},{\\\"home\\\":\\\"chat.example\\\",\\\"op\\\":\\\"set-home\\\"},{\\\"handle\\\":\\\"kat.chat.example\\\",\\\"op\\\":\\\"set-handle\\\"},{\\\"next\\\":\\\"eJNt1eByysQ2ZRoxclQ75p_1SXzvS5o0TH2INkwfOks\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"seq\\\":0,\\\"ts\\\":1794096000}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"GNVC7z6iMi7YVppacm1qd_VO_MxDzC4uzXDNiis-Q66ZbcjhuZxPdm7Z5_2Ovbv9pSXLWyW7ZASZNbxKY0KZAA\",\"t\":\"chain-entry\"}",
+        "signed_sha256": "37834cad0b3e7bff0f3638a2ed84bdb8686b705cb0eb18ad443893d2e556f16e",
+        "type": "chain-entry"
+      }
+    },
+    {
+      "note": "device 1 adds device 2",
+      "signed": {
+        "body": "{\"id\":\"tr:g6buzlilhz576dzwhcro3bf5\",\"ops\":[{\"key\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"name\":\"Kat's Desktop\",\"op\":\"add-device\"}],\"prev\":\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\",\"seq\":1,\"ts\":1794096060}",
+        "sig_input": "[\"tieroute/v1\",\"chain-entry\",\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\"]",
+        "signature_hex": "bd09f892fce24bd5c448b04147537afbb96dfdf8073169b0f8bfeb917e43e8b219a68bb1054570924814fe13c91ea43926ff44e865bf9ef45d5d3440c8cd9d02",
+        "signed": "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"name\\\":\\\"Kat's Desktop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"N4NMrQs-e_8PNjii7YS9uGhrcFyw6xitRDiT0uVW8W4\\\",\\\"seq\\\":1,\\\"ts\\\":1794096060}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"vQn4kvziS9XESLBBR1N6-7lt_fgHMWmw-L_rkX5D6LIZpouxBUVwkkgU_hPJHqQ5Jv9E6GW_nvRdXTRAyM2dAg\",\"t\":\"chain-entry\"}",
+        "signed_sha256": "eeb24383470add80f7f57db68a4845b062e89db01065835e4c829ce45f68de74",
+        "type": "chain-entry"
+      }
+    },
+    {
+      "note": "recovery key 1 removes device 2 and commits to recovery key 2; SHA-256(k) must equal the genesis commitment",
+      "signed": {
+        "body": "{\"id\":\"tr:g6buzlilhz576dzwhcro3bf5\",\"ops\":[{\"key\":\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\",\"op\":\"remove-device\"},{\"next\":\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\",\"op\":\"set-recovery\"}],\"prev\":\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\",\"seq\":2,\"ts\":1794096120}",
+        "sig_input": "[\"tieroute/v1\",\"chain-entry\",\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794096120}\"]",
+        "signature_hex": "c6fc1f50655f5736dff6eb74812e806a5bb014fbb85c0c307abd06586e7f58ee23d20d9232b489db41202361acdb69d45552686fef1a2b55a549b0096a5af200",
+        "signed": "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"5_FioQvsVZr-oZXk3OhLaVaNXSywlj60RsBoXisX8vA\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"next\\\":\\\"lJDhTxerqyL3O3ZvTX9puRTwMLdCUF8r4Zpgyc7iIao\\\",\\\"op\\\":\\\"set-recovery\\\"}],\\\"prev\\\":\\\"7rJDg0cK3YD39X22ikhFsGLonbAQZYNeTIKc5F9o3nQ\\\",\\\"seq\\\":2,\\\"ts\\\":1794096120}\",\"k\":\"IbDO5b8xttl-q32fvzGBcHRDy05HiPkN5wEPSUSgk1c\",\"s\":\"xvwfUGVfVzbf9ut0gS6AaluwFPu4XAwwer0GWG5_WO4j0g2SMrSJ20EgI2Gs22nUVVJob-8aK1WlSbAJalryAA\",\"t\":\"chain-entry\"}",
+        "signed_sha256": "2bec5e31ca2a87d51e630dac8ab8decc498e83aacdb12b9dd8ae310d8e6c4779",
+        "type": "chain-entry"
+      }
+    },
+    {
+      "note": "self-rotation: device 1 replaces its own key with device 3 (calm notice, SPEC §6.4.1)",
+      "signed": {
+        "body": "{\"id\":\"tr:g6buzlilhz576dzwhcro3bf5\",\"ops\":[{\"key\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"op\":\"remove-device\"},{\"key\":\"rcFAEfgtHFbZVqpPnXPYhYNhpgYEhSXg0Ixjjcdd2Mc\",\"name\":\"Kat's Laptop\",\"op\":\"add-device\"}],\"prev\":\"K-xeMcoqh9UeYw2sirjezEmOg6rNsSud2K4xDY5sR3k\",\"seq\":3,\"ts\":1794096180}",
+        "sig_input": "[\"tieroute/v1\",\"chain-entry\",\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"rcFAEfgtHFbZVqpPnXPYhYNhpgYEhSXg0Ixjjcdd2Mc\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"K-xeMcoqh9UeYw2sirjezEmOg6rNsSud2K4xDY5sR3k\\\",\\\"seq\\\":3,\\\"ts\\\":1794096180}\"]",
+        "signature_hex": "6cbfacc62d8ce001d0022c9b3d0fa54c865138dddb0bc1b9c9618fb714e8f4d3a7640c88024beb5b812e7fad53991afcb7fc3457f9abf1dbc11f5159d7190a08",
+        "signed": "{\"b\":\"{\\\"id\\\":\\\"tr:g6buzlilhz576dzwhcro3bf5\\\",\\\"ops\\\":[{\\\"key\\\":\\\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\\\",\\\"op\\\":\\\"remove-device\\\"},{\\\"key\\\":\\\"rcFAEfgtHFbZVqpPnXPYhYNhpgYEhSXg0Ixjjcdd2Mc\\\",\\\"name\\\":\\\"Kat's Laptop\\\",\\\"op\\\":\\\"add-device\\\"}],\\\"prev\\\":\\\"K-xeMcoqh9UeYw2sirjezEmOg6rNsSud2K4xDY5sR3k\\\",\\\"seq\\\":3,\\\"ts\\\":1794096180}\",\"k\":\"ebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ\",\"s\":\"bL-sxi2M4AHQAiybPQ-lTIZRON3bC8G5yWGPtxTo9NOnZAyIAkvrW4Euf61TmRr8t_w0V_mr8dvBH1FZ1xkKCA\",\"t\":\"chain-entry\"}",
+        "signed_sha256": "0fa6dd5cd203f6e29c1b05fc149838c4c7b717414a62994ff97f358826c7409f",
+        "type": "chain-entry"
+      }
+    }
+  ],
+  "final_state": {
+    "devices": [
+      "adc14011f82d1c56d956aa4f9d73d8858361a606048525e0d08c638dc75dd8c7"
+    ],
+    "handle": "kat.chat.example",
+    "head_seq": 3,
+    "head_sha256": "0fa6dd5cd203f6e29c1b05fc149838c4c7b717414a62994ff97f358826c7409f",
+    "home": "chat.example",
+    "recovery_commitment": "9490e14f17abab22f73b766f4d7f69b914f030b742505f2be19a60c9cee221aa"
+  },
+  "identity_id": "tr:g6buzlilhz576dzwhcro3bf5",
+  "identity_id_derivation": "\"tr:\" || lowercase base32 (RFC 4648, no padding) of the first 15 bytes of SHA-256 of the genesis `signed` text (JCS)",
+  "keys": {
+    "device_1": {
+      "name": "Kat's Laptop",
+      "public_hex": "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664",
+      "seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+    },
+    "device_2": {
+      "name": "Kat's Desktop",
+      "public_hex": "e7f162a10bec559afea195e4dce84b69568d5d2cb0963eb446c0685e2b17f2f0",
+      "seed_hex": "2122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40"
+    },
+    "device_3": {
+      "name": "Kat's Laptop (rotated)",
+      "public_hex": "adc14011f82d1c56d956aa4f9d73d8858361a606048525e0d08c638dc75dd8c7",
+      "seed_hex": "4142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60"
+    },
+    "recovery": "see recovery.json"
+  },
+  "notice": "Test vectors for Tieroute v1 (draft). These keys are public: never use them for anything real."
+}
