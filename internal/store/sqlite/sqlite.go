@@ -32,6 +32,7 @@ CREATE INDEX IF NOT EXISTS move_reservations_handle ON move_reservations (handle
 CREATE TABLE IF NOT EXISTS chains   (id TEXT NOT NULL, seq INTEGER NOT NULL, entry BLOB NOT NULL, PRIMARY KEY (id, seq));
 CREATE TABLE IF NOT EXISTS handles  (handle TEXT PRIMARY KEY, id TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS nonces   (k TEXT PRIMARY KEY, expires INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS nonces_expires ON nonces (expires);
 CREATE TABLE IF NOT EXISTS tokens   (hash BLOB PRIMARY KEY, id TEXT NOT NULL, device BLOB NOT NULL, name TEXT NOT NULL, expires INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS kps      (n INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL, device BLOB NOT NULL, data BLOB NOT NULL, last_resort INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS contacts (owner TEXT NOT NULL, other TEXT NOT NULL, state TEXT NOT NULL, since INTEGER NOT NULL, request BLOB, PRIMARY KEY (owner, other));
@@ -553,6 +554,26 @@ func nonceKey(id string, device, nonce []byte) string {
 func (x sessions) PutNonce(ctx context.Context, id string, device, nonce []byte, expires int64) error {
 	_, err := x.db.ExecContext(ctx, "INSERT OR REPLACE INTO nonces (k, expires) VALUES (?, ?)", nonceKey(id, device, nonce), expires)
 	return err
+}
+
+func (x sessions) UseNonce(ctx context.Context, key string, expires, now int64) (bool, error) {
+	// Inserts the key, or takes over an expired record of it; a live one is left alone.
+	res, err := x.db.ExecContext(ctx, `INSERT INTO nonces (k, expires) VALUES (?, ?)
+		ON CONFLICT (k) DO UPDATE SET expires = excluded.expires WHERE nonces.expires < ?`, key, expires, now)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
+}
+
+func (x sessions) PruneNonces(ctx context.Context, now int64) (int, error) {
+	res, err := x.db.ExecContext(ctx, "DELETE FROM nonces WHERE expires < ?", now)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
 }
 
 func (x sessions) TakeNonce(ctx context.Context, id string, device, nonce []byte, now int64) error {

@@ -57,6 +57,9 @@ func (s *Server) maintain(ctx context.Context) {
 	} else if n > 0 {
 		s.log.Info("pruned move reservations", "n", n)
 	}
+	if _, err := s.st.Sessions().PruneNonces(ctx, now()); err != nil {
+		s.log.Error("pruning nonces", "err", err)
+	}
 	s.limits.sweep(now())
 	s.saveLimits()
 }

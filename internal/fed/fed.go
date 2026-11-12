@@ -42,11 +42,24 @@ type Fed struct {
 	// ours), whenever a peer answers: from its Date header, or from the `now` in a
 	// clock-skew refusal (refused = true). The operator is told from there (SPEC §8.4).
 	OnClock func(peer string, offset int64, refused bool)
+	// UseNonce, if set, records an incoming request's nonce until `expires` and reports
+	// whether it was fresh, in one step, in storage that outlives a restart (SPEC §8.3).
+	// Nil keeps nonces in memory, for tests.
+	UseNonce func(ctx context.Context, key string, expires, now int64) (fresh bool, err error)
 
-	mu     sync.Mutex
-	docs   map[string]cachedDoc
-	nonces map[string]int64
+	mu        sync.Mutex
+	docs      map[string]cachedDoc
+	nonces    map[string]int64
+	nextSweep int64
 }
+
+// UnavailableError is a failure to check a request that says nothing about the request
+// itself: the sender's server document couldn't be fetched, or our storage failed. The
+// answer is 503, so the sender retries, rather than a refusal it would give up on.
+type UnavailableError struct{ Err error }
+
+func (e *UnavailableError) Error() string { return "unavailable: " + e.Err.Error() }
+func (e *UnavailableError) Unwrap() error { return e.Err }
 
 type cachedDoc struct {
 	doc     Doc
@@ -168,7 +181,7 @@ func (f *Fed) ServerDoc(ctx context.Context, name string) (Doc, error) {
 func (f *Fed) KeyFor(ctx context.Context, server, kid string, t int64) (ed25519.PublicKey, error) {
 	d, err := f.ServerDoc(ctx, server)
 	if err != nil {
-		return nil, err
+		return nil, &UnavailableError{err}
 	}
 	for _, k := range d.Keys {
 		if k.KID == kid && t >= k.NBF && t <= k.EXP && len(k.Pub) == ed25519.PublicKeySize {
@@ -312,19 +325,37 @@ func (f *Fed) Verify(ctx context.Context, raw []byte, path string) (from string,
 	if err := sig.Verify("s2s", pub); err != nil {
 		return "", nil, err
 	}
-	key := req.From + "|" + string(wire.HexBytes(req.Nonce))
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for k, exp := range f.nonces {
-		if exp < now {
-			delete(f.nonces, k)
-		}
+	// Recorded only now, once the signature checks out, so unsigned junk can't fill the
+	// record (SPEC §8.3).
+	fresh, err := f.useNonce(ctx, "s2s|"+req.From+"|"+string(wire.HexBytes(req.Nonce)), now+NonceTTL, now)
+	if err != nil {
+		return "", nil, &UnavailableError{err}
 	}
-	if _, seen := f.nonces[key]; seen {
+	if !fresh {
 		return "", nil, errors.New("replayed nonce")
 	}
-	f.nonces[key] = now + NonceTTL
 	return req.From, req.Body, nil
+}
+
+func (f *Fed) useNonce(ctx context.Context, key string, expires, now int64) (bool, error) {
+	if f.UseNonce != nil {
+		return f.UseNonce(ctx, key, expires, now)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if now >= f.nextSweep {
+		for k, exp := range f.nonces {
+			if exp < now {
+				delete(f.nonces, k)
+			}
+		}
+		f.nextSweep = now + 60
+	}
+	if exp, seen := f.nonces[key]; seen && exp >= now {
+		return false, nil
+	}
+	f.nonces[key] = expires
+	return true, nil
 }
 
 // HandleDoc is what a handle resolves to (SPEC §5.3).

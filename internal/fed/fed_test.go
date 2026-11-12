@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rerouteholdings/rerouted/internal/serverkey"
+	"github.com/rerouteholdings/rerouted/internal/store/sqlite"
 	"github.com/rerouteholdings/rerouted/internal/wire"
 )
 
@@ -182,5 +183,51 @@ func TestVerifyChecksKeyAndSignatureBeforeNonce(t *testing.T) {
 	}
 	if _, _, err := f.Verify(ctx, request(live, "live"), "ping"); err == nil {
 		t.Fatal("a replayed nonce verified")
+	}
+}
+
+// A replayed request is refused even after a restart, which empties memory: nonces are
+// kept in storage (SPEC §8.3). And when the sender's server document can't be fetched,
+// the request is unavailable, not refused, so a real sender retries.
+func TestReplayRefusedAcrossRestart(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(nil)
+	now := time.Now().Unix()
+	doc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := wire.Marshal(map[string]any{"name": "a.test", "keys": []any{
+			map[string]any{"kid": "k", "pub": wire.Bytes(pub), "nbf": now - 3600, "exp": now + 3600},
+		}})
+		w.Write(b)
+	}))
+	defer doc.Close()
+	st, err := sqlite.OpenTemp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	start := func() *Fed {
+		f := New("b.test", serverkey.Key{}, map[string]string{"a.test": doc.URL})
+		f.HTTP = doc.Client()
+		f.UseNonce = st.Sessions().UseNonce
+		return f
+	}
+	sig, err := wire.SignKID("s2s", s2sRequest{From: "a.test", To: "b.test", Path: "ping", TS: now, Nonce: make([]byte, 16), Body: wire.Raw(`{}`)}, priv, "k")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, _ := sig.Encode()
+	ctx := context.Background()
+	if _, _, err := start().Verify(ctx, req, "ping"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := start().Verify(ctx, req, "ping"); err == nil {
+		t.Fatal("a request replayed after a restart verified")
+	}
+
+	doc.Close() // the sender's server document can't be fetched now
+	f := New("b.test", serverkey.Key{}, map[string]string{"a.test": doc.URL})
+	sig, _ = wire.SignKID("s2s", s2sRequest{From: "a.test", To: "b.test", Path: "ping", TS: now, Nonce: []byte("another nonce 16"), Body: wire.Raw(`{}`)}, priv, "k")
+	req, _ = sig.Encode()
+	if _, _, err := f.Verify(ctx, req, "ping"); !errors.As(err, new(*UnavailableError)) {
+		t.Fatalf("with the sender's document unreachable: %v, want unavailable", err)
 	}
 }

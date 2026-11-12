@@ -264,6 +264,11 @@ func (s *Server) s2s(path string, h func(http.ResponseWriter, *http.Request, str
 				s.writeS2SClockSkew(w, e)
 				return
 			}
+			if _, ok := errors.AsType[*fed.UnavailableError](err); ok {
+				s.log.Warn("couldn't check an s2s request", "path", path, "err", err)
+				writeError(w, http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "")
+				return
+			}
 			writeError(w, http.StatusUnauthorized, wire.ErrCodeBadSignature, err.Error())
 			return
 		}

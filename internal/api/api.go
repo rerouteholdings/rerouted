@@ -66,6 +66,7 @@ func New(cfg *config.Config, key serverkey.Key, log *slog.Logger, st store.Store
 	}
 	s.fed = fed.New(cfg.Name, key, cfg.Peers)
 	s.fed.OnClock = s.peerClock
+	s.fed.UseNonce = st.Sessions().UseNonce
 	ik := hmac.New(sha256.New, key.Priv.Seed())
 	ik.Write([]byte("tieroute invite codes"))
 	s.inviteKey = ik.Sum(nil)

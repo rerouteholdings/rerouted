@@ -129,6 +129,12 @@ type Sessions interface {
 	PutNonce(ctx context.Context, id string, device, nonce []byte, expires int64) error
 	// TakeNonce consumes a nonce. ErrNotFound if it's unknown, used, or expired.
 	TakeNonce(ctx context.Context, id string, device, nonce []byte, now int64) error
+	// UseNonce records a server-to-server request nonce until `expires`, in one step, and
+	// reports whether it was fresh: false if the same key is recorded and not yet expired
+	// (SPEC §8.3). Keys start with "s2s|", so they never meet the auth nonces above.
+	UseNonce(ctx context.Context, key string, expires, now int64) (fresh bool, err error)
+	// PruneNonces deletes every nonce, of either kind, that expired before `now`.
+	PruneNonces(ctx context.Context, now int64) (int, error)
 	CreateToken(ctx context.Context, tokenHash []byte, id string, device []byte, name string, expires int64) error
 	// LookupToken also extends the token's expiry.
 	LookupToken(ctx context.Context, tokenHash []byte, now int64) (id string, device []byte, err error)
