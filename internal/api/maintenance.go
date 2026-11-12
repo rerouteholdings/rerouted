@@ -57,6 +57,14 @@ func (s *Server) maintain(ctx context.Context) {
 	} else if n > 0 {
 		s.log.Info("pruned move reservations", "n", n)
 	}
+	// Delivery IDs and send results are kept as long as inbox items: far longer than any
+	// retry, since the outbox gives up after 72 hours.
+	if _, err := s.st.Inbox().PruneSeen(ctx, before); err != nil {
+		s.log.Error("pruning seen delivery IDs", "err", err)
+	}
+	if _, err := s.st.Sent().Prune(ctx, before); err != nil {
+		s.log.Error("pruning send results", "err", err)
+	}
 	if _, err := s.st.Sessions().PruneNonces(ctx, now()); err != nil {
 		s.log.Error("pruning nonces", "err", err)
 	}

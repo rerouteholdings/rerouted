@@ -23,7 +23,7 @@ import (
 
 // SchemaVersion is stored in PRAGMA user_version. Bump it with a migration
 // whenever the schema changes.
-const SchemaVersion = 6
+const SchemaVersion = 7
 
 const schema = `
 CREATE TABLE IF NOT EXISTS move_registrations (id TEXT NOT NULL, operation BLOB NOT NULL, PRIMARY KEY (id, operation));
@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS groups_allowed (owner TEXT NOT NULL, grp BLOB NOT NUL
 CREATE TABLE IF NOT EXISTS inbox    (cursor INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT NOT NULL, ts INTEGER NOT NULL, delivery BLOB, notice BLOB);
 CREATE INDEX IF NOT EXISTS inbox_owner ON inbox (owner, cursor);
 CREATE TABLE IF NOT EXISTS acks     (owner TEXT NOT NULL, device BLOB NOT NULL, upto INTEGER NOT NULL, PRIMARY KEY (owner, device));
-CREATE TABLE IF NOT EXISTS seen     (owner TEXT NOT NULL, did BLOB NOT NULL, PRIMARY KEY (owner, did));
+CREATE TABLE IF NOT EXISTS seen     (owner TEXT NOT NULL, did BLOB NOT NULL, ts INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (owner, did));
+CREATE TABLE IF NOT EXISTS sent     (sender TEXT NOT NULL, did BLOB NOT NULL, result BLOB NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (sender, did));
 CREATE TABLE IF NOT EXISTS hub      (grp BLOB PRIMARY KEY, epoch INTEGER NOT NULL, key BLOB NOT NULL, awaiting INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS commits  (grp BLOB NOT NULL, epoch INTEGER NOT NULL, data BLOB NOT NULL, receipt BLOB NOT NULL, ts INTEGER NOT NULL DEFAULT 0, request BLOB, PRIMARY KEY (grp, epoch));
 CREATE TABLE IF NOT EXISTS remote   (id TEXT PRIMARY KEY, home TEXT NOT NULL, entries BLOB NOT NULL);
@@ -136,6 +137,20 @@ func open(path, sync string) (*Store, error) {
 			return nil, err
 		}
 	}
+	// Version 7: seen delivery IDs record when they were seen, so they can be pruned.
+	// Existing ones count from the upgrade. Sent results (POST send) are a new table, from
+	// schema.
+	if v < 7 && !hasColumn(db, "seen", "ts") {
+		if err := migrateSeenTimes(db); err != nil {
+			db.Close()
+			return nil, err
+		}
+	}
+	// Indexes on columns that older databases only have after the migrations above.
+	if _, err := db.Exec(indexes); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if _, err := db.Exec("PRAGMA user_version = " + strconv.Itoa(SchemaVersion)); err != nil {
 		db.Close()
 		return nil, err
@@ -146,6 +161,26 @@ func open(path, sync string) (*Store, error) {
 		return nil, err
 	}
 	return &Store{db: db, mediaDir: mediaDir}, nil
+}
+
+const indexes = `
+CREATE INDEX IF NOT EXISTS seen_ts ON seen (ts);
+CREATE INDEX IF NOT EXISTS sent_ts ON sent (ts);
+`
+
+func migrateSeenTimes(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("ALTER TABLE seen ADD COLUMN ts INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE seen SET ts = strftime('%s','now')"); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func migrateKeyTimes(db *sql.DB) error {
@@ -176,6 +211,7 @@ func (s *Store) Sessions() store.Sessions       { return sessions{s.db} }
 func (s *Store) KeyPackages() store.KeyPackages { return keyPackages{s.db} }
 func (s *Store) Contacts() store.Contacts       { return contacts{s.db} }
 func (s *Store) Invites() store.Invites         { return invites{s.db} }
+func (s *Store) Sent() store.Sent               { return sent{s.db} }
 func (s *Store) Inbox() store.Inbox             { return inbox{s.db} }
 func (s *Store) Hub() store.Hub                 { return hub{s.db} }
 func (s *Store) Remote() store.Remote           { return remote{s.db} }
@@ -831,13 +867,64 @@ func (x inbox) Prune(ctx context.Context, owner string, devices [][]byte, before
 	return err
 }
 
-func (x inbox) SeenDelivery(ctx context.Context, owner string, id []byte) (bool, error) {
-	res, err := x.db.ExecContext(ctx, "INSERT OR IGNORE INTO seen (owner, did) VALUES (?, ?)", owner, id)
+func (x inbox) Deliver(ctx context.Context, owner string, id []byte, it store.Item) (string, bool, error) {
+	tx, err := x.db.BeginTx(ctx, nil)
 	if err != nil {
-		return false, err
+		return "", false, err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO seen (owner, did, ts) VALUES (?, ?, ?)", owner, id, it.TS)
+	if err != nil {
+		return "", false, err
+	}
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		return "", false, err
+	}
+	res, err = tx.ExecContext(ctx, "INSERT INTO inbox (owner, ts, delivery, notice) VALUES (?, ?, ?, ?)", owner, it.TS, it.Delivery, it.Notice)
+	if err != nil {
+		return "", false, err
+	}
+	n, err := res.LastInsertId()
+	if err != nil {
+		return "", false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return "", false, err
+	}
+	return strconv.FormatInt(n, 10), true, nil
+}
+
+func (x inbox) PruneSeen(ctx context.Context, before int64) (int, error) {
+	res, err := x.db.ExecContext(ctx, "DELETE FROM seen WHERE ts < ?", before)
+	if err != nil {
+		return 0, err
 	}
 	n, _ := res.RowsAffected()
-	return n == 1, nil
+	return int(n), nil
+}
+
+// ---- sent results ----
+
+type sent struct{ db *sql.DB }
+
+func (x sent) Get(ctx context.Context, sender string, id []byte) ([]byte, error) {
+	var b []byte
+	err := x.db.QueryRowContext(ctx, "SELECT result FROM sent WHERE sender = ? AND did = ?", sender, id).Scan(&b)
+	return b, notFound(err)
+}
+
+func (x sent) Put(ctx context.Context, sender string, id, result []byte, ts int64) error {
+	_, err := x.db.ExecContext(ctx, "INSERT OR IGNORE INTO sent (sender, did, result, ts) VALUES (?, ?, ?, ?)", sender, id, result, ts)
+	return err
+}
+
+func (x sent) Prune(ctx context.Context, before int64) (int, error) {
+	res, err := x.db.ExecContext(ctx, "DELETE FROM sent WHERE ts < ?", before)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
 }
 
 // ---- hub ----

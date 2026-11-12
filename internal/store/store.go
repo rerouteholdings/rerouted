@@ -34,6 +34,7 @@ type Store interface {
 	Hub() Hub
 	Remote() Remote
 	Outbox() Outbox
+	Sent() Sent
 	Profiles() Profiles
 	Media() Media
 	Account() Account
@@ -227,8 +228,25 @@ type Inbox interface {
 	Ack(ctx context.Context, owner string, device []byte, upto string) error
 	// Prune deletes items every listed device has acked, and items older than `before` (SPEC §9.4).
 	Prune(ctx context.Context, owner string, devices [][]byte, before int64) error
-	// SeenDelivery records a delivery ID for deduplication (SPEC §9.5). It reports whether it was new.
-	SeenDelivery(ctx context.Context, owner string, id []byte) (isNew bool, err error)
+	// Deliver stores a delivery in an owner's inbox unless its ID was delivered to that owner
+	// before (SPEC §9.5), recording the ID and appending the item in one transaction, so a
+	// failure leaves neither. isNew is false, with no cursor, for a repeat.
+	Deliver(ctx context.Context, owner string, id []byte, it Item) (cursor string, isNew bool, err error)
+	// PruneSeen forgets delivery IDs recorded before `before`. A repeat after that is stored
+	// again, so `before` has to be older than any retry: the outbox gives up after 72 hours.
+	PruneSeen(ctx context.Context, before int64) (int, error)
+}
+
+// Sent keeps the result of each delivery a local user sent, by sender and delivery ID, so
+// a resubmitted ID gets the original result instead of being delivered again
+// (spec/api/client-stage1.md, POST send).
+type Sent interface {
+	// Get returns the stored result, or ErrNotFound.
+	Get(ctx context.Context, sender string, id []byte) ([]byte, error)
+	// Put stores a result. A result already stored for the same ID is kept.
+	Put(ctx context.Context, sender string, id, result []byte, ts int64) error
+	// Prune deletes results stored before `before`.
+	Prune(ctx context.Context, before int64) (int, error)
 }
 
 // HubGroup is the hub's state for one group (SPEC §11.6).

@@ -242,12 +242,6 @@ type sendResult struct {
 	Receipt wire.Raw   `json:"receipt,omitempty"`
 }
 
-// sent remembers results per sender and delivery ID, so retries are idempotent.
-var (
-	sentMu sync.Mutex
-	sent   = map[string]sendResult{}
-)
-
 // inboxRetention is how long undelivered items are kept (SPEC §9.4).
 const inboxRetention = 30 * 24 * 3600
 
@@ -266,23 +260,85 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request, sess session) {
 	}
 	results := make([]sendResult, len(req.Deliveries))
 	for i, o := range req.Deliveries {
-		key := sess.id + "|" + hex.EncodeToString(o.ID)
-		sentMu.Lock()
-		prev, dup := sent[key]
-		sentMu.Unlock()
-		if dup {
-			results[i] = prev
-			continue
-		}
-		res := s.sendOne(r.Context(), sess, o)
-		if res.Status == "sent" {
-			sentMu.Lock()
-			sent[key] = res
-			sentMu.Unlock()
+		res, err := s.sendIdempotent(r.Context(), sess, o)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "")
+			return
 		}
 		results[i] = res
 	}
 	writeBody(w, http.StatusOK, map[string]any{"results": results})
+}
+
+// sendIdempotent sends one delivery, or returns the result it got when its sender sent
+// the same ID before: resubmitting an ID never delivers twice (POST send). Results are
+// stored once the delivery is sent, and kept for 30 days. Two requests with the same ID
+// at once take turns, so the second finds the first one's result. An error means the
+// stored results couldn't be read, so the client should retry the request.
+func (s *Server) sendIdempotent(ctx context.Context, sess session, o outgoing) (sendResult, error) {
+	unlock, err := s.sending.lock(ctx, sess.id+"|"+hex.EncodeToString(o.ID))
+	if err != nil {
+		return sendResult{}, err
+	}
+	defer unlock()
+	switch b, err := s.st.Sent().Get(ctx, sess.id, o.ID); {
+	case err == nil:
+		var prev sendResult
+		if err := wire.Unmarshal(b, &prev); err != nil {
+			return sendResult{}, err
+		}
+		return prev, nil
+	case !errors.Is(err, store.ErrNotFound):
+		return sendResult{}, err
+	}
+	res := s.sendOne(ctx, sess, o)
+	if res.Status != "sent" {
+		return res, nil // rejections aren't kept: a corrected retry gets a fresh try
+	}
+	b, err := wire.Marshal(res)
+	if err == nil {
+		err = s.st.Sent().Put(ctx, sess.id, o.ID, b, now())
+	}
+	if err != nil {
+		// It was delivered: say so. A retry would deliver it again, but every recipient's
+		// inbox drops a delivery ID it already has.
+		s.log.Error("storing a send result", "err", err)
+	}
+	return res, nil
+}
+
+// keyLocks serializes work on the same key, such as one sender's delivery ID.
+type keyLocks struct {
+	mu   sync.Mutex
+	busy map[string]chan struct{}
+}
+
+// lock waits until no one else holds key, then holds it until the returned func is called.
+func (l *keyLocks) lock(ctx context.Context, key string) (func(), error) {
+	for {
+		l.mu.Lock()
+		if l.busy == nil {
+			l.busy = map[string]chan struct{}{}
+		}
+		done, held := l.busy[key]
+		if !held {
+			done = make(chan struct{})
+			l.busy[key] = done
+			l.mu.Unlock()
+			return func() {
+				l.mu.Lock()
+				delete(l.busy, key)
+				l.mu.Unlock()
+				close(done)
+			}, nil
+		}
+		l.mu.Unlock()
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
 }
 
 func reject(id []byte, code string) sendResult {
@@ -296,7 +352,9 @@ func (s *Server) sendOne(ctx context.Context, sess session, o outgoing) sendResu
 		if len(o.ID) != 16 || len(o.Data) == 0 || len(o.Data) > maxLinkBundle || len(o.To) != 1 || o.To[0] != sess.id {
 			return reject(o.ID, wire.ErrCodeBadRequest)
 		}
-		s.deliverLocal(ctx, delivery{ID: o.ID, Kind: o.Kind, From: sess.id, To: o.To, Data: o.Data}, s.cfg.Name)
+		if err := s.deliverLocal(ctx, delivery{ID: o.ID, Kind: o.Kind, From: sess.id, To: o.To, Data: o.Data}, s.cfg.Name); err != nil {
+			return s.unavailable(o.ID, err)
+		}
 		return sendResult{ID: o.ID, Status: "sent"}
 	}
 	switch {
@@ -332,13 +390,25 @@ func (s *Server) sendOne(ctx context.Context, sess session, o outgoing) sendResu
 		s.deliverEphemeral(ctx, d, s.cfg.Name, true)
 		return res
 	}
-	s.deliver(ctx, d)
-
+	// If storing fails, the client retries. A retried commit gets the receipt the hub
+	// already gave it (SPEC §11.6), and recipients drop what they already have.
+	if err := s.deliver(ctx, d); err != nil {
+		return s.unavailable(o.ID, err)
+	}
 	// Welcomes go out only after the hub accepted the commit (SPEC §11.6).
 	for _, wl := range o.Welcomes {
-		s.deliver(ctx, delivery{ID: wl.ID, Kind: "mls", From: sess.id, To: wl.To, Group: o.Group, Epoch: o.Epoch + 1, MLS: "welcome", Data: wl.Data})
+		if err := s.deliver(ctx, delivery{ID: wl.ID, Kind: "mls", From: sess.id, To: wl.To, Group: o.Group, Epoch: o.Epoch + 1, MLS: "welcome", Data: wl.Data}); err != nil {
+			return s.unavailable(o.ID, err)
+		}
 	}
 	return res
+}
+
+// unavailable is the result for a delivery that couldn't be stored. It isn't kept, so
+// the client's retry tries again.
+func (s *Server) unavailable(id []byte, err error) sendResult {
+	s.log.Error("storing a delivery", "err", err)
+	return reject(id, wire.ErrCodeUnavailable)
 }
 
 // sequenceRemote asks the group's hub on another server to sequence a commit (S2S commit).
@@ -437,8 +507,11 @@ func (s *Server) retried(ctx context.Context, group []byte, epoch uint64, reques
 
 // deliver sends a locally submitted delivery: into local inboxes, and through
 // the outbox to every other server with recipients, one call per server (SPEC §9.2).
-func (s *Server) deliver(ctx context.Context, d delivery) {
-	s.deliverLocal(ctx, d, s.cfg.Name)
+// An error means some of it wasn't stored, and the whole delivery should be retried.
+func (s *Server) deliver(ctx context.Context, d delivery) error {
+	if err := s.deliverLocal(ctx, d, s.cfg.Name); err != nil {
+		return err
+	}
 	byHome := map[string][]string{}
 	for _, to := range d.To {
 		if s.isLocal(ctx, to) {
@@ -450,47 +523,65 @@ func (s *Server) deliver(ctx context.Context, d delivery) {
 		// Unknown identities are dropped: a sender only talks to people it has fetched.
 	}
 	if s.fed == nil {
-		return
+		return nil
 	}
 	for home, tos := range byHome {
 		out := d
 		out.To = tos
-		s.enqueue(ctx, home, "deliver", map[string]any{"deliveries": []delivery{out}})
+		if err := s.enqueue(ctx, home, "deliver", map[string]any{"deliveries": []delivery{out}}); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // deliverLocal puts a delivery in each local recipient's inbox, applying the
 // allowlists (SPEC §9.3). Drops are silent.
 // origin is the server that delivered it.
-func (s *Server) deliverLocal(ctx context.Context, d delivery, origin string) {
+//
+// It returns the first storage error, after trying every recipient. Each recipient's
+// copy is stored whole or not at all, and a recipient that already has it drops the
+// repeat, so the caller can retry the whole delivery.
+func (s *Server) deliverLocal(ctx context.Context, d delivery, origin string) error {
 	enc, err := wire.Marshal(d)
 	if err != nil {
-		s.log.Error("encode delivery", "err", err)
-		return
+		return err
 	}
+	var first error
 	for _, to := range d.To {
-		if !s.isLocal(ctx, to) || !s.allowed(ctx, d, to, origin) {
-			continue
-		}
-		if d.MLS == "welcome" && to != d.From {
-			// A Welcome from someone we asked promotes them to a full contact (SPEC §10.3).
-			s.st.Contacts().Put(ctx, to, store.Contact{ID: d.From, State: store.StateContact, Since: now()})
-		}
-		if d.MLS == "welcome" && len(d.Group) > 0 {
-			// Accepting a Welcome allowlists its group, so what members send before the
-			// recipient's device processes it isn't dropped (SPEC §10.3).
-			s.st.Contacts().AllowGroup(ctx, to, d.Group)
-		}
-		if isNew, _ := s.st.Inbox().SeenDelivery(ctx, to, d.ID); !isNew {
-			continue
-		}
-		it := store.Item{TS: now(), Delivery: enc}
-		if cur, err := s.st.Inbox().Append(ctx, to, it); err == nil {
-			it.Cursor = cur
-			s.pushItem(to, it)
-			s.fire.publish(to, it)
+		if err := s.deliverTo(ctx, d, enc, to, origin); err != nil && first == nil {
+			first = err
 		}
 	}
+	return first
+}
+
+func (s *Server) deliverTo(ctx context.Context, d delivery, enc []byte, to, origin string) error {
+	if !s.isLocal(ctx, to) || !s.allowed(ctx, d, to, origin) {
+		return nil
+	}
+	if d.MLS == "welcome" && to != d.From {
+		// A Welcome from someone we asked promotes them to a full contact (SPEC §10.3).
+		if err := s.st.Contacts().Put(ctx, to, store.Contact{ID: d.From, State: store.StateContact, Since: now()}); err != nil {
+			return err
+		}
+	}
+	if d.MLS == "welcome" && len(d.Group) > 0 {
+		// Accepting a Welcome allowlists its group, so what members send before the
+		// recipient's device processes it isn't dropped (SPEC §10.3).
+		if err := s.st.Contacts().AllowGroup(ctx, to, d.Group); err != nil {
+			return err
+		}
+	}
+	it := store.Item{TS: now(), Delivery: enc}
+	cur, isNew, err := s.st.Inbox().Deliver(ctx, to, d.ID, it)
+	if err != nil || !isNew {
+		return err
+	}
+	it.Cursor = cur
+	s.pushItem(to, it)
+	s.fire.publish(to, it)
+	return nil
 }
 
 // allowed applies a local recipient's allowlists to a delivery (SPEC §10.3).

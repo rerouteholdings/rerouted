@@ -99,20 +99,19 @@ func (s *Server) fetchRemote(ctx context.Context, id, home string, follow bool) 
 
 const outboxExpiry = 72 * 3600
 
-func (s *Server) enqueue(ctx context.Context, dest, path string, body any) {
+func (s *Server) enqueue(ctx context.Context, dest, path string, body any) error {
 	b, err := wire.Marshal(body)
 	if err != nil {
-		s.log.Error("encode s2s body", "err", err)
-		return
+		return err
 	}
 	if err := s.st.Outbox().Enqueue(ctx, dest, path, b, now()); err != nil {
-		s.log.Error("enqueue", "err", err)
-		return
+		return err
 	}
 	select {
 	case s.kick <- struct{}{}:
 	default:
 	}
+	return nil
 }
 
 // RunOutbox delivers queued S2S requests until ctx ends.
@@ -405,6 +404,7 @@ func (s *Server) s2sDeliver(w http.ResponseWriter, r *http.Request, from string,
 		return
 	}
 	var wrong []wire.Bytes
+	var failed error
 	for _, d := range req.Deliveries {
 		if d.Kind != "mls" || !mlsKinds[d.MLS] {
 			continue
@@ -422,7 +422,16 @@ func (s *Server) s2sDeliver(w http.ResponseWriter, r *http.Request, from string,
 			s.deliverEphemeral(r.Context(), d, from, false)
 			continue
 		}
-		s.deliverLocal(r.Context(), d, from)
+		if err := s.deliverLocal(r.Context(), d, from); err != nil && failed == nil {
+			failed = err
+		}
+	}
+	if failed != nil {
+		// Nothing half-stored: the sending server retries the whole call later, and
+		// recipients drop the deliveries they already have.
+		s.log.Error("storing a delivery from another server", "server", from, "err", failed)
+		writeError(w, http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "")
+		return
 	}
 	if len(wrong) > 0 {
 		// Not silent: it says nothing about the recipient, only that our copy of the

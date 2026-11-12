@@ -41,6 +41,7 @@ type Server struct {
 	inviteKey []byte
 	homeAsker func(ctx context.Context, home, id string) ([][]byte, error) // tests: stands in for previous homes
 	retry     destBackoff
+	sending   keyLocks // one send at a time per sender and delivery ID
 	streams   streams
 	presence  presenceBook
 	profiles  remoteProfiles
