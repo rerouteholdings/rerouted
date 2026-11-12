@@ -34,7 +34,11 @@ func (s *Server) backupPut(w http.ResponseWriter, r *http.Request, sess session)
 		return
 	}
 	ctx := r.Context()
-	used, _ := s.st.Backups().Usage(ctx, sess.id)
+	used, err := s.st.Backups().Usage(ctx, sess.id)
+	if err != nil {
+		s.unavailableRead(w, "reading backup usage", err) // never let a failed check past the quota
+		return
+	}
 	if req.Snapshot {
 		used = 0 // a snapshot replaces everything before it
 	}
@@ -42,7 +46,7 @@ func (s *Server) backupPut(w http.ResponseWriter, r *http.Request, sess session)
 		writeError(w, http.StatusRequestEntityTooLarge, wire.ErrCodeOverQuota, "the backup is full: compact it with a snapshot")
 		return
 	}
-	err := s.st.Backups().Put(ctx, sess.id, store.Segment{Seq: req.Seq, CT: req.CT, Snapshot: req.Snapshot})
+	err = s.st.Backups().Put(ctx, sess.id, store.Segment{Seq: req.Seq, CT: req.CT, Snapshot: req.Snapshot})
 	switch {
 	case errors.Is(err, store.ErrExists):
 		writeError(w, http.StatusConflict, wire.ErrCodeAlreadyExists, "that seq holds a different segment")

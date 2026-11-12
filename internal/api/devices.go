@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/rerouteholdings/rerouted/internal/chain"
@@ -69,6 +70,7 @@ func (s *Server) recoverAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	enc, _ := sig.Encode()
 	devicesBefore := st.Devices
+	var removed [][]byte
 	switch {
 	case e.Seq == st.Seq+1 && bytes.Equal(e.Prev, st.Head):
 		// On top of the head.
@@ -82,8 +84,12 @@ func (s *Server) recoverAccount(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "recover takes only recovery-signed entries; devices use chain/append")
 			return
 		}
+		if removed, err = s.revokeRemoved(r.Context(), e.ID, devicesBefore, st.Devices); err != nil {
+			s.unavailableRead(w, "revoking a removed device's sessions", err)
+			return
+		}
 		if err := s.st.Chains().Append(r.Context(), e.ID, before, enc); err != nil {
-			writeError(w, http.StatusConflict, wire.ErrCodeStaleHead, "")
+			writeChainWriteError(w, s, err)
 			return
 		}
 	case e.Seq >= 1 && e.Seq <= st.Seq:
@@ -98,8 +104,12 @@ func (s *Server) recoverAccount(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, wire.ErrCodeInvalidChain, msg)
 			return
 		}
+		if removed, err = s.revokeRemoved(r.Context(), e.ID, devicesBefore, next.Devices); err != nil {
+			s.unavailableRead(w, "revoking a removed device's sessions", err)
+			return
+		}
 		if err := s.st.Chains().Fork(r.Context(), e.ID, at, st.Seq, [][]byte{enc}); err != nil {
-			writeError(w, http.StatusConflict, wire.ErrCodeStaleHead, "")
+			writeChainWriteError(w, s, err)
 			return
 		}
 		s.log.Warn("recovery fork", "id", e.ID, "replaced_from", at, "replaced_to", st.Seq)
@@ -108,15 +118,12 @@ func (s *Server) recoverAccount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, wire.ErrCodeStaleHead, "")
 		return
 	}
-	for k := range devicesBefore {
-		if _, still := st.Devices[k]; !still {
-			s.st.Sessions().RevokeDevice(r.Context(), e.ID, unhex(k))
-			s.closeDevice(e.ID, unhex(k))
-		}
+	for _, dev := range removed {
+		s.closeDevice(e.ID, dev)
 	}
 	s.log.Info("account recovered", "id", e.ID, "seq", st.Seq)
 	// Every remaining device hears about it: someone used the recovery code (SPEC §6.4.1).
-	s.notify(r.Context(), e.ID, map[string]any{"t": "chain-alert", "level": "alarm", "entry": wire.Raw(enc)})
+	s.logged("sending a recovery alert", s.notify(r.Context(), e.ID, map[string]any{"t": "chain-alert", "level": "alarm", "entry": wire.Raw(enc)}))
 	s.pushChain(r.Context(), e.ID)
 	writeBody(w, http.StatusOK, map[string]any{"seq": st.Seq, "head": st.Head})
 }
@@ -124,20 +131,27 @@ func (s *Server) recoverAccount(w http.ResponseWriter, r *http.Request) {
 // ---- identity push (SPEC §6.5) ----
 
 // pushChain tells everyone who has `id` as a contact that its chain changed: local
-// users get a notice, other servers get the chain (S2S identity/push).
+// users get a notice, other servers get the chain (S2S identity/push). It runs after the
+// change is stored, so failures are only logged: contacts also fetch the chain when they
+// next need it.
 func (s *Server) pushChain(ctx context.Context, id string) {
 	raw, err := s.st.Chains().Entries(ctx, id, -1)
 	if err != nil {
+		s.logged("reading a chain to push", err)
 		return
 	}
-	cs, _, _ := s.st.Contacts().List(ctx, id, "", 10000)
+	cs, _, err := s.st.Contacts().List(ctx, id, "", 10000)
+	if err != nil {
+		s.logged("listing contacts to push a chain to", err)
+		return
+	}
 	homes := map[string]bool{}
 	for _, c := range cs {
 		if c.State == store.StateBlocked {
 			continue
 		}
 		if s.isLocal(ctx, c.ID) {
-			s.notify(ctx, c.ID, map[string]any{"t": "chain-update", "id": id})
+			s.logged("telling a contact about a chain update", s.notify(ctx, c.ID, map[string]any{"t": "chain-update", "id": id}))
 			continue
 		}
 		if st, _, err := s.lookup(ctx, c.ID, ""); err == nil {
@@ -152,7 +166,7 @@ func (s *Server) pushChain(ctx context.Context, id string) {
 		entries[i] = e
 	}
 	for home := range homes {
-		s.enqueue(ctx, home, "identity/push", map[string]any{"id": id, "entries": entries})
+		s.logged("queueing a chain push", s.enqueue(ctx, home, "identity/push", map[string]any{"id": id, "entries": entries}))
 	}
 }
 
@@ -174,14 +188,19 @@ func (s *Server) s2sIdentityPush(w http.ResponseWriter, r *http.Request, from st
 	// It must extend our cache or be a valid recovery fork, and device-signed entries
 	// count only if the home before them vouches for them (SPEC §6.5, §6.4.1).
 	_, _, changed, err := s.acceptChain(r.Context(), req.ID, raw, from)
+	if errors.Is(err, errStorage) {
+		s.unavailableRead(w, "caching a pushed chain", err) // the pusher retries
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusConflict, wire.ErrCodeInvalidChain, err.Error())
 		return
 	}
 	if changed {
-		owners, _ := s.st.Contacts().Owners(r.Context(), req.ID)
+		owners, err := s.st.Contacts().Owners(r.Context(), req.ID)
+		s.logged("listing who to tell about a chain update", err)
 		for _, o := range owners {
-			s.notify(r.Context(), o, map[string]any{"t": "chain-update", "id": req.ID})
+			s.logged("telling a contact about a chain update", s.notify(r.Context(), o, map[string]any{"t": "chain-update", "id": req.ID}))
 		}
 	}
 	writeBody(w, http.StatusAccepted, map[string]any{})

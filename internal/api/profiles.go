@@ -121,7 +121,7 @@ func (s *Server) checkProfile(ctx context.Context, p profileBody) string {
 		}
 	}
 	if p.Invite != "" {
-		invs, _ := s.st.Invites().List(ctx, p.ID, now())
+		invs, _ := s.st.Invites().List(ctx, p.ID, now()) // an error finds nothing: the profile is refused
 		h := s.inviteHash(p.Invite)
 		found := false
 		for _, inv := range invs {

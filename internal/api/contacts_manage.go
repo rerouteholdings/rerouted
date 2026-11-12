@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/rerouteholdings/rerouted/internal/store"
@@ -48,30 +49,50 @@ func (s *Server) contactDeclineReq(w http.ResponseWriter, r *http.Request, sess 
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "signer isn't a current device")
 		return
 	}
+	const noMatch = "no pending request from that identity matches"
 	c, err := s.st.Contacts().Get(ctx, sess.id, d.To)
-	if err != nil || c.State != store.StatePendingIn || !requestMatches(c.Request, d.Request) {
-		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "no pending request from that identity matches")
+	if err != nil {
+		s.notFound(w, err, noMatch)
+		return
+	}
+	if c.State != store.StatePendingIn || !requestMatches(c.Request, d.Request) {
+		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, noMatch)
 		return
 	}
 	// Our side: no new requests from them for 30 days.
-	s.st.Contacts().Put(ctx, sess.id, store.Contact{ID: d.To, State: store.StateDeclined, Since: now()})
-	if s.isLocal(ctx, d.To) {
-		s.receiveDecline(ctx, d, req.Decline)
-	} else if them, _, err := s.lookup(ctx, d.To, ""); err == nil && s.fed != nil {
-		s.enqueue(ctx, them.Home, "contacts/decline", map[string]any{"decline": req.Decline})
+	err = s.st.Contacts().Put(ctx, sess.id, store.Contact{ID: d.To, State: store.StateDeclined, Since: now()})
+	if err == nil && s.isLocal(ctx, d.To) {
+		err = s.receiveDecline(ctx, d, req.Decline)
+	} else if err == nil && s.fed != nil {
+		if them, _, lerr := s.lookup(ctx, d.To, ""); lerr == nil {
+			err = s.enqueue(ctx, them.Home, "contacts/decline", map[string]any{"decline": req.Decline})
+		}
+	}
+	if err != nil {
+		s.unavailableRead(w, "declining a contact request", err)
+		return
 	}
 	writeBody(w, http.StatusAccepted, map[string]any{})
 }
 
 // receiveDecline clears the requester's pending request and tells their devices, if the
 // decline matches a request they sent (SPEC §9.3). Anything else is dropped silently.
-func (s *Server) receiveDecline(ctx context.Context, d contactDecline, raw wire.Raw) {
+// An error is a storage failure: the decline should be retried.
+func (s *Server) receiveDecline(ctx context.Context, d contactDecline, raw wire.Raw) error {
 	c, err := s.st.Contacts().Get(ctx, d.To, d.From)
-	if err != nil || c.State != store.StatePendingOut || !requestMatches(c.Request, d.Request) {
-		return
+	if errors.Is(err, store.ErrNotFound) {
+		return nil
 	}
-	s.st.Contacts().Delete(ctx, d.To, d.From)
-	s.notify(ctx, d.To, map[string]any{"t": "contact-declined", "decline": raw})
+	if err != nil {
+		return err
+	}
+	if c.State != store.StatePendingOut || !requestMatches(c.Request, d.Request) {
+		return nil
+	}
+	if err := s.st.Contacts().Delete(ctx, d.To, d.From); err != nil {
+		return err
+	}
+	return s.notify(ctx, d.To, map[string]any{"t": "contact-declined", "decline": raw})
 }
 
 // requestMatches reports whether stored (an encoded signed contact-request) hashes to h.
@@ -119,7 +140,10 @@ func (s *Server) s2sContactDecline(w http.ResponseWriter, r *http.Request, from 
 		return
 	}
 	if s.isLocal(ctx, d.To) {
-		s.receiveDecline(ctx, d, req.Decline)
+		if err := s.receiveDecline(ctx, d, req.Decline); err != nil {
+			s.unavailableRead(w, "receiving a decline", err)
+			return
+		}
 	}
 	writeBody(w, http.StatusAccepted, map[string]any{})
 }
@@ -131,12 +155,20 @@ func (s *Server) contactCancel(w http.ResponseWriter, r *http.Request, sess sess
 	if !ok {
 		return
 	}
+	const none = "no pending request to that identity"
 	c, err := s.st.Contacts().Get(r.Context(), sess.id, id)
-	if err != nil || c.State != store.StatePendingOut {
-		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "no pending request to that identity")
+	if err != nil {
+		s.notFound(w, err, none)
 		return
 	}
-	s.st.Contacts().Delete(r.Context(), sess.id, id)
+	if c.State != store.StatePendingOut {
+		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, none)
+		return
+	}
+	if err := s.st.Contacts().Delete(r.Context(), sess.id, id); err != nil {
+		s.unavailableRead(w, "cancelling a contact request", err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -146,11 +178,18 @@ func (s *Server) contactRemove(w http.ResponseWriter, r *http.Request, sess sess
 		return
 	}
 	c, err := s.st.Contacts().Get(r.Context(), sess.id, id)
-	if err != nil || c.State == store.StateBlocked || c.State == store.StateDeclined {
+	if err != nil {
+		s.notFound(w, err, "")
+		return
+	}
+	if c.State == store.StateBlocked || c.State == store.StateDeclined {
 		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "")
 		return
 	}
-	s.st.Contacts().Delete(r.Context(), sess.id, id)
+	if err := s.st.Contacts().Delete(r.Context(), sess.id, id); err != nil {
+		s.unavailableRead(w, "removing a contact", err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -160,7 +199,10 @@ func (s *Server) contactBlock(w http.ResponseWriter, r *http.Request, sess sessi
 		return
 	}
 	// Blocking replaces whatever was there: contact, request, or decline (SPEC §9.6).
-	s.st.Contacts().Put(r.Context(), sess.id, store.Contact{ID: id, State: store.StateBlocked, Since: now()})
+	if err := s.st.Contacts().Put(r.Context(), sess.id, store.Contact{ID: id, State: store.StateBlocked, Since: now()}); err != nil {
+		s.unavailableRead(w, "blocking", err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -169,8 +211,13 @@ func (s *Server) contactUnblock(w http.ResponseWriter, r *http.Request, sess ses
 	if !ok {
 		return
 	}
-	if c, err := s.st.Contacts().Get(r.Context(), sess.id, id); err == nil && c.State == store.StateBlocked {
-		s.st.Contacts().Delete(r.Context(), sess.id, id)
+	c, err := s.st.Contacts().Get(r.Context(), sess.id, id)
+	if err == nil && c.State == store.StateBlocked {
+		err = s.st.Contacts().Delete(r.Context(), sess.id, id)
+	}
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		s.unavailableRead(w, "unblocking", err)
+		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

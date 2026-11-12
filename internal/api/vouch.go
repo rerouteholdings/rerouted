@@ -10,6 +10,7 @@ import (
 
 	"github.com/rerouteholdings/rerouted/internal/chain"
 	"github.com/rerouteholdings/rerouted/internal/fed"
+	"github.com/rerouteholdings/rerouted/internal/store"
 	"github.com/rerouteholdings/rerouted/internal/wire"
 )
 
@@ -146,6 +147,10 @@ func hasPrefix(chain, prefix [][]byte) bool {
 	return slices.EqualFunc(chain[:len(prefix)], prefix, bytes.Equal)
 }
 
+// errStorage marks an error as a storage failure rather than a problem with what was
+// received, so the caller answers 503 and the sender retries.
+var errStorage = errors.New("storage failure")
+
 // acceptChain merges a chain received from server `from` into the cache: it must extend
 // the cached chain or be a valid recovery fork (SPEC §6.5, §6.4.1), and only the vouched
 // part of what's new is kept. With nothing cached, the chain is taken as its current home
@@ -163,6 +168,9 @@ func (s *Server) acceptChain(ctx context.Context, id string, raw [][]byte, from 
 		return nil, nil, false, errors.New("chain is for a different identity")
 	}
 	_, cached, err := s.st.Remote().Get(ctx, id)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return nil, nil, false, fmt.Errorf("%w: %w", errStorage, err)
+	}
 	if err != nil {
 		if st.Home != from {
 			return nil, nil, false, fmt.Errorf("a first copy of a chain must come from its home, not %s", from)
@@ -170,7 +178,9 @@ func (s *Server) acceptChain(ctx context.Context, id string, raw [][]byte, from 
 		if err := s.checkMoves(ctx, id, raw, from); err != nil {
 			return nil, nil, false, err
 		}
-		s.st.Remote().Put(ctx, id, st.Home, raw)
+		if err := s.st.Remote().Put(ctx, id, st.Home, raw); err != nil {
+			return nil, nil, false, fmt.Errorf("%w: %w", errStorage, err)
+		}
 		return st, raw, true, nil
 	}
 	keep, out, at, err := chain.Resolve(cached, raw)
@@ -194,7 +204,9 @@ func (s *Server) acceptChain(ctx context.Context, id string, raw [][]byte, from 
 	if err != nil {
 		return nil, nil, false, err
 	}
-	s.st.Remote().Put(ctx, id, ast.Home, accepted)
+	if err := s.st.Remote().Put(ctx, id, ast.Home, accepted); err != nil {
+		return nil, nil, false, fmt.Errorf("%w: %w", errStorage, err)
+	}
 	return ast, accepted, true, nil
 }
 

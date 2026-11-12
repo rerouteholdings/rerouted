@@ -28,6 +28,19 @@ func (s *Server) isLocal(ctx context.Context, id string) bool {
 	return err == nil && st.Home == s.cfg.Name
 }
 
+// local is isLocal for callers that mustn't mistake a storage failure for "not here",
+// such as delivery, which would drop the item.
+func (s *Server) local(ctx context.Context, id string) (bool, error) {
+	st, _, err := s.identity(ctx, id)
+	if err == nil {
+		return st.Home == s.cfg.Name, nil
+	}
+	if _, serr := s.st.Chains().Entries(ctx, id, -1); serr != nil && !errors.Is(serr, store.ErrNotFound) {
+		return false, serr
+	}
+	return false, nil // unknown here, or a chain that doesn't validate
+}
+
 // canonChain re-encodes chain entries received from elsewhere as JCS, so stored
 // copies compare byte for byte whatever formatting they arrived in (SPEC §4.3).
 func canonChain(in [][]byte) ([][]byte, error) {
@@ -187,12 +200,12 @@ func (s *Server) flushOutbox(ctx context.Context) {
 		t := now()
 		if t-it.Created > outboxExpiry {
 			s.log.Warn("s2s gave up after 72 hours", "dest", it.Dest, "path", it.Path)
-			s.st.Outbox().Done(ctx, it.ID)
+			s.logged("marking an outbox item done", s.st.Outbox().Done(ctx, it.ID))
 			s.deliveryFailed(ctx, it, "expired", nil)
 			continue
 		}
 		if until := s.retry.waiting(it.Dest, t); until != 0 {
-			s.st.Outbox().Retry(ctx, it.ID, until) // its server is backing off: wait in line
+			s.logged("rescheduling an outbox item", s.st.Outbox().Retry(ctx, it.ID, until)) // its server is backing off: wait in line
 			continue
 		}
 		_, err := s.fed.Call(ctx, it.Dest, it.Path, it.Body)
@@ -201,19 +214,19 @@ func (s *Server) flushOutbox(ctx context.Context) {
 		switch {
 		case err == nil:
 			s.retry.ok(it.Dest)
-			s.st.Outbox().Done(ctx, it.ID)
+			s.logged("marking an outbox item done", s.st.Outbox().Done(ctx, it.ID))
 		case isStatus && st.Status/100 == 4 && !retryable(st.Status):
 			// A refusal: the server is up, but won't take this one. Don't retry.
 			s.retry.ok(it.Dest)
 			s.log.Warn("s2s refused", "dest", it.Dest, "path", it.Path, "err", err)
-			s.st.Outbox().Done(ctx, it.ID)
+			s.logged("marking an outbox item done", s.st.Outbox().Done(ctx, it.ID))
 			s.deliveryFailed(ctx, it, st.Code, st.IDs)
 		default:
 			var hint int64
 			if isStatus {
 				hint = st.RetryAfter
 			}
-			s.st.Outbox().Retry(ctx, it.ID, s.retry.fail(it.Dest, t, hint))
+			s.logged("rescheduling an outbox item", s.st.Outbox().Retry(ctx, it.ID, s.retry.fail(it.Dest, t, hint)))
 		}
 	}
 }
@@ -236,7 +249,7 @@ func (s *Server) deliveryFailed(ctx context.Context, it store.OutboxItem, reason
 			continue
 		}
 		if s.isLocal(ctx, d.From) {
-			s.notify(ctx, d.From, map[string]any{"t": "delivery-failed", "id": d.ID, "to": d.To, "reason": reason})
+			s.logged("telling a sender a delivery failed", s.notify(ctx, d.From, map[string]any{"t": "delivery-failed", "id": d.ID, "to": d.To, "reason": reason}))
 		}
 	}
 }
@@ -370,6 +383,10 @@ func (s *Server) s2sContactRequest(w http.ResponseWriter, r *http.Request, from 
 		return
 	}
 	st, accepted, _, err := s.acceptChain(r.Context(), ids.ID, raw, from)
+	if errors.Is(err, errStorage) {
+		s.unavailableRead(w, "caching a requester's chain", err)
+		return
+	}
 	if err != nil || !fromHome(accepted, from, now(), false) {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeInvalidChain, "requester's chain must name the calling server")
 		return
@@ -390,7 +407,10 @@ func (s *Server) s2sContactRequest(w http.ResponseWriter, r *http.Request, from 
 		return
 	}
 	if s.isLocal(r.Context(), cr.To) {
-		s.receiveContactRequest(r.Context(), cr, req.Request, req.Chain, from)
+		if err := s.receiveContactRequest(r.Context(), cr, req.Request, req.Chain, from); err != nil {
+			s.unavailableRead(w, "receiving a contact request", err)
+			return
+		}
 	}
 	writeBody(w, http.StatusAccepted, map[string]any{}) // silent either way (SPEC §9.3)
 }

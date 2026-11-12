@@ -87,15 +87,19 @@ func (s *Server) inviteRevoke(w http.ResponseWriter, r *http.Request, sess sessi
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "give the code or its hash")
 		return
 	}
-	if err := s.st.Invites().Revoke(r.Context(), sess.id, hash); errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "")
+	if err := s.st.Invites().Revoke(r.Context(), sess.id, hash); err != nil {
+		s.notFound(w, err, "") // a failed revoke must never look like it worked
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) inviteList(w http.ResponseWriter, r *http.Request, sess session) {
-	invs, _ := s.st.Invites().List(r.Context(), sess.id, now())
+	invs, err := s.st.Invites().List(r.Context(), sess.id, now())
+	if err != nil {
+		s.unavailableRead(w, "listing invites", err)
+		return
+	}
 	items := []map[string]any{}
 	for _, inv := range invs {
 		m := map[string]any{"hash": inv.Hash, "public": inv.Public, "created": inv.Created}
@@ -149,7 +153,7 @@ func (s *Server) checkInvite(ctx context.Context, body contactRequestBody, origi
 	// Public codes are readable off a profile, so the per-sender limits apply (SPEC §9.5).
 	// The per-server total is far lower for servers none of our users has a contact on.
 	originMax := 50
-	if known, _ := s.st.Remote().HasContactOn(ctx, origin); known || origin == s.cfg.Name {
+	if known, _ := s.st.Remote().HasContactOn(ctx, origin); known || origin == s.cfg.Name { // an error counts as unknown: the tighter limit
 		originMax = 1000
 	}
 	if !s.limits.allowAll(t,

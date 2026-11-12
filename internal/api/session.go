@@ -53,6 +53,34 @@ func (s *Server) authed(h func(http.ResponseWriter, *http.Request, session)) htt
 	}
 }
 
+// revokeRemoved ends the sessions of the devices in `before` that `after` no longer has,
+// and returns them. Run it before storing the chain change that removes them: if it
+// fails, nothing has changed, and if storing the change fails afterwards, the devices are
+// still in the chain and can sign in again. The other way round, a failure would leave a
+// removed device signed in.
+func (s *Server) revokeRemoved(ctx context.Context, id string, before, after map[string]string) ([][]byte, error) {
+	var removed [][]byte
+	for k := range before {
+		if _, still := after[k]; !still {
+			if err := s.st.Sessions().RevokeDevice(ctx, id, unhex(k)); err != nil {
+				return nil, err
+			}
+			removed = append(removed, unhex(k))
+		}
+	}
+	return removed, nil
+}
+
+// writeChainWriteError answers a failed chain write: 409 stale-head if the head moved
+// since it was read, and 503 for a storage failure, which the client retries as is.
+func writeChainWriteError(w http.ResponseWriter, s *Server, err error) {
+	if errors.Is(err, store.ErrConflict) {
+		writeError(w, http.StatusConflict, wire.ErrCodeStaleHead, "")
+		return
+	}
+	s.unavailableRead(w, "writing a chain", err)
+}
+
 // identity loads and validates a local identity's chain.
 func (s *Server) identity(ctx context.Context, id string) (*chain.State, [][]byte, error) {
 	raw, err := s.st.Chains().Entries(ctx, id, -1)
@@ -197,7 +225,10 @@ func (s *Server) authChallenge(w http.ResponseWriter, r *http.Request) {
 	rand.Read(nonce)
 	t := now()
 	exp := t + 60
-	s.st.Sessions().PutNonce(r.Context(), req.ID, req.Key, nonce, exp)
+	if err := s.st.Sessions().PutNonce(r.Context(), req.ID, req.Key, nonce, exp); err != nil {
+		s.unavailableRead(w, "storing an auth challenge", err)
+		return
+	}
 	// `now`: the homeserver is the clock, and the client corrects for the difference (SPEC §8.4).
 	writeBody(w, http.StatusOK, map[string]any{"nonce": nonce, "expires": exp, "now": t})
 }
@@ -251,12 +282,19 @@ func (s *Server) authSession(w http.ResponseWriter, r *http.Request) {
 	tok := base64.RawURLEncoding.EncodeToString(raw)
 	sum := sha256.Sum256([]byte(tok))
 	exp := time.Now().Add(tokenTTL).Unix()
-	s.st.Sessions().CreateToken(r.Context(), sum[:], body.ID, key, body.Name, exp)
+	if err := s.st.Sessions().CreateToken(r.Context(), sum[:], body.ID, key, body.Name, exp); err != nil {
+		s.unavailableRead(w, "creating a session", err)
+		return
+	}
 	writeBody(w, http.StatusOK, map[string]any{"token": tok, "expires": exp})
 }
 
 func (s *Server) authLogout(w http.ResponseWriter, r *http.Request, sess session) {
-	s.st.Sessions().RevokeToken(r.Context(), sess.tokenHash)
+	// A failed sign-out must never look like it worked: the token would still be live.
+	if err := s.st.Sessions().RevokeToken(r.Context(), sess.tokenHash); err != nil {
+		s.unavailableRead(w, "signing out", err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -375,18 +413,20 @@ func (s *Server) appendChain(w http.ResponseWriter, r *http.Request, sess sessio
 			return
 		}
 	}
-	if err := s.st.Chains().Append(r.Context(), sess.id, before, enc); err != nil {
-		writeError(w, http.StatusConflict, wire.ErrCodeStaleHead, "")
-		return
-	}
 	// Removed devices lose their sessions right away (spec/api/conventions.md). A move
 	// away doesn't end any: if a thief made it, the owner's devices still have to see the
 	// alarm, and recover within 72 hours (SPEC §6.4.1). Deliveries go to the new home now.
-	for k := range devicesBefore {
-		if _, still := st.Devices[k]; !still {
-			s.st.Sessions().RevokeDevice(r.Context(), sess.id, unhex(k))
-			s.closeDevice(sess.id, unhex(k))
-		}
+	removed, err := s.revokeRemoved(r.Context(), sess.id, devicesBefore, st.Devices)
+	if err != nil {
+		s.unavailableRead(w, "revoking a removed device's sessions", err)
+		return
+	}
+	if err := s.st.Chains().Append(r.Context(), sess.id, before, enc); err != nil {
+		writeChainWriteError(w, s, err)
+		return
+	}
+	for _, dev := range removed {
+		s.closeDevice(sess.id, dev)
 	}
 	// Alerts (SPEC §6.4.1).
 	if lvl := chain.Alert(applied); lvl != chain.AlertNone {
@@ -394,7 +434,7 @@ func (s *Server) appendChain(w http.ResponseWriter, r *http.Request, sess sessio
 		if lvl == chain.AlertNotice {
 			level = "notice"
 		}
-		s.notify(r.Context(), sess.id, map[string]any{"t": "chain-alert", "level": level, "entry": wire.Raw(enc)})
+		s.logged("sending a chain alert", s.notify(r.Context(), sess.id, map[string]any{"t": "chain-alert", "level": level, "entry": wire.Raw(enc)}))
 	}
 	s.pushChain(r.Context(), sess.id) // contacts learn about new or removed devices (SPEC §6.5)
 	writeBody(w, http.StatusOK, map[string]any{"seq": st.Seq, "head": st.Head})

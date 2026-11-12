@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -62,17 +63,37 @@ func pageLimit(w http.ResponseWriter, r *http.Request) (int, bool) {
 }
 
 // notify puts a server notice in a user's inbox (spec/api/client-stage1.md).
-func (s *Server) notify(ctx context.Context, owner string, notice map[string]any) {
+func (s *Server) notify(ctx context.Context, owner string, notice map[string]any) error {
 	b, err := wire.Marshal(notice)
 	if err != nil {
-		s.log.Error("encode notice", "err", err)
-		return
+		return err
 	}
 	it := store.Item{TS: now(), Notice: b}
-	if cur, err := s.st.Inbox().Append(ctx, owner, it); err == nil {
-		it.Cursor = cur
-		s.pushItem(owner, it)
+	cur, err := s.st.Inbox().Append(ctx, owner, it)
+	if err != nil {
+		return err
 	}
+	it.Cursor = cur
+	s.pushItem(owner, it)
+	return nil
+}
+
+// logged logs a failure in a side effect the request doesn't depend on, such as telling
+// other devices about a change that's already stored.
+func (s *Server) logged(what string, err error) {
+	if err != nil {
+		s.log.Error(what, "err", err)
+	}
+}
+
+// notFound answers a lookup that failed: 404 with msg if nothing is stored, and 503 for a
+// storage failure, which the client retries.
+func (s *Server) notFound(w http.ResponseWriter, err error, msg string) {
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, msg)
+		return
+	}
+	s.unavailableRead(w, "a lookup", err)
 }
 
 // isContactOrRequested reports whether owner accepts things from other:
@@ -81,11 +102,20 @@ func (s *Server) notify(ctx context.Context, owner string, notice map[string]any
 const pendingTTL = 30 * 24 * 3600
 
 func (s *Server) isContactOrRequested(ctx context.Context, owner, other string) bool {
+	ok, _ := s.contactOrRequested(ctx, owner, other) // an error counts as no
+	return ok
+}
+
+// contactOrRequested is isContactOrRequested, returning storage failures.
+func (s *Server) contactOrRequested(ctx context.Context, owner, other string) (bool, error) {
 	c, err := s.st.Contacts().Get(ctx, owner, other)
-	if err != nil {
-		return false
+	if errors.Is(err, store.ErrNotFound) {
+		return false, nil
 	}
-	return c.State == store.StateContact || (c.State == store.StatePendingOut && c.Since+pendingTTL > now())
+	if err != nil {
+		return false, err
+	}
+	return c.State == store.StateContact || (c.State == store.StatePendingOut && c.Since+pendingTTL > now()), nil
 }
 
 // ---- key packages (SPEC §11.4) ----
@@ -100,7 +130,10 @@ func (s *Server) kpUpload(w http.ResponseWriter, r *http.Request, sess session) 
 		return
 	}
 	if req.Replace {
-		s.st.KeyPackages().Clear(r.Context(), sess.id, sess.device)
+		if err := s.st.KeyPackages().Clear(r.Context(), sess.id, sess.device); err != nil {
+			s.unavailableRead(w, "clearing key packages", err)
+			return
+		}
 	}
 	n, err := s.st.KeyPackages().Upload(r.Context(), sess.id, sess.device, plain(req.Packages), req.LastResort)
 	if err != nil {
@@ -111,7 +144,12 @@ func (s *Server) kpUpload(w http.ResponseWriter, r *http.Request, sess session) 
 }
 
 func (s *Server) kpCount(w http.ResponseWriter, r *http.Request, sess session) {
-	n, lr, _ := s.st.KeyPackages().Count(r.Context(), sess.id, sess.device)
+	n, lr, err := s.st.KeyPackages().Count(r.Context(), sess.id, sess.device)
+	if err != nil {
+		// A count of 0 would have the client upload a fresh batch it doesn't need.
+		s.unavailableRead(w, "counting key packages", err)
+		return
+	}
 	writeBody(w, http.StatusOK, map[string]any{"count": n, "last-resort": lr})
 }
 
@@ -164,7 +202,10 @@ func (s *Server) claimFor(w http.ResponseWriter, r *http.Request, target, claima
 	allowed := target == claimant || s.isContactOrRequested(r.Context(), target, claimant)
 	if !allowed && group != nil {
 		// Group IDs aren't secret, so these claims are rate-limited (SPEC §11.4).
-		allowed, _ = s.st.Contacts().GroupAllowed(r.Context(), target, group)
+		if allowed, err = s.st.Contacts().GroupAllowed(r.Context(), target, group); err != nil {
+			s.unavailableRead(w, "checking a group allowlist", err)
+			return
+		}
 		// Per claimant and per origin server: identities are free, servers aren't (SPEC §9.5).
 		allowed = allowed && s.limits.allowAll(now(),
 			limit{"group-claim|" + claimant + "|" + target, 10, 24 * 3600},
@@ -188,7 +229,11 @@ func (s *Server) claimFor(w http.ResponseWriter, r *http.Request, target, claima
 		}
 		devices = append(devices, d)
 	}
-	kps, _ := s.st.KeyPackages().Claim(r.Context(), target, devices)
+	kps, err := s.st.KeyPackages().Claim(r.Context(), target, devices)
+	if err != nil {
+		s.unavailableRead(w, "claiming key packages", err)
+		return
+	}
 	out := []map[string]any{}
 	for _, kp := range kps {
 		out = append(out, map[string]any{"dev": kp.Device, "kp": kp.Data, "last-resort": kp.LastResort})
@@ -237,63 +282,80 @@ func (s *Server) contactRequest(w http.ResponseWriter, r *http.Request, sess ses
 	for i, e := range myChain {
 		chainRaw[i] = e
 	}
-	// Everything below answers 202, whatever happens (SPEC §10.3).
-	defer writeBody(w, http.StatusAccepted, map[string]any{})
-
-	if s.isLocal(ctx, body.To) {
-		s.receiveContactRequest(ctx, body, req.Request, chainRaw, s.cfg.Name)
+	// Everything below answers 202, whatever happens to the request (SPEC §10.3), unless
+	// our own storage fails: then 503, which says nothing about the recipient.
+	if err := s.sendContactRequest(ctx, sess, body, req.Request, chainRaw); err != nil {
+		s.unavailableRead(w, "sending a contact request", err)
 		return
+	}
+	writeBody(w, http.StatusAccepted, map[string]any{})
+}
+
+func (s *Server) sendContactRequest(ctx context.Context, sess session, body contactRequestBody, reqRaw wire.Raw, chainRaw []wire.Raw) error {
+	if s.isLocal(ctx, body.To) {
+		return s.receiveContactRequest(ctx, body, reqRaw, chainRaw, s.cfg.Name)
 	}
 	// Another server: remember the request on our side, then forward it (S2S contacts/request).
 	them, _, err := s.lookup(ctx, body.To, "")
 	if err != nil || s.fed == nil {
-		return // unknown identity: the client should resolve and fetch its chain first
+		return nil // unknown identity: the client should resolve and fetch its chain first
 	}
-	if c, err := s.st.Contacts().Get(ctx, sess.id, body.To); err == nil && c.State == store.StatePendingIn {
+	c, err := s.st.Contacts().Get(ctx, sess.id, body.To)
+	switch {
+	case err == nil && c.State == store.StatePendingIn:
 		// They already asked us: that makes it mutual (client-stage1.md).
-		s.st.Contacts().Put(ctx, sess.id, store.Contact{ID: body.To, State: store.StateContact, Since: now()})
-	} else {
+		err = s.st.Contacts().Put(ctx, sess.id, store.Contact{ID: body.To, State: store.StateContact, Since: now()})
+	case err == nil || errors.Is(err, store.ErrNotFound):
 		// Keep the request, so a decline can be matched to it (SPEC §9.3).
-		s.st.Contacts().Put(ctx, sess.id, store.Contact{ID: body.To, State: store.StatePendingOut, Since: now(), Request: req.Request})
+		err = s.st.Contacts().Put(ctx, sess.id, store.Contact{ID: body.To, State: store.StatePendingOut, Since: now(), Request: reqRaw})
 	}
-	s.enqueue(ctx, them.Home, "contacts/request", map[string]any{"request": req.Request, "chain": chainRaw})
+	if err != nil {
+		return err
+	}
+	return s.enqueue(ctx, them.Home, "contacts/request", map[string]any{"request": reqRaw, "chain": chainRaw})
 }
 
 // receiveContactRequest handles a request whose recipient is local, from any server.
 // origin is the requester's homeserver. Every refusal is silent (SPEC §10.3), to the sender;
 // the operator's log says why, with no identifiers, so a request someone says never arrived
-// can be traced.
-func (s *Server) receiveContactRequest(ctx context.Context, body contactRequestBody, reqRaw wire.Raw, chainRaw []wire.Raw, origin string) {
+// can be traced. An error is a storage failure, and the request should be retried.
+func (s *Server) receiveContactRequest(ctx context.Context, body contactRequestBody, reqRaw wire.Raw, chainRaw []wire.Raw, origin string) error {
 	from, to := body.From, body.To
 	drop := func(why string) { s.log.Info("contact request dropped", "origin", origin, "why", why) }
-	if c, err := s.st.Contacts().Get(ctx, to, from); err == nil {
-		switch {
-		case c.State == store.StateBlocked:
-			drop("blocked")
-			return
-		case c.State == store.StateDeclined && now()-c.Since < declineCooldown:
-			drop("declined in the last 30 days") // no new requests, even with a new code (SPEC §9.3)
-			return
-		}
+	switch c, err := s.st.Contacts().Get(ctx, to, from); {
+	case err != nil && !errors.Is(err, store.ErrNotFound):
+		return err
+	case err != nil:
+	case c.State == store.StateBlocked:
+		drop("blocked")
+		return nil
+	case c.State == store.StateDeclined && now()-c.Since < declineCooldown:
+		drop("declined in the last 30 days") // no new requests, even with a new code (SPEC §9.3)
+		return nil
 	}
 	if why := s.checkInvite(ctx, body, origin); why != "" {
 		drop(why) // every contact request needs a valid invite code (SPEC §9.1)
-		return
+		return nil
 	}
-	notice := map[string]any{"t": "contact-request", "request": reqRaw, "chain": chainRaw}
+	put := func(owner string, c store.Contact) error { return s.st.Contacts().Put(ctx, owner, c) }
+	var err error
 	if s.isContactOrRequested(ctx, to, from) { // requests in both directions
-		s.st.Contacts().Put(ctx, to, store.Contact{ID: from, State: store.StateContact, Since: now()})
-		if s.isLocal(ctx, from) {
-			s.st.Contacts().Put(ctx, from, store.Contact{ID: to, State: store.StateContact, Since: now()})
+		err = put(to, store.Contact{ID: from, State: store.StateContact, Since: now()})
+		if err == nil && s.isLocal(ctx, from) {
+			err = put(from, store.Contact{ID: to, State: store.StateContact, Since: now()})
 		}
-		s.notify(ctx, to, notice)
-		return
+	} else {
+		if s.isLocal(ctx, from) {
+			err = put(from, store.Contact{ID: to, State: store.StatePendingOut, Since: now(), Request: reqRaw})
+		}
+		if err == nil {
+			err = put(to, store.Contact{ID: from, State: store.StatePendingIn, Since: now(), Request: reqRaw})
+		}
 	}
-	if s.isLocal(ctx, from) {
-		s.st.Contacts().Put(ctx, from, store.Contact{ID: to, State: store.StatePendingOut, Since: now(), Request: reqRaw})
+	if err != nil {
+		return err
 	}
-	s.st.Contacts().Put(ctx, to, store.Contact{ID: from, State: store.StatePendingIn, Since: now(), Request: reqRaw})
-	s.notify(ctx, to, notice)
+	return s.notify(ctx, to, map[string]any{"t": "contact-request", "request": reqRaw, "chain": chainRaw})
 }
 
 func (s *Server) contactAccept(w http.ResponseWriter, r *http.Request, sess session) {
@@ -303,12 +365,20 @@ func (s *Server) contactAccept(w http.ResponseWriter, r *http.Request, sess sess
 	if !readBody(w, r, &req) {
 		return
 	}
+	const none = "no pending request from that identity"
 	c, err := s.st.Contacts().Get(r.Context(), sess.id, req.ID)
-	if err != nil || c.State != store.StatePendingIn {
-		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "no pending request from that identity")
+	if err != nil {
+		s.notFound(w, err, none)
 		return
 	}
-	s.st.Contacts().Put(r.Context(), sess.id, store.Contact{ID: req.ID, State: store.StateContact, Since: now()})
+	if c.State != store.StatePendingIn {
+		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, none)
+		return
+	}
+	if err := s.st.Contacts().Put(r.Context(), sess.id, store.Contact{ID: req.ID, State: store.StateContact, Since: now()}); err != nil {
+		s.unavailableRead(w, "accepting a contact", err)
+		return
+	}
 	writeBody(w, http.StatusOK, map[string]any{})
 }
 

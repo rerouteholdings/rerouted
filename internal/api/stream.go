@@ -226,7 +226,14 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	go s.streamWriter(st)
-	_, _, gap, _ := s.st.Inbox().List(ctx, id, dev, auth.After, 1)
+	// A replay that can't read the inbox closes the stream, so the client reconnects and
+	// replays, rather than believing it has everything.
+	_, _, gap, err := s.st.Inbox().List(ctx, id, dev, auth.After, 1)
+	if err != nil {
+		s.log.Error("reading an inbox for the stream", "err", err)
+		st.close(closeGoingAway, "storage unavailable; reconnect")
+		return
+	}
 	s.sendFrame(st, map[string]any{"t": "ready", "gap": gap})
 	var last int64 = -1
 	if c, err := strconv.ParseInt(auth.After, 10, 64); err == nil {
@@ -236,7 +243,9 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 	for {
 		items, next, _, err := s.st.Inbox().List(ctx, id, dev, after, 500)
 		if err != nil {
-			break
+			s.log.Error("replaying an inbox", "err", err)
+			st.close(closeGoingAway, "storage unavailable; reconnect")
+			return
 		}
 		for _, it := range items {
 			s.sendFrame(st, map[string]any{"t": "item", "item": itemJSON(it)})
@@ -279,7 +288,7 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 			s.sendFrame(st, map[string]any{"t": "pong", "n": wire.Raw(f.N)})
 		case "pong":
 		case "ack":
-			s.ack(ctx, id, dev, f.Upto)
+			s.logged("acking from the stream", s.ack(ctx, id, dev, f.Upto))
 		default:
 			s.sendFrame(st, map[string]any{"t": "error", "error": wire.ErrCodeUnknownKind, "ref": wire.Raw(msg)})
 		}
@@ -312,15 +321,20 @@ func (s *Server) streamWriter(st *stream) {
 }
 
 // ack records a device's position and prunes what every device has acked (SPEC §10.4).
-func (s *Server) ack(ctx context.Context, id string, dev []byte, upto string) {
-	s.st.Inbox().Ack(ctx, id, dev, upto)
+// An error means the position wasn't recorded. Pruning is best effort: maintenance and
+// the next ack catch up.
+func (s *Server) ack(ctx context.Context, id string, dev []byte, upto string) error {
+	if err := s.st.Inbox().Ack(ctx, id, dev, upto); err != nil {
+		return err
+	}
 	if st, _, err := s.identity(ctx, id); err == nil {
 		var devices [][]byte
 		for k := range st.Devices {
 			devices = append(devices, unhex(k))
 		}
-		s.st.Inbox().Prune(ctx, id, devices, now()-inboxRetention)
+		s.logged("pruning an inbox", s.st.Inbox().Prune(ctx, id, devices, now()-inboxRetention))
 	}
+	return nil
 }
 
 // ---- ephemeral deliveries: only to devices connected now, never stored (SPEC §13.3) ----
@@ -329,7 +343,11 @@ func (s *Server) ack(ctx context.Context, id string, dev []byte, upto string) {
 // take it, and sends it once to other servers, without the outbox: it's never retried.
 func (s *Server) deliverEphemeral(ctx context.Context, d delivery, origin string, local bool) {
 	for _, to := range d.To {
-		if !s.isLocal(ctx, to) || !s.streams.connected(to) || !s.allowed(ctx, d, to, origin) {
+		if !s.isLocal(ctx, to) || !s.streams.connected(to) {
+			continue
+		}
+		// Typing and receipts are never retried, so a failed check drops them.
+		if ok, err := s.allowed(ctx, d, to, origin); err != nil || !ok {
 			continue
 		}
 		b, err := wire.Marshal(d)

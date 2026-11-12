@@ -35,11 +35,14 @@ func (s *Server) postReport(w http.ResponseWriter, r *http.Request, sess session
 		return
 	}
 	ctx := r.Context()
-	s.st.Reports().Add(ctx, store.Report{Received: now(), Origin: s.cfg.Name, Reporter: rep.Reporter, Reported: rep.Reported, Body: req.Report})
+	if err := s.st.Reports().Add(ctx, store.Report{Received: now(), Origin: s.cfg.Name, Reporter: rep.Reporter, Reported: rep.Reported, Body: req.Report}); err != nil {
+		s.unavailableRead(w, "storing a report", err) // the reporter retries: never lose a report
+		return
+	}
 	s.log.Warn("report received", "reporter", rep.Reporter, "reported", rep.Reported)
 	if req.Forward && !s.isLocal(ctx, rep.Reported) && s.fed != nil {
 		if them, _, err := s.lookup(ctx, rep.Reported, ""); err == nil {
-			s.enqueue(ctx, them.Home, "report", map[string]any{"report": req.Report})
+			s.logged("queueing a report to forward", s.enqueue(ctx, them.Home, "report", map[string]any{"report": req.Report}))
 		}
 	}
 	writeBody(w, http.StatusAccepted, map[string]any{})
@@ -67,7 +70,10 @@ func (s *Server) s2sReport(w http.ResponseWriter, r *http.Request, from string, 
 		writeBody(w, http.StatusTooManyRequests, wire.Error{Code: wire.ErrCodeRateLimited, Retry: 3600})
 		return
 	}
-	s.st.Reports().Add(ctx, store.Report{Received: now(), Origin: from, Reporter: rep.Reporter, Reported: rep.Reported, Body: req.Report})
+	if err := s.st.Reports().Add(ctx, store.Report{Received: now(), Origin: from, Reporter: rep.Reporter, Reported: rep.Reported, Body: req.Report}); err != nil {
+		s.unavailableRead(w, "storing a forwarded report", err) // the forwarding server retries
+		return
+	}
 	s.log.Warn("report forwarded", "from", from, "reporter", rep.Reporter, "reported", rep.Reported)
 	writeBody(w, http.StatusAccepted, map[string]any{})
 }

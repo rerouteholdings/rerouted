@@ -52,7 +52,11 @@ func (s *Server) mediaUploadPublic(w http.ResponseWriter, r *http.Request, sess 
 // storeMedia stores the request body as a file. With mimeType set, it's a public picture.
 func (s *Server) storeMedia(w http.ResponseWriter, r *http.Request, sess session, mimeType string, max int64) {
 	ctx := r.Context()
-	used, _ := s.st.Media().Usage(ctx, sess.id)
+	used, err := s.st.Media().Usage(ctx, sess.id)
+	if err != nil {
+		s.unavailableRead(w, "reading file usage", err) // never let a failed check past the quota
+		return
+	}
 	if used >= s.cfg.MediaQuota {
 		writeError(w, http.StatusRequestEntityTooLarge, wire.ErrCodeOverQuota, "")
 		return
@@ -71,7 +75,7 @@ func (s *Server) storeMedia(w http.ResponseWriter, r *http.Request, sess session
 		return
 	}
 	if used+m.Size > s.cfg.MediaQuota {
-		s.st.Media().Remove(ctx, id)
+		s.logged("removing a file over the quota", s.st.Media().Remove(ctx, id))
 		writeError(w, http.StatusRequestEntityTooLarge, wire.ErrCodeOverQuota, "")
 		return
 	}
@@ -83,7 +87,7 @@ func (s *Server) storeMedia(w http.ResponseWriter, r *http.Request, sess session
 			ok = ok && len(h) >= 12 && string(h[8:12]) == "WEBP"
 		}
 		if !ok {
-			s.st.Media().Remove(ctx, id)
+			s.logged("removing a picture of the wrong type", s.st.Media().Remove(ctx, id))
 			writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "the bytes aren't a "+mimeType)
 			return
 		}

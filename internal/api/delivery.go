@@ -34,6 +34,12 @@ func (s *Server) groupCreate(w http.ResponseWriter, r *http.Request, sess sessio
 		return
 	}
 	ctx := r.Context()
+	// Allowlisted first: it's harmless if the rest fails, and a retry would otherwise find
+	// the group registered and get 409.
+	if err := s.st.Contacts().AllowGroup(ctx, sess.id, req.Group); err != nil {
+		s.unavailableRead(w, "allowlisting a group", err)
+		return
+	}
 	if req.Hub != "" && req.Hub != s.cfg.Name {
 		// Hub handoff to another server: register the group there (S2S group/register).
 		body, _ := wire.Marshal(map[string]any{"group": req.Group, "epoch": req.Epoch, "epoch-key": req.EpochKey})
@@ -47,11 +53,20 @@ func (s *Server) groupCreate(w http.ResponseWriter, r *http.Request, sess sessio
 			return
 		}
 	} else if err := s.st.Hub().Register(ctx, store.HubGroup{Group: req.Group, Epoch: req.Epoch, EpochKey: req.EpochKey}); err != nil {
+		s.registerFailed(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// registerFailed answers a failed hub registration: 409 if the group is already
+// registered, 503 if storage failed.
+func (s *Server) registerFailed(w http.ResponseWriter, err error) {
+	if errors.Is(err, store.ErrConflict) {
 		writeError(w, http.StatusConflict, wire.ErrCodeAlreadyExists, "")
 		return
 	}
-	s.st.Contacts().AllowGroup(ctx, sess.id, req.Group)
-	w.WriteHeader(http.StatusNoContent)
+	s.unavailableRead(w, "registering a group", err)
 }
 
 // S2S group/register: a hub handoff names this server as a group's new hub (SPEC §11.11).
@@ -69,7 +84,12 @@ func (s *Server) s2sGroupRegister(w http.ResponseWriter, r *http.Request, from s
 		return
 	}
 	ctx := r.Context()
-	if ok, _ := s.st.Remote().HasContactOn(ctx, from); !ok {
+	ok, err := s.st.Remote().HasContactOn(ctx, from)
+	if err != nil {
+		s.unavailableRead(w, "checking a hub handoff", err) // not a refusal: the caller retries
+		return
+	}
+	if !ok {
 		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "this hub takes groups only from servers its users have contacts on")
 		return
 	}
@@ -78,7 +98,7 @@ func (s *Server) s2sGroupRegister(w http.ResponseWriter, r *http.Request, from s
 		return
 	}
 	if err := s.st.Hub().Register(ctx, store.HubGroup{Group: req.Group, Epoch: req.Epoch, EpochKey: req.EpochKey}); err != nil {
-		writeError(w, http.StatusConflict, wire.ErrCodeAlreadyExists, "")
+		s.registerFailed(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -92,10 +112,15 @@ func (s *Server) groupRegister(allow bool) func(http.ResponseWriter, *http.Reque
 		if !readBody(w, r, &req) {
 			return
 		}
+		var err error
 		if allow {
-			s.st.Contacts().AllowGroup(r.Context(), sess.id, req.Group)
+			err = s.st.Contacts().AllowGroup(r.Context(), sess.id, req.Group)
 		} else {
-			s.st.Contacts().DisallowGroup(r.Context(), sess.id, req.Group)
+			err = s.st.Contacts().DisallowGroup(r.Context(), sess.id, req.Group)
+		}
+		if err != nil {
+			s.unavailableRead(w, "changing the groups allowlist", err)
+			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
@@ -108,7 +133,11 @@ func (s *Server) groupCommits(w http.ResponseWriter, r *http.Request, sess sessi
 		return
 	}
 	ctx := r.Context()
-	if ok, _ := s.st.Contacts().GroupAllowed(ctx, sess.id, group); !ok {
+	switch ok, err := s.st.Contacts().GroupAllowed(ctx, sess.id, group); {
+	case err != nil:
+		s.unavailableRead(w, "checking the groups allowlist", err)
+		return
+	case !ok:
 		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "")
 		return
 	}
@@ -557,8 +586,11 @@ func (s *Server) deliverLocal(ctx context.Context, d delivery, origin string) er
 }
 
 func (s *Server) deliverTo(ctx context.Context, d delivery, enc []byte, to, origin string) error {
-	if !s.isLocal(ctx, to) || !s.allowed(ctx, d, to, origin) {
-		return nil
+	if here, err := s.local(ctx, to); err != nil || !here {
+		return err
+	}
+	if ok, err := s.allowed(ctx, d, to, origin); err != nil || !ok {
+		return err
 	}
 	if d.MLS == "welcome" && to != d.From {
 		// A Welcome from someone we asked promotes them to a full contact (SPEC §10.3).
@@ -584,25 +616,30 @@ func (s *Server) deliverTo(ctx context.Context, d delivery, enc []byte, to, orig
 	return nil
 }
 
-// allowed applies a local recipient's allowlists to a delivery (SPEC §10.3).
-func (s *Server) allowed(ctx context.Context, d delivery, to, origin string) bool {
+// allowed applies a local recipient's allowlists to a delivery (SPEC §10.3). An error is
+// a storage failure: the caller retries rather than drop the delivery, or let it past a
+// block it couldn't check.
+func (s *Server) allowed(ctx context.Context, d delivery, to, origin string) (bool, error) {
 	if to == d.From {
-		return true
+		return true, nil
 	}
-	if c, err := s.st.Contacts().Get(ctx, to, d.From); err == nil && c.State == store.StateBlocked {
-		return false
+	switch c, err := s.st.Contacts().Get(ctx, to, d.From); {
+	case err != nil && !errors.Is(err, store.ErrNotFound):
+		return false, err
+	case err == nil && c.State == store.StateBlocked:
+		return false, nil
 	}
 	if d.MLS == "welcome" {
-		return s.isContactOrRequested(ctx, to, d.From)
+		return s.contactOrRequested(ctx, to, d.From)
 	}
-	if ok, _ := s.st.Contacts().GroupAllowed(ctx, to, d.Group); !ok {
-		return false
+	if ok, err := s.st.Contacts().GroupAllowed(ctx, to, d.Group); err != nil || !ok {
+		return false, err
 	}
 	// Group IDs aren't secret: limit what one sender can push into a group (SPEC §10.3).
 	g := wire.B64(d.Group)
 	return s.limits.allowAll(now(),
 		limit{"mls|" + d.From + "|" + g + "|" + to, 1000, 3600},
-		limit{"mls-origin|" + originKey(origin) + "|" + g + "|" + to, 3000, 3600})
+		limit{"mls-origin|" + originKey(origin) + "|" + g + "|" + to, 3000, 3600}), nil
 }
 
 // ---- inbox (SPEC §9.4) ----
@@ -641,7 +678,10 @@ func (s *Server) ackInbox(w http.ResponseWriter, r *http.Request, sess session) 
 	if !readBody(w, r, &req) {
 		return
 	}
-	s.ack(r.Context(), sess.id, sess.device, req.Upto)
+	if err := s.ack(r.Context(), sess.id, sess.device, req.Upto); err != nil {
+		s.unavailableRead(w, "acking an inbox", err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
