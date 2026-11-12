@@ -27,7 +27,7 @@ func (s *Server) RunMaintenance(ctx context.Context) {
 
 // limitsPath is where the rate limits are kept between restarts, or "" for none.
 func (s *Server) limitsPath() string {
-	if s.cfg.DataDir == "" || s.cfg.Store == "mem" {
+	if s.cfg.DataDir == "" || s.cfg.Store == "temp" {
 		return ""
 	}
 	return filepath.Join(s.cfg.DataDir, "limits.json")
