@@ -155,12 +155,12 @@ func discover(arg string) server {
 }
 
 type user struct {
-	srv           server
-	id, handle    string
-	dev           ed25519.PrivateKey
-	token         string
-	after         string
-	pending, seen []item
+	srv        server
+	id, handle string
+	dev        ed25519.PrivateKey
+	token      string
+	after      string
+	pending    []item
 }
 
 type item struct {
