@@ -111,9 +111,24 @@ func (f *Fed) S2SBase(ctx context.Context, name string) (string, error) {
 func New(name string, key serverkey.Key, peers map[string]string) *Fed {
 	return &Fed{
 		Name: name, Key: key, Peers: peers,
-		HTTP: &http.Client{Timeout: 15 * time.Second},
+		HTTP: &http.Client{Timeout: 15 * time.Second, Transport: newTransport()},
 		docs: map[string]cachedDoc{}, nonces: map[string]int64{},
 	}
+}
+
+// newTransport is the HTTP transport for talking to other servers. Peers are few and
+// talked to often, so connections are kept longer and more of them per peer than the
+// default (90 s, 2 per host): under the 5 minutes common reverse proxies keep idle
+// connections, so ours usually close first. HTTP/2 connections are checked with a ping
+// after 30 s without a frame, so a dead one is noticed before a request waits on it.
+func newTransport() *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.ForceAttemptHTTP2 = true
+	t.MaxIdleConns = 256
+	t.MaxIdleConnsPerHost = 16
+	t.IdleConnTimeout = 4 * time.Minute
+	t.HTTP2 = &http.HTTP2Config{SendPingTimeout: 30 * time.Second, PingTimeout: 10 * time.Second}
+	return t
 }
 
 // base returns the URL prefix for a server or handle domain.
