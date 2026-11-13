@@ -663,14 +663,24 @@ func (x sessions) CreateToken(ctx context.Context, tokenHash []byte, id string, 
 
 const tokenTTL = 30 * 24 * 3600
 
+// tokenSlack is how far ahead of 30 days a use pushes a token's expiry. Each use extends a token
+// (30 days without use, API conventions), but writing the new expiry on every request would sync
+// the disk once per call. So a use writes only when the stored expiry is under 30 days away, and
+// then sets it a minute past: a token never expires early, at most a minute late, and each one
+// costs at most one write a minute.
+const tokenSlack = 60
+
 func (x sessions) LookupToken(ctx context.Context, tokenHash []byte, now int64) (string, []byte, error) {
 	var id string
 	var dev []byte
-	err := x.rdb.QueryRowContext(ctx, "SELECT id, device FROM tokens WHERE hash = ? AND expires >= ?", tokenHash, now).Scan(&id, &dev)
+	var expires int64
+	err := x.rdb.QueryRowContext(ctx, "SELECT id, device, expires FROM tokens WHERE hash = ? AND expires >= ?", tokenHash, now).Scan(&id, &dev, &expires)
 	if err != nil {
 		return "", nil, notFound(err)
 	}
-	x.db.ExecContext(ctx, "UPDATE tokens SET expires = ? WHERE hash = ?", now+tokenTTL, tokenHash)
+	if expires < now+tokenTTL {
+		x.db.ExecContext(ctx, "UPDATE tokens SET expires = ? WHERE hash = ?", now+tokenTTL+tokenSlack, tokenHash)
+	}
 	return id, dev, nil
 }
 
