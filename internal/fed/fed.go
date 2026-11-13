@@ -26,6 +26,9 @@ const (
 	MaxSkew  = 5 * 60  // seconds; S2S requests (SPEC §8.3)
 	NonceTTL = 10 * 60 // seconds
 	docTTL   = time.Hour
+	// docRefresh: a cached server document used in the last docRefresh of its life is
+	// fetched again in the background, so busy peers never wait on a fetch.
+	docRefresh = 10 * time.Minute
 )
 
 // Fed holds what federation needs: who we are, and how to reach everyone else.
@@ -47,10 +50,11 @@ type Fed struct {
 	// Nil keeps nonces in memory, for tests.
 	UseNonce func(ctx context.Context, key string, expires, now int64) (fresh bool, err error)
 
-	mu        sync.Mutex
-	docs      map[string]cachedDoc
-	nonces    map[string]int64
-	nextSweep int64
+	mu         sync.Mutex
+	docs       map[string]cachedDoc
+	refreshing map[string]bool
+	nonces     map[string]int64
+	nextSweep  int64
 }
 
 // UnavailableError is a failure to check a request that says nothing about the request
@@ -167,14 +171,46 @@ func (f *Fed) get(ctx context.Context, name, path string) ([]byte, error) {
 	return b, nil
 }
 
-// ServerDoc fetches (and caches) another server's document.
+// ServerDoc fetches (and caches) another server's document. One that's about to expire
+// is refreshed in the background, and the cached copy used meanwhile.
 func (f *Fed) ServerDoc(ctx context.Context, name string) (Doc, error) {
 	f.mu.Lock()
 	c, ok := f.docs[name]
 	f.mu.Unlock()
-	if ok && time.Since(c.fetched) < docTTL {
-		return c.doc, nil
+	if ok {
+		if age := time.Since(c.fetched); age < docTTL {
+			if age >= docTTL-docRefresh {
+				f.refreshDoc(name)
+			}
+			return c.doc, nil
+		}
 	}
+	return f.fetchDoc(ctx, name)
+}
+
+// refreshDoc fetches name's document in the background, unless that's already under way.
+// If it fails, the cached copy stays until it expires, and is then fetched as usual.
+func (f *Fed) refreshDoc(name string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.refreshing[name] {
+		return
+	}
+	if f.refreshing == nil {
+		f.refreshing = map[string]bool{}
+	}
+	f.refreshing[name] = true
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		f.fetchDoc(ctx, name)
+		f.mu.Lock()
+		delete(f.refreshing, name)
+		f.mu.Unlock()
+	}()
+}
+
+func (f *Fed) fetchDoc(ctx context.Context, name string) (Doc, error) {
 	b, err := f.get(ctx, name, "/.well-known/tieroute/server")
 	if err != nil {
 		return Doc{}, err
@@ -187,6 +223,9 @@ func (f *Fed) ServerDoc(ctx context.Context, name string) (Doc, error) {
 		return Doc{}, fmt.Errorf("server document for %s names %q", name, d.Name)
 	}
 	f.mu.Lock()
+	if f.docs == nil {
+		f.docs = map[string]cachedDoc{}
+	}
 	f.docs[name] = cachedDoc{doc: d, fetched: time.Now()}
 	f.mu.Unlock()
 	return d, nil

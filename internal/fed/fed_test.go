@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -229,5 +230,56 @@ func TestReplayRefusedAcrossRestart(t *testing.T) {
 	req, _ = sig.Encode()
 	if _, _, err := f.Verify(ctx, req, "ping"); !errors.As(err, new(*UnavailableError)) {
 		t.Fatalf("with the sender's document unreachable: %v, want unavailable", err)
+	}
+}
+
+// A server document near the end of its hour is used as is while a fresh copy is fetched
+// in the background: the request that noticed doesn't wait for it.
+func TestServerDocRefreshedInBackground(t *testing.T) {
+	var hits atomic.Int32
+	release := make(chan struct{})
+	doc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hits.Add(1) > 1 {
+			<-release
+		}
+		b, _ := wire.Marshal(map[string]any{"name": "a.test", "keys": []any{}})
+		w.Write(b)
+	}))
+	defer doc.Close()
+	f := New("b.test", serverkey.Key{}, map[string]string{"a.test": doc.URL})
+	ctx := context.Background()
+	if _, err := f.ServerDoc(ctx, "a.test"); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-docTTL + docRefresh/2)
+	f.mu.Lock()
+	f.docs["a.test"] = cachedDoc{doc: f.docs["a.test"].doc, fetched: old}
+	f.mu.Unlock()
+	done := make(chan error, 1)
+	go func() { _, err := f.ServerDoc(ctx, "a.test"); done <- err }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("ServerDoc waited for the refresh")
+	}
+	f.ServerDoc(ctx, "a.test") // the refresh is under way: no second one
+	close(release)
+	for i := 0; ; i++ {
+		f.mu.Lock()
+		fetched := f.docs["a.test"].fetched
+		f.mu.Unlock()
+		if fetched.After(old) {
+			break
+		}
+		if i == 200 {
+			t.Fatal("the document was never refreshed")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if n := hits.Load(); n != 2 {
+		t.Fatalf("%d fetches, want 2", n)
 	}
 }
