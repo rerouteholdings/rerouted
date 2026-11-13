@@ -868,30 +868,46 @@ func (x inbox) Prune(ctx context.Context, owner string, devices [][]byte, before
 }
 
 func (x inbox) Deliver(ctx context.Context, owner string, id []byte, it store.Item) (string, bool, error) {
+	cur, err := x.DeliverAll(ctx, []store.Delivered{{Owner: owner, ID: id, Item: it}})
+	if err != nil {
+		return "", false, err
+	}
+	return cur[0], cur[0] != "", nil
+}
+
+// DeliverAll stores every copy in one transaction, so a delivery to a group costs one
+// sync to disk rather than one per member.
+func (x inbox) DeliverAll(ctx context.Context, ds []store.Delivered) ([]string, error) {
 	tx, err := x.db.BeginTx(ctx, nil)
 	if err != nil {
-		return "", false, err
+		return nil, err
 	}
 	defer tx.Rollback()
-	res, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO seen (owner, did, ts) VALUES (?, ?, ?)", owner, id, it.TS)
-	if err != nil {
-		return "", false, err
-	}
-	if n, err := res.RowsAffected(); err != nil || n == 0 {
-		return "", false, err
-	}
-	res, err = tx.ExecContext(ctx, "INSERT INTO inbox (owner, ts, delivery, notice) VALUES (?, ?, ?, ?)", owner, it.TS, it.Delivery, it.Notice)
-	if err != nil {
-		return "", false, err
-	}
-	n, err := res.LastInsertId()
-	if err != nil {
-		return "", false, err
+	out := make([]string, len(ds))
+	for i, d := range ds {
+		res, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO seen (owner, did, ts) VALUES (?, ?, ?)", d.Owner, d.ID, d.Item.TS)
+		if err != nil {
+			return nil, err
+		}
+		if n, err := res.RowsAffected(); err != nil {
+			return nil, err
+		} else if n == 0 {
+			continue // a repeat
+		}
+		res, err = tx.ExecContext(ctx, "INSERT INTO inbox (owner, ts, delivery, notice) VALUES (?, ?, ?, ?)", d.Owner, d.Item.TS, d.Item.Delivery, d.Item.Notice)
+		if err != nil {
+			return nil, err
+		}
+		n, err := res.LastInsertId()
+		if err != nil {
+			return nil, err
+		}
+		out[i] = strconv.FormatInt(n, 10)
 	}
 	if err := tx.Commit(); err != nil {
-		return "", false, err
+		return nil, err
 	}
-	return strconv.FormatInt(n, 10), true, nil
+	return out, nil
 }
 
 func (x inbox) PruneSeen(ctx context.Context, before int64) (int, error) {

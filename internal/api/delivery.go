@@ -568,52 +568,68 @@ func (s *Server) deliver(ctx context.Context, d delivery) error {
 // allowlists (SPEC §9.3). Drops are silent.
 // origin is the server that delivered it.
 //
-// It returns the first storage error, after trying every recipient. Each recipient's
-// copy is stored whole or not at all, and a recipient that already has it drops the
-// repeat, so the caller can retry the whole delivery.
+// Every recipient's copy is stored in one transaction, then pushed to their connected
+// devices. It returns the first storage error, after trying every recipient. Copies are
+// stored whole or not at all, and a recipient that already has it drops the repeat, so
+// the caller can retry the whole delivery.
 func (s *Server) deliverLocal(ctx context.Context, d delivery, origin string) error {
 	enc, err := wire.Marshal(d)
 	if err != nil {
 		return err
 	}
 	var first error
+	var ds []store.Delivered
 	for _, to := range d.To {
-		if err := s.deliverTo(ctx, d, enc, to, origin); err != nil && first == nil {
+		ok, err := s.admit(ctx, d, to, origin)
+		if err != nil && first == nil {
 			first = err
 		}
+		if ok {
+			ds = append(ds, store.Delivered{Owner: to, ID: d.ID, Item: store.Item{TS: now(), Delivery: enc}})
+		}
+	}
+	if len(ds) == 0 {
+		return first
+	}
+	curs, err := s.st.Inbox().DeliverAll(ctx, ds)
+	if err != nil {
+		return err
+	}
+	for i, cur := range curs {
+		if cur == "" {
+			continue // a repeat
+		}
+		it := ds[i].Item
+		it.Cursor = cur
+		s.pushItem(ds[i].Owner, it)
+		s.fire.publish(ds[i].Owner, it)
 	}
 	return first
 }
 
-func (s *Server) deliverTo(ctx context.Context, d delivery, enc []byte, to, origin string) error {
+// admit reports whether a delivery goes into a recipient's inbox: they live here, and
+// their allowlists let it in. Accepting a Welcome updates their allowlists on the way.
+func (s *Server) admit(ctx context.Context, d delivery, to, origin string) (bool, error) {
 	if here, err := s.local(ctx, to); err != nil || !here {
-		return err
+		return false, err
 	}
 	if ok, err := s.allowed(ctx, d, to, origin); err != nil || !ok {
-		return err
+		return false, err
 	}
 	if d.MLS == "welcome" && to != d.From {
 		// A Welcome from someone we asked promotes them to a full contact (SPEC §10.3).
 		if err := s.st.Contacts().Put(ctx, to, store.Contact{ID: d.From, State: store.StateContact, Since: now()}); err != nil {
-			return err
+			return false, err
 		}
 	}
 	if d.MLS == "welcome" && len(d.Group) > 0 {
 		// Accepting a Welcome allowlists its group, so what members send before the
 		// recipient's device processes it isn't dropped (SPEC §10.3).
 		if err := s.st.Contacts().AllowGroup(ctx, to, d.Group); err != nil {
-			return err
+			return false, err
 		}
 	}
-	it := store.Item{TS: now(), Delivery: enc}
-	cur, isNew, err := s.st.Inbox().Deliver(ctx, to, d.ID, it)
-	if err != nil || !isNew {
-		return err
-	}
-	it.Cursor = cur
-	s.pushItem(to, it)
-	s.fire.publish(to, it)
-	return nil
+	return true, nil
 }
 
 // allowed applies a local recipient's allowlists to a delivery (SPEC §10.3). An error is

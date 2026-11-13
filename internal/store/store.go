@@ -221,6 +221,13 @@ type Item struct {
 	Notice   []byte // encoded notice, or nil
 }
 
+// Delivered is one owner's copy of a delivery, for Inbox.DeliverAll.
+type Delivered struct {
+	Owner string
+	ID    []byte
+	Item  Item
+}
+
 // Inbox stores per-user inboxes and per-device ack positions (SPEC §9.4).
 type Inbox interface {
 	Append(ctx context.Context, owner string, it Item) (cursor string, err error)
@@ -232,6 +239,9 @@ type Inbox interface {
 	// before (SPEC §9.5), recording the ID and appending the item in one transaction, so a
 	// failure leaves neither. isNew is false, with no cursor, for a repeat.
 	Deliver(ctx context.Context, owner string, id []byte, it Item) (cursor string, isNew bool, err error)
+	// DeliverAll is Deliver for several owners' copies in one transaction: all of them are
+	// stored or none are. cursors[i] is the cursor for ds[i], or "" for a repeat.
+	DeliverAll(ctx context.Context, ds []Delivered) (cursors []string, err error)
 	// PruneSeen forgets delivery IDs recorded before `before`. A repeat after that is stored
 	// again, so `before` has to be older than any retry: the outbox gives up after 72 hours.
 	PruneSeen(ctx context.Context, before int64) (int, error)
