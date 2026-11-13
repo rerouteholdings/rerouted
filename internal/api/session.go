@@ -87,13 +87,7 @@ func (s *Server) identity(ctx context.Context, id string) (*chain.State, [][]byt
 	if err != nil {
 		return nil, nil, err
 	}
-	entries := make([]wire.Signed, len(raw))
-	for i, b := range raw {
-		if entries[i], err = wire.DecodeSigned(b); err != nil {
-			return nil, nil, err
-		}
-	}
-	st, err := chain.Validate(entries)
+	st, err := decodeChain(raw)
 	return st, raw, err
 }
 

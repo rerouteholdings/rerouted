@@ -55,7 +55,21 @@ func canonChain(in [][]byte) ([][]byte, error) {
 	return out, nil
 }
 
+// decodeChain decodes and validates a chain. A chain that validated before isn't checked
+// again: the state is remembered by a hash of the exact bytes (see validChains).
 func decodeChain(raw [][]byte) (*chain.State, error) {
+	sum := chainSum(raw)
+	if st := validChains.get(sum); st != nil {
+		return st, nil
+	}
+	st, err := validateChain(raw)
+	if err == nil {
+		validChains.put(sum, st)
+	}
+	return st, err
+}
+
+func validateChain(raw [][]byte) (*chain.State, error) {
 	entries := make([]wire.Signed, len(raw))
 	for i, b := range raw {
 		var err error

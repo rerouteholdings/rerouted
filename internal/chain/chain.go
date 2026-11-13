@@ -243,6 +243,9 @@ func (st *State) finish(e wire.ChainEntry, enc []byte) {
 	st.Seq, st.Head, st.HeadTS = e.Seq, sum[:], e.TS
 }
 
+// Clone returns a deep copy of st.
+func (st *State) Clone() *State { return st.clone() }
+
 func (st *State) clone() *State {
 	c := *st
 	c.Devices = make(map[string]string, len(st.Devices))
