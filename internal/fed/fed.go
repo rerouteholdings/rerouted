@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/rerouteholdings/rerouted/internal/serverkey"
+	"github.com/rerouteholdings/rerouted/internal/version"
 	"github.com/rerouteholdings/rerouted/internal/wire"
 )
 
@@ -155,6 +156,7 @@ func (f *Fed) get(ctx context.Context, name, path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("User-Agent", version.UserAgent())
 	req.Host = host
 	resp, err := f.HTTP.Do(req)
 	if err != nil {
@@ -304,6 +306,7 @@ func (f *Fed) Fetch(ctx context.Context, dest, path string, body []byte) (string
 	if err != nil {
 		return "", nil, err
 	}
+	req.Header.Set("User-Agent", version.UserAgent())
 	req.Header.Set("Content-Type", wire.MediaType)
 	sent := time.Now()
 	resp, err := f.HTTP.Do(req)
