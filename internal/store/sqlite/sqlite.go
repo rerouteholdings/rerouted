@@ -56,9 +56,10 @@ CREATE TABLE IF NOT EXISTS reports  (n INTEGER PRIMARY KEY AUTOINCREMENT, receiv
 `
 
 type Store struct {
-	db       *sql.DB
-	mediaDir string // files live here, beside the database
-	tempDir  string // removed on Close: set by OpenTemp
+	db       *sql.DB // the one writer
+	rdb      *sql.DB // readers, for the reads on every request: see openReaders
+	mediaDir string  // files live here, beside the database
+	tempDir  string  // removed on Close: set by OpenTemp
 }
 
 // Open opens (or creates) the database at path.
@@ -81,8 +82,33 @@ func OpenTemp() (*Store, error) {
 	return s, nil
 }
 
+func dsn(path, sync string) string {
+	return "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=synchronous(" + sync + ")&_pragma=busy_timeout(5000)&_pragma=foreign_keys(on)"
+}
+
+// readers is how many connections serve reads.
+const readers = 4
+
+// openReaders opens a pool of read-only connections beside the writer. In WAL mode
+// readers don't wait for the writer, so the reads every request makes (sessions, chains,
+// allowlists) don't queue behind a write that's syncing to disk. Each read sees every
+// write committed before it started. query_only makes sure nothing writes through it.
+func openReaders(path, sync string) (*sql.DB, error) {
+	rdb, err := sql.Open("sqlite", dsn(path, sync)+"&_pragma=query_only(1)")
+	if err != nil {
+		return nil, err
+	}
+	rdb.SetMaxOpenConns(readers)
+	rdb.SetMaxIdleConns(readers)
+	if err := rdb.Ping(); err != nil {
+		rdb.Close()
+		return nil, err
+	}
+	return rdb, nil
+}
+
 func open(path, sync string) (*Store, error) {
-	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=journal_mode(WAL)&_pragma=synchronous("+sync+")&_pragma=busy_timeout(5000)&_pragma=foreign_keys(on)")
+	db, err := sql.Open("sqlite", dsn(path, sync))
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +186,12 @@ func open(path, sync string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{db: db, mediaDir: mediaDir}, nil
+	rdb, err := openReaders(path, sync)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	return &Store{db: db, rdb: rdb, mediaDir: mediaDir}, nil
 }
 
 const indexes = `
@@ -200,6 +231,7 @@ func migrateKeyTimes(db *sql.DB) error {
 }
 
 func (s *Store) Close() error {
+	s.rdb.Close()
 	err := s.db.Close()
 	if s.tempDir != "" {
 		os.RemoveAll(s.tempDir)
@@ -207,16 +239,16 @@ func (s *Store) Close() error {
 	return err
 }
 
-func (s *Store) Chains() store.Chains           { return chains{s.db} }
-func (s *Store) Sessions() store.Sessions       { return sessions{s.db} }
+func (s *Store) Chains() store.Chains           { return chains{s.db, s.rdb} }
+func (s *Store) Sessions() store.Sessions       { return sessions{s.db, s.rdb} }
 func (s *Store) KeyPackages() store.KeyPackages { return keyPackages{s.db} }
-func (s *Store) Contacts() store.Contacts       { return contacts{s.db} }
+func (s *Store) Contacts() store.Contacts       { return contacts{s.db, s.rdb} }
 func (s *Store) Invites() store.Invites         { return invites{s.db} }
 func (s *Store) Sent() store.Sent               { return sent{s.db} }
-func (s *Store) Inbox() store.Inbox             { return inbox{s.db} }
+func (s *Store) Inbox() store.Inbox             { return inbox{s.db, s.rdb} }
 func (s *Store) Hub() store.Hub                 { return hub{s.db} }
-func (s *Store) Remote() store.Remote           { return remote{s.db} }
-func (s *Store) Outbox() store.Outbox           { return outbox{s.db} }
+func (s *Store) Remote() store.Remote           { return remote{s.db, s.rdb} }
+func (s *Store) Outbox() store.Outbox           { return outbox{s.db, s.rdb} }
 func (s *Store) Profiles() store.Profiles       { return profiles{s.db} }
 func (s *Store) Media() store.Media             { return media{s.db, s.mediaDir} }
 func (s *Store) Account() store.Account         { return account{s.db} }
@@ -252,7 +284,7 @@ func isConstraint(err error) bool {
 
 // ---- chains ----
 
-type chains struct{ db *sql.DB }
+type chains struct{ db, rdb *sql.DB }
 
 // heldByOther reports whether another identity owns `handle`, or holds it with a move
 // reservation whose hold hasn't ended at `now` (SPEC §6.6).
@@ -539,7 +571,7 @@ func (c chains) Append(ctx context.Context, id string, prevSeq uint64, entry []b
 }
 
 func (c chains) Entries(ctx context.Context, id string, after int64) ([][]byte, error) {
-	rows, err := c.db.QueryContext(ctx, "SELECT entry FROM chains WHERE id = ? AND seq > ? ORDER BY seq", id, after)
+	rows, err := c.rdb.QueryContext(ctx, "SELECT entry FROM chains WHERE id = ? AND seq > ? ORDER BY seq", id, after)
 	if err != nil {
 		return nil, err
 	}
@@ -560,7 +592,7 @@ func (c chains) Entries(ctx context.Context, id string, after int64) ([][]byte, 
 
 func (c chains) ByHandle(ctx context.Context, handle string) (string, error) {
 	var id string
-	err := c.db.QueryRowContext(ctx, "SELECT id FROM handles WHERE handle = ?", handle).Scan(&id)
+	err := c.rdb.QueryRowContext(ctx, "SELECT id FROM handles WHERE handle = ?", handle).Scan(&id)
 	return id, notFound(err)
 }
 
@@ -582,7 +614,7 @@ func (c chains) ReleaseHandle(ctx context.Context, handle string) (string, error
 
 // ---- sessions ----
 
-type sessions struct{ db *sql.DB }
+type sessions struct{ db, rdb *sql.DB }
 
 func nonceKey(id string, device, nonce []byte) string {
 	return id + "|" + string(wire.HexBytes(device)) + "|" + string(wire.HexBytes(nonce))
@@ -634,7 +666,7 @@ const tokenTTL = 30 * 24 * 3600
 func (x sessions) LookupToken(ctx context.Context, tokenHash []byte, now int64) (string, []byte, error) {
 	var id string
 	var dev []byte
-	err := x.db.QueryRowContext(ctx, "SELECT id, device FROM tokens WHERE hash = ? AND expires >= ?", tokenHash, now).Scan(&id, &dev)
+	err := x.rdb.QueryRowContext(ctx, "SELECT id, device FROM tokens WHERE hash = ? AND expires >= ?", tokenHash, now).Scan(&id, &dev)
 	if err != nil {
 		return "", nil, notFound(err)
 	}
@@ -719,11 +751,11 @@ func (k keyPackages) Claim(ctx context.Context, id string, devices [][]byte) ([]
 
 // ---- contacts ----
 
-type contacts struct{ db *sql.DB }
+type contacts struct{ db, rdb *sql.DB }
 
 func (c contacts) Get(ctx context.Context, owner, other string) (*store.Contact, error) {
 	ct := store.Contact{ID: other}
-	err := c.db.QueryRowContext(ctx, "SELECT state, since, request FROM contacts WHERE owner = ? AND other = ?", owner, other).Scan(&ct.State, &ct.Since, &ct.Request)
+	err := c.rdb.QueryRowContext(ctx, "SELECT state, since, request FROM contacts WHERE owner = ? AND other = ?", owner, other).Scan(&ct.State, &ct.Since, &ct.Request)
 	if err != nil {
 		return nil, notFound(err)
 	}
@@ -791,13 +823,13 @@ func (c contacts) DisallowGroup(ctx context.Context, owner string, group []byte)
 
 func (c contacts) GroupAllowed(ctx context.Context, owner string, group []byte) (bool, error) {
 	var n int
-	err := c.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM groups_allowed WHERE owner = ? AND grp = ?", owner, group).Scan(&n)
+	err := c.rdb.QueryRowContext(ctx, "SELECT COUNT(*) FROM groups_allowed WHERE owner = ? AND grp = ?", owner, group).Scan(&n)
 	return n > 0, err
 }
 
 // ---- inbox ----
 
-type inbox struct{ db *sql.DB }
+type inbox struct{ db, rdb *sql.DB }
 
 func (x inbox) Append(ctx context.Context, owner string, it store.Item) (string, error) {
 	res, err := x.db.ExecContext(ctx, "INSERT INTO inbox (owner, ts, delivery, notice) VALUES (?, ?, ?, ?)", owner, it.TS, it.Delivery, it.Notice)
@@ -813,9 +845,9 @@ func (x inbox) List(ctx context.Context, owner string, device []byte, after stri
 	from, err := strconv.ParseInt(after, 10, 64)
 	if after == "" || err != nil {
 		from = 0
-		x.db.QueryRowContext(ctx, "SELECT upto FROM acks WHERE owner = ? AND device = ?", owner, device).Scan(&from)
+		x.rdb.QueryRowContext(ctx, "SELECT upto FROM acks WHERE owner = ? AND device = ?", owner, device).Scan(&from)
 	}
-	rows, err := x.db.QueryContext(ctx, "SELECT cursor, ts, delivery, notice FROM inbox WHERE owner = ? AND cursor > ? ORDER BY cursor LIMIT ?", owner, from, limit+1)
+	rows, err := x.rdb.QueryContext(ctx, "SELECT cursor, ts, delivery, notice FROM inbox WHERE owner = ? AND cursor > ? ORDER BY cursor LIMIT ?", owner, from, limit+1)
 	if err != nil {
 		return nil, "", false, err
 	}
@@ -1033,7 +1065,7 @@ func (h hub) PruneCommits(ctx context.Context, before int64) error {
 
 // ---- remote chains ----
 
-type remote struct{ db *sql.DB }
+type remote struct{ db, rdb *sql.DB }
 
 func (r remote) Put(ctx context.Context, id, home string, entries [][]byte) error {
 	b, err := wire.Marshal(entries)
@@ -1047,7 +1079,7 @@ func (r remote) Put(ctx context.Context, id, home string, entries [][]byte) erro
 func (r remote) Get(ctx context.Context, id string) (string, [][]byte, error) {
 	var home string
 	var b []byte
-	if err := r.db.QueryRowContext(ctx, "SELECT home, entries FROM remote WHERE id = ?", id).Scan(&home, &b); err != nil {
+	if err := r.rdb.QueryRowContext(ctx, "SELECT home, entries FROM remote WHERE id = ?", id).Scan(&home, &b); err != nil {
 		return "", nil, notFound(err)
 	}
 	var stored []wire.Bytes
@@ -1072,7 +1104,7 @@ func (r remote) HasContactOn(ctx context.Context, home string) (bool, error) {
 
 // ---- outbox ----
 
-type outbox struct{ db *sql.DB }
+type outbox struct{ db, rdb *sql.DB }
 
 func (o outbox) Enqueue(ctx context.Context, dest, path string, body []byte, now int64) error {
 	_, err := o.db.ExecContext(ctx, "INSERT INTO outbox (dest, path, body, next, created) VALUES (?, ?, ?, ?, ?)", dest, path, body, now, now)
@@ -1088,7 +1120,7 @@ func (o outbox) DueTo(ctx context.Context, dest string, now int64, limit int) ([
 }
 
 func (o outbox) Dests(ctx context.Context, now int64) ([]string, error) {
-	rows, err := o.db.QueryContext(ctx, "SELECT DISTINCT dest FROM outbox WHERE next <= ?", now)
+	rows, err := o.rdb.QueryContext(ctx, "SELECT DISTINCT dest FROM outbox WHERE next <= ?", now)
 	if err != nil {
 		return nil, err
 	}
@@ -1105,7 +1137,7 @@ func (o outbox) Dests(ctx context.Context, now int64) ([]string, error) {
 }
 
 func (o outbox) due(ctx context.Context, query string, args ...any) ([]store.OutboxItem, error) {
-	rows, err := o.db.QueryContext(ctx, query, args...)
+	rows, err := o.rdb.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
