@@ -166,6 +166,7 @@ func open(path, sync string) (*Store, error) {
 const indexes = `
 CREATE INDEX IF NOT EXISTS seen_ts ON seen (ts);
 CREATE INDEX IF NOT EXISTS sent_ts ON sent (ts);
+CREATE INDEX IF NOT EXISTS outbox_dest ON outbox (dest, next);
 `
 
 func migrateSeenTimes(db *sql.DB) error {
@@ -1079,7 +1080,32 @@ func (o outbox) Enqueue(ctx context.Context, dest, path string, body []byte, now
 }
 
 func (o outbox) Due(ctx context.Context, now int64, limit int) ([]store.OutboxItem, error) {
-	rows, err := o.db.QueryContext(ctx, "SELECT n, dest, path, body, attempts, created FROM outbox WHERE next <= ? ORDER BY n LIMIT ?", now, limit)
+	return o.due(ctx, "SELECT n, dest, path, body, attempts, created FROM outbox WHERE next <= ? ORDER BY n LIMIT ?", now, limit)
+}
+
+func (o outbox) DueTo(ctx context.Context, dest string, now int64, limit int) ([]store.OutboxItem, error) {
+	return o.due(ctx, "SELECT n, dest, path, body, attempts, created FROM outbox WHERE dest = ? AND next <= ? ORDER BY n LIMIT ?", dest, now, limit)
+}
+
+func (o outbox) Dests(ctx context.Context, now int64) ([]string, error) {
+	rows, err := o.db.QueryContext(ctx, "SELECT DISTINCT dest FROM outbox WHERE next <= ?", now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+func (o outbox) due(ctx context.Context, query string, args ...any) ([]store.OutboxItem, error) {
+	rows, err := o.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

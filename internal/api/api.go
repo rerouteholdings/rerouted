@@ -34,7 +34,7 @@ type Server struct {
 	log       *slog.Logger
 	st        store.Store
 	fed       *fed.Fed
-	kick      chan struct{}
+	out       outboxQueues
 	mux       *http.ServeMux
 	links     linkProofs
 	limits    limiter
@@ -57,7 +57,7 @@ func New(cfg *config.Config, key serverkey.Key, log *slog.Logger, st store.Store
 		log:      log,
 		st:       st,
 		mux:      http.NewServeMux(),
-		kick:     make(chan struct{}, 1),
+		out:      newOutboxQueues(),
 		links:    linkProofs{m: map[string]*linkProof{}},
 		limits:   limiter{m: map[string][]int64{}},
 		retry:    destBackoff{m: map[string]*backoff{}},

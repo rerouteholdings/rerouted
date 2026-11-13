@@ -323,6 +323,10 @@ type OutboxItem struct {
 type Outbox interface {
 	Enqueue(ctx context.Context, dest, path string, body []byte, now int64) error
 	Due(ctx context.Context, now int64, limit int) ([]OutboxItem, error)
+	// DueTo is Due for one destination, oldest first.
+	DueTo(ctx context.Context, dest string, now int64, limit int) ([]OutboxItem, error)
+	// Dests lists the destinations with requests due.
+	Dests(ctx context.Context, now int64) ([]string, error)
 	Done(ctx context.Context, id int64) error
 	Retry(ctx context.Context, id int64, next int64) error
 }

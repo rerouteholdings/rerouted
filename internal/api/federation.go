@@ -134,25 +134,112 @@ func (s *Server) enqueue(ctx context.Context, dest, path string, body any) error
 	if err := s.st.Outbox().Enqueue(ctx, dest, path, b, now()); err != nil {
 		return err
 	}
-	select {
-	case s.kick <- struct{}{}:
-	default:
+	// Try it now, without waiting for the next round. The outbox is the retry path.
+	if base := s.out.running(); base != nil {
+		s.wake(base, dest)
 	}
 	return nil
 }
 
-// RunOutbox delivers queued S2S requests until ctx ends.
+// RunOutbox delivers queued S2S requests until ctx ends: each destination has its own
+// worker, so a slow or unreachable server holds up only what's queued for it.
 func (s *Server) RunOutbox(ctx context.Context) {
+	s.out.mu.Lock()
+	s.out.base = ctx
+	s.out.mu.Unlock()
 	t := time.NewTicker(2 * time.Second)
 	defer t.Stop()
 	for {
-		s.flushOutbox(ctx)
+		s.outboxRound(ctx)
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-		case <-s.kick:
 		}
+	}
+}
+
+// outboxWorkers bounds how many destinations are sent to at once.
+const outboxWorkers = 32
+
+// outboxQueues tracks the per-destination workers. A destination has at most one
+// worker, which sends its due requests in the order they were queued.
+type outboxQueues struct {
+	mu   sync.Mutex
+	base context.Context // RunOutbox's context, nil until it starts
+	dest map[string]*destWorker
+	sem  chan struct{}
+}
+
+type destWorker struct {
+	again bool          // more may be due: go round once more before stopping
+	idle  chan struct{} // closed when the worker stops
+}
+
+func newOutboxQueues() outboxQueues {
+	return outboxQueues{dest: map[string]*destWorker{}, sem: make(chan struct{}, outboxWorkers)}
+}
+
+func (q *outboxQueues) running() context.Context {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.base
+}
+
+// wake makes sure dest's worker runs, starting one if there's none, and returns a
+// channel closed once it has sent everything due and stopped.
+func (s *Server) wake(ctx context.Context, dest string) <-chan struct{} {
+	q := &s.out
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if w := q.dest[dest]; w != nil {
+		w.again = true
+		return w.idle
+	}
+	w := &destWorker{idle: make(chan struct{})}
+	q.dest[dest] = w
+	go s.runDest(ctx, dest, w)
+	return w.idle
+}
+
+func (s *Server) runDest(ctx context.Context, dest string, w *destWorker) {
+	q := &s.out
+	for {
+		select {
+		case q.sem <- struct{}{}:
+			s.sendDue(ctx, dest)
+			<-q.sem
+		case <-ctx.Done():
+		}
+		q.mu.Lock()
+		if !w.again || ctx.Err() != nil {
+			delete(q.dest, dest)
+			close(w.idle)
+			q.mu.Unlock()
+			return
+		}
+		w.again = false
+		q.mu.Unlock()
+	}
+}
+
+// outboxRound wakes the worker of every destination with requests due.
+func (s *Server) outboxRound(ctx context.Context) []<-chan struct{} {
+	dests, err := s.st.Outbox().Dests(ctx, now())
+	if err != nil {
+		return nil
+	}
+	idle := make([]<-chan struct{}, len(dests))
+	for i, d := range dests {
+		idle[i] = s.wake(ctx, d)
+	}
+	return idle
+}
+
+// flushOutbox sends everything due and waits until it's done.
+func (s *Server) flushOutbox(ctx context.Context) {
+	for _, c := range s.outboxRound(ctx) {
+		<-c
 	}
 }
 
@@ -205,43 +292,56 @@ func (d *destBackoff) ok(dest string) {
 	d.mu.Unlock()
 }
 
-func (s *Server) flushOutbox(ctx context.Context) {
-	items, err := s.st.Outbox().Due(ctx, now(), 50)
-	if err != nil {
+// sendDue sends dest's due requests, oldest first. Only dest's worker calls it.
+func (s *Server) sendDue(ctx context.Context, dest string) {
+	const batch = 50
+	for range 20 { // a bound, in case storage keeps failing to mark items done
+		items, err := s.st.Outbox().DueTo(ctx, dest, now(), batch)
+		if err != nil {
+			return
+		}
+		for _, it := range items {
+			s.sendItem(ctx, it)
+		}
+		if len(items) < batch || ctx.Err() != nil {
+			return
+		}
+	}
+}
+
+func (s *Server) sendItem(ctx context.Context, it store.OutboxItem) {
+	t := now()
+	if t-it.Created > outboxExpiry {
+		s.log.Warn("s2s gave up after 72 hours", "dest", it.Dest, "path", it.Path)
+		s.logged("marking an outbox item done", s.st.Outbox().Done(ctx, it.ID))
+		s.deliveryFailed(ctx, it, "expired", nil)
 		return
 	}
-	for _, it := range items {
-		t := now()
-		if t-it.Created > outboxExpiry {
-			s.log.Warn("s2s gave up after 72 hours", "dest", it.Dest, "path", it.Path)
-			s.logged("marking an outbox item done", s.st.Outbox().Done(ctx, it.ID))
-			s.deliveryFailed(ctx, it, "expired", nil)
-			continue
+	if until := s.retry.waiting(it.Dest, t); until != 0 {
+		s.logged("rescheduling an outbox item", s.st.Outbox().Retry(ctx, it.ID, until)) // its server is backing off: wait in line
+		return
+	}
+	_, err := s.fed.Call(ctx, it.Dest, it.Path, it.Body)
+	var st *fed.ErrStatus
+	isStatus := errors.As(err, &st)
+	switch {
+	case err == nil:
+		s.retry.ok(it.Dest)
+		s.logged("marking an outbox item done", s.st.Outbox().Done(ctx, it.ID))
+	case isStatus && st.Status/100 == 4 && !retryable(st.Status):
+		// A refusal: the server is up, but won't take this one. Don't retry.
+		s.retry.ok(it.Dest)
+		s.log.Warn("s2s refused", "dest", it.Dest, "path", it.Path, "err", err)
+		s.logged("marking an outbox item done", s.st.Outbox().Done(ctx, it.ID))
+		s.deliveryFailed(ctx, it, st.Code, st.IDs)
+	case ctx.Err() != nil:
+		// Shutting down: the item stays due, for the next start.
+	default:
+		var hint int64
+		if isStatus {
+			hint = st.RetryAfter
 		}
-		if until := s.retry.waiting(it.Dest, t); until != 0 {
-			s.logged("rescheduling an outbox item", s.st.Outbox().Retry(ctx, it.ID, until)) // its server is backing off: wait in line
-			continue
-		}
-		_, err := s.fed.Call(ctx, it.Dest, it.Path, it.Body)
-		var st *fed.ErrStatus
-		isStatus := errors.As(err, &st)
-		switch {
-		case err == nil:
-			s.retry.ok(it.Dest)
-			s.logged("marking an outbox item done", s.st.Outbox().Done(ctx, it.ID))
-		case isStatus && st.Status/100 == 4 && !retryable(st.Status):
-			// A refusal: the server is up, but won't take this one. Don't retry.
-			s.retry.ok(it.Dest)
-			s.log.Warn("s2s refused", "dest", it.Dest, "path", it.Path, "err", err)
-			s.logged("marking an outbox item done", s.st.Outbox().Done(ctx, it.ID))
-			s.deliveryFailed(ctx, it, st.Code, st.IDs)
-		default:
-			var hint int64
-			if isStatus {
-				hint = st.RetryAfter
-			}
-			s.logged("rescheduling an outbox item", s.st.Outbox().Retry(ctx, it.ID, s.retry.fail(it.Dest, t, hint)))
-		}
+		s.logged("rescheduling an outbox item", s.st.Outbox().Retry(ctx, it.ID, s.retry.fail(it.Dest, t, hint)))
 	}
 }
 
