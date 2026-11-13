@@ -128,3 +128,49 @@ func BenchmarkIdentity(b *testing.B) {
 		}
 	}
 }
+
+// Chain lookups while group deliveries are being written, as on a busy server: whether
+// reads wait for writes to sync.
+func BenchmarkIdentityDuringWrites(b *testing.B) {
+	s := benchServer(b)
+	ctx := context.Background()
+	group := randBytes(32)
+	sender := benchIdentity(b, s, "sender", 3)
+	to := []string{sender}
+	for i := range 24 {
+		id := benchIdentity(b, s, fmt.Sprintf("member%d", i), 3)
+		if err := s.st.Contacts().AllowGroup(ctx, id, group); err != nil {
+			b.Fatal(err)
+		}
+		to = append(to, id)
+	}
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			s.limits.mu.Lock()
+			s.limits.m = map[string][]int64{}
+			s.limits.mu.Unlock()
+			d := delivery{ID: randBytes(16), Kind: "mls", From: sender, To: to, Group: group, Epoch: 1, MLS: "app", Data: []byte("hello, group")}
+			s.deliver(ctx, d)
+		}
+	}()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			if _, _, err := s.identity(ctx, to[3]); err != nil {
+				b.Error(err)
+				return
+			}
+		}
+	})
+	b.StopTimer()
+	close(stop)
+	<-done
+}
