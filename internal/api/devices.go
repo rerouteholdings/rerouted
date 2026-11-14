@@ -59,6 +59,13 @@ func (s *Server) recoverAccount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeInvalidChain, err.Error())
 		return
 	}
+	for _, op := range e.Ops {
+		if op.Op == wire.OpMigrate && s.wv == wire.V1 {
+			// It registers a version 2 identity, which only chain/append does (SPEC §6.8).
+			writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, `migrate goes through chain/append, with the version 2 genesis in "genesis"`)
+			return
+		}
+	}
 	st, raw, err := s.identity(r.Context(), e.ID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "")

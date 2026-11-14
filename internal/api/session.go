@@ -130,6 +130,17 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, `"check" is for moves, with "chain"`)
 		return
 	}
+	// A version 2 genesis that names a version 1 identity was registered with that
+	// identity's migrate, which needed no invite (SPEC §6.8): this only confirms it.
+	if s.wv == wire.V2 && len(req.Chain) == 0 && req.Genesis != nil {
+		if sig, err := s.decodeSigned(req.Genesis); err == nil {
+			if st, _, err := s.genesis(sig); err == nil && st.MigratedFrom != "" {
+				enc, _ := sig.Encode()
+				s.registerMigrated(w, r, st, enc)
+				return
+			}
+		}
+	}
 	// Registration is by invite (SPEC §8.2). Open signups are a published code.
 	switch {
 	case s.cfg.Registration == "invite" && subtle.ConstantTimeCompare([]byte(req.Invite), []byte(s.cfg.RegistrationCode)) == 1:
@@ -333,6 +344,22 @@ func (s *Server) getChain(w http.ResponseWriter, r *http.Request, sess session) 
 	} else {
 		_, all, err = s.lookup(r.Context(), id, home)
 	}
+	if err != nil && s.wv == wire.V2 {
+		// A version 1 chain that ends in migrate, for a version 2 client checking a
+		// contact's migration: it validates version 1 chains by version 1's rules (SPEC
+		// §6.8). Any other version 1 chain stays a stranger here.
+		var st *chain.State
+		if sess.id == "" {
+			if all, err = s.legacy().lookupCached(r.Context(), id); err == nil {
+				st, err = s.legacy().decodeChain(all)
+			}
+		} else {
+			st, all, err = s.legacy().lookup(r.Context(), id, home)
+		}
+		if err == nil && !st.Closed() {
+			err = store.ErrNotFound
+		}
+	}
 	if err != nil {
 		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "")
 		return
@@ -351,6 +378,7 @@ func (s *Server) appendChain(w http.ResponseWriter, r *http.Request, sess sessio
 	var req struct {
 		Entry       wire.Raw `json:"entry"`
 		Reservation wire.Raw `json:"reservation,omitempty"` // a device-signed move's, from its destination (SPEC §6.6)
+		Genesis     wire.Raw `json:"genesis,omitempty"`     // with migrate: the version 2 genesis it names (SPEC §6.8)
 	}
 	if !readBody(w, r, &req) {
 		return
@@ -392,6 +420,15 @@ func (s *Server) appendChain(w http.ResponseWriter, r *http.Request, sess sessio
 		return
 	case err != nil:
 		writeError(w, http.StatusBadRequest, wire.ErrCodeInvalidChain, err.Error())
+		return
+	}
+	if st.Closed() {
+		// migrate: the version 2 identity is registered in the same step (SPEC §6.8).
+		s.appendMigrate(w, r, sess, st, before, applied, enc, req.Genesis)
+		return
+	}
+	if req.Genesis != nil {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, `"genesis" goes only with migrate`)
 		return
 	}
 	// Moves paused by the operator: refuse a device-signed move before it's stored, so
@@ -446,7 +483,15 @@ func (s *Server) resolve(w http.ResponseWriter, r *http.Request, sess session) {
 		// Registered here, but it only resolves while the chain still names it (SPEC §5.3):
 		// after a set-handle to another name, the old one answers like any stale record.
 		// The handle document stays served, so the identity can switch back to it.
-		if st, _, err := s.identity(r.Context(), id); err != nil || st.Handle != handle {
+		st, _, err := s.identity(r.Context(), id)
+		if err != nil && s.wv == wire.V1 {
+			if st2, _, err2 := s.modern().identity(r.Context(), id); err2 == nil && st2.MigratedFrom != "" {
+				// It's a version 2 identity's now: the version 1 one migrated (SPEC §6.8).
+				writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, migratedMsg)
+				return
+			}
+		}
+		if err != nil || st.Handle != handle {
 			writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "handle and chain don't agree")
 			return
 		}
@@ -468,11 +513,20 @@ func (s *Server) resolve(w http.ResponseWriter, r *http.Request, sess session) {
 	}
 	// Fetch and cache the chain now, and check it points back at the handle (SPEC §5.3).
 	st, _, err := s.lookup(r.Context(), d.ID, d.Home)
+	if err != nil && s.wv == wire.V2 {
+		// A record that still names a version 1 identity that migrated resolves to its
+		// version 2 identity (SPEC §5.3 step 3, §6.8).
+		st, err = s.followMigration(r.Context(), d.ID, d.Home)
+	}
+	if err == nil && st.Closed() {
+		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, migratedMsg)
+		return
+	}
 	if err != nil || st.Handle != handle {
 		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "handle and chain don't agree")
 		return
 	}
-	writeBody(w, http.StatusOK, map[string]any{"id": d.ID, "home": st.Home})
+	writeBody(w, http.StatusOK, map[string]any{"id": st.ID, "home": st.Home})
 }
 
 // movesPausedMsg is the refusal while the operator has paused moves (REROUTED_PAUSE_MOVES).

@@ -43,4 +43,9 @@ const (
 	ErrCodeBadInvite          = "bad-invite"
 	ErrCodeAwaitingKey        = "awaiting-key"
 	ErrCodeWrongHome          = "wrong-home"
+	// ErrCodeMigrated (410) refuses something addressed to, or sent by, a wire version 1
+	// identity whose chain ends in `migrate` (SPEC §6.8): it lives on as a version 2
+	// identity, which a version 1 client can't reach. rerouted's own code; the spec's
+	// registry doesn't list it yet.
+	ErrCodeMigrated = "migrated"
 )

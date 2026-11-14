@@ -290,6 +290,10 @@ func (s *Server) claimFor(w http.ResponseWriter, r *http.Request, target, claima
 		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "")
 		return
 	}
+	if st.Closed() {
+		writeError(w, http.StatusGone, wire.ErrCodeMigrated, migratedMsg) // SPEC §6.8
+		return
+	}
 	allowed := target == claimant || s.isContactOrRequested(r.Context(), target, claimant)
 	if !allowed && group != nil {
 		// Group IDs aren't secret, so these claims are rate-limited (SPEC §11.4).
@@ -373,6 +377,16 @@ func (s *Server) contactRequest(w http.ResponseWriter, r *http.Request, sess ses
 		return
 	}
 	ctx := r.Context()
+	// Either side migrated to wire version 2 (SPEC §6.8). The chains are public, so saying
+	// so out loud gives nothing away.
+	switch {
+	case me.Closed():
+		writeError(w, http.StatusGone, wire.ErrCodeMigrated, migratedSelfMsg)
+		return
+	case s.closedKnown(ctx, body.To):
+		writeError(w, http.StatusGone, wire.ErrCodeMigrated, migratedMsg)
+		return
+	}
 	chainRaw := make([]wire.Raw, len(myChain))
 	for i, e := range myChain {
 		chainRaw[i] = e
@@ -426,6 +440,10 @@ func (s *Server) receiveContactRequest(ctx context.Context, body contactRequestB
 		return nil
 	case c.State == store.StateDeclined && now()-c.Since < declineCooldown:
 		drop("declined in the last 30 days") // no new requests, even with a new code (SPEC §9.3)
+		return nil
+	}
+	if s.closedLocal(ctx, to) {
+		drop("the recipient migrated to wire version 2") // SPEC §6.8
 		return nil
 	}
 	if why := s.checkInvite(ctx, body, origin); why != "" {
@@ -483,6 +501,11 @@ func (s *Server) listContacts(w http.ResponseWriter, r *http.Request, sess sessi
 		return
 	}
 	cs, next, err := s.st.Contacts().List(r.Context(), sess.id, r.URL.Query().Get("after"), limit)
+	if err == nil && s.wv == wire.V2 && s.reconcile(r.Context(), sess.id, cs) {
+		// Contacts that migrated from wire version 1 are listed as their version 2
+		// identities now (SPEC §6.8).
+		cs, next, err = s.st.Contacts().List(r.Context(), sess.id, r.URL.Query().Get("after"), limit)
+	}
 	if err != nil {
 		s.unavailableRead(w, "listing contacts", err)
 		return

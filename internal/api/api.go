@@ -51,6 +51,7 @@ type Server struct {
 	wv        int     // the wire version this Server speaks: wire.V1 or wire.V2
 	apiPath   string  // where its APIs live, with "client/" and "s2s/" under it
 	v2        *Server // on the version 1 Server, its version 2 sibling (wireversion.go)
+	v1        *Server // on the version 2 Server, its version 1 sibling, for migrations (migrate.go)
 }
 
 // New makes the server for both wire versions: the version 1 Server, which serves
@@ -72,7 +73,7 @@ func New(cfg *config.Config, key serverkey.Key, log *slog.Logger, st store.Store
 	// Wire version 2 shares the mux, the database (its own view of it), the rate limits,
 	// and the invite code key, so codes made on either API hash alike.
 	s.v2 = newServer(cfg, key, log.With("wire", 2), st.ForWire(wire.V2), wire.V2, s.limits)
-	s.v2.mux, s.v2.inviteKey = s.mux, s.inviteKey
+	s.v2.mux, s.v2.inviteKey, s.v2.v1 = s.mux, s.inviteKey, s
 	s.routes()
 	s.v2.apiRoutes()
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

@@ -416,8 +416,12 @@ func (s *Server) deliveryFailed(ctx context.Context, it store.OutboxItem, reason
 		if len(ids) > 0 && !containsBytes(plain(ids), d.ID) {
 			continue
 		}
+		to := d.To
+		if reason == wire.ErrCodeMigrated {
+			to = s.whoMigrated(ctx, d.To, it.Dest)
+		}
 		if s.isLocal(ctx, d.From) {
-			s.logged("telling a sender a delivery failed", s.notify(ctx, d.From, map[string]any{"t": "delivery-failed", "id": d.ID, "to": d.To, "reason": reason}))
+			s.logged("telling a sender a delivery failed", s.notify(ctx, d.From, map[string]any{"t": "delivery-failed", "id": d.ID, "to": to, "reason": reason}))
 		}
 	}
 }
@@ -591,7 +595,7 @@ func (s *Server) s2sDeliver(w http.ResponseWriter, r *http.Request, from string,
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "")
 		return
 	}
-	var wrong []wire.Bytes
+	var wrong, migrated []wire.Bytes
 	var failed error
 	for _, d := range req.Deliveries {
 		if d.Kind != "mls" || !mlsKinds[d.MLS] {
@@ -610,6 +614,12 @@ func (s *Server) s2sDeliver(w http.ResponseWriter, r *http.Request, from string,
 			s.deliverEphemeral(r.Context(), d, from, false)
 			continue
 		}
+		for _, to := range d.To {
+			if s.closedLocal(r.Context(), to) {
+				migrated = append(migrated, d.ID) // the others still get it
+				break
+			}
+		}
 		if err := s.deliverLocal(r.Context(), d, from); err != nil && failed == nil {
 			failed = err
 		}
@@ -625,6 +635,12 @@ func (s *Server) s2sDeliver(w http.ResponseWriter, r *http.Request, from string,
 		// Not silent: it says nothing about the recipient, only that our copy of the
 		// sender's chain is behind, which the sender needs to know (SPEC §10.2, §6.6).
 		writeBody(w, http.StatusConflict, wire.Error{Code: wire.ErrCodeWrongHome, Msg: "the sender's chain here doesn't name your server as its home", IDs: wrong})
+		return
+	}
+	if len(migrated) > 0 {
+		// Not silent either: a recipient's chain ends in migrate, which is public (SPEC
+		// §6.8). Everyone else these were for has them; the sender's server tells its user.
+		writeBody(w, http.StatusGone, wire.Error{Code: wire.ErrCodeMigrated, Msg: "a recipient migrated to wire version 2", IDs: migrated})
 		return
 	}
 	writeBody(w, http.StatusAccepted, map[string]any{}) // allowlist drops stay silent

@@ -4,7 +4,7 @@ rerouted is the reference homeserver for [Tieroute](https://rerouteholdings.llc/
 
 A *homeserver* holds its users' identities, and stores their messages until their devices fetch them. rerouted never needs to read a message: clients encrypt everything with Messaging Layer Security (MLS), and rerouted routes by the delivery envelope alone. It's written in Go, without cgo, and keeps its data in one SQLite database and a directory of files.
 
-rerouted is alpha software, maintained by Reroute Holdings LLC. It runs the public alpha homeservers. It speaks Tieroute wire versions 1 and 2 side by side, each under its own API base. The current spec, version 2.0, defines wire version 2, with post-quantum signatures, a migration from wire version 1, and community servers. rerouted implements version 2's identities, contacts, key packages, and delivery so far, but not its groups, the migration, or community servers.
+rerouted is alpha software, maintained by Reroute Holdings LLC. It runs the public alpha homeservers. It speaks Tieroute wire versions 1 and 2 side by side, each under its own API base. The current spec, version 2.0, defines wire version 2, with post-quantum signatures, a migration from wire version 1, and community servers. rerouted implements version 2's identities, contacts, key packages, delivery, and the migration from version 1 so far, but not its groups or community servers.
 
 ## Documentation
 
@@ -23,6 +23,14 @@ rerouted implements every wire version 1 endpoint in the spec's Appendix A, for 
 
 The wire version 2 API serves the same endpoints for version 2 identities: composite ML-DSA-65 + Ed25519 signatures (§3.2), chains with composite device keys, the 10-device ceiling, and recovery forks of any age (§6.4), key packages with their `kp-binding` (§3.2.2), and S2S calls signed with a composite server key (§8.3). The two versions keep their identities apart, and neither accepts the other's signatures (§5.1). Handles are one namespace across both.
 
+A version 1 identity migrates to version 2 (§6.8) in one request: the version 1 `POST chain/append` that carries `migrate` also carries the version 2 genesis it names, in `genesis`. One transaction appends the entry, registers the version 2 identity on the same server, hands it the handle, and copies the contact and group allowlists, so neither half can be left without the other. The version 2 `POST register` with that genesis only confirms a migration that happened (`200`), and before it answers `403 not-allowed`. After it:
+
+- The version 1 chain is closed: any later entry is `400 invalid-chain`, and no recovery fork can override the `migrate`.
+- Deliveries, key-package claims, and contact requests for the version 1 identity are refused with `410 migrated`, a code rerouted adds. A delivery refused by another server reaches the sender's devices as a `delivery-failed` event with reason `migrated`. The version 1 identity can't send, but its devices can still read its version 1 inbox.
+- On the version 1 API its handle doesn't resolve (`404`). On the version 2 API it resolves to the version 2 identity, as does a handle record that still names the version 1 identity.
+- A contact that has migrated too is listed under its version 2 identifier, on both servers: at the migration, when another server pushes a closed version 1 chain, and when a version 2 client lists its contacts. Contacts that haven't migrated stay listed under their version 1 identifiers until they do.
+- A version 2 client can fetch a closed version 1 chain with `GET chain/{id}`, to check the link.
+
 | Area | Spec | What rerouted does |
 |---|---|---|
 | Encoding | §4 | I-JSON (the Internet JSON profile) with duplicate-name, UTF-8, and integer checks; strict base64url; and the JSON Canonicalization Scheme (JCS) for everything signed or hashed |
@@ -40,7 +48,8 @@ The wire version 2 API serves the same endpoints for version 2 identities: compo
 What isn't built yet:
 
 - Wire version 2's groups and hub (§11.6): on the version 2 API, `groups/create`, `groups/epoch-key`, `GET groups/{group}/commits`, the hub's S2S endpoints, and commits sent through `POST send` answer `501 not-implemented`.
-- The migration from wire version 1 (§6.8), and community servers (§16).
+- Community servers (§16).
+- Migrating to a version 2 identity on another server. It starts on the version 1 identity's homeserver, and moves afterwards.
 - The public firehose shows wire version 1's deliveries only.
 - Batching several deliveries into one server-to-server `deliver` call. Each call carries one, which the spec allows.
 - Registration codes with use counts or expiry dates. There's one code, `REROUTED_REGISTRATION_CODE`.

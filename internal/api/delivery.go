@@ -288,6 +288,14 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request, sess session) {
 		return
 	}
 	results := make([]sendResult, len(req.Deliveries))
+	if s.closedLocal(r.Context(), sess.id) {
+		// The sender migrated to wire version 2, and sends from there (SPEC §6.8).
+		for i, o := range req.Deliveries {
+			results[i] = reject(o.ID, wire.ErrCodeMigrated)
+		}
+		writeBody(w, http.StatusOK, map[string]any{"results": results})
+		return
+	}
 	for i, o := range req.Deliveries {
 		res, err := s.sendIdempotent(r.Context(), sess, o)
 		if err != nil {
@@ -393,6 +401,11 @@ func (s *Server) sendOne(ctx context.Context, sess session, o outgoing) sendResu
 		return reject(o.ID, wire.ErrCodeUnknownKind)
 	case len(o.ID) != 16 || len(o.Group) != 32 || len(o.To) == 0 || len(o.Data) == 0:
 		return reject(o.ID, wire.ErrCodeBadRequest)
+	}
+	if s.allMigrated(ctx, sess.id, o.To) {
+		// Nobody it's for can get it: they all migrated to wire version 2 (SPEC §6.8).
+		// Refused before anything happens, a commit's sequencing included.
+		return reject(o.ID, wire.ErrCodeMigrated)
 	}
 	d := delivery{ID: o.ID, Kind: o.Kind, From: sess.id, To: o.To, Group: o.Group, Epoch: o.Epoch, MLS: o.MLS, Data: o.Data}
 	res := sendResult{ID: o.ID, Status: "sent"}
@@ -547,14 +560,27 @@ func (s *Server) deliver(ctx context.Context, d delivery) error {
 		return err
 	}
 	byHome := map[string][]string{}
+	var migrated []string
 	for _, to := range d.To {
+		if s.closedLocal(ctx, to) {
+			migrated = append(migrated, to) // deliverLocal left it out
+			continue
+		}
 		if s.isLocal(ctx, to) {
 			continue
 		}
 		if st, _, err := s.lookup(ctx, to, ""); err == nil {
+			if st.Closed() {
+				migrated = append(migrated, to)
+				continue
+			}
 			byHome[st.Home] = append(byHome[st.Home], to)
 		}
 		// Unknown identities are dropped: a sender only talks to people it has fetched.
+	}
+	if len(migrated) > 0 && s.isLocal(ctx, d.From) {
+		// Not dropped silently: the sender's devices learn who migrated (SPEC §6.8, §10.5).
+		s.logged("telling a sender a delivery failed", s.notify(ctx, d.From, map[string]any{"t": "delivery-failed", "id": d.ID, "to": migrated, "reason": wire.ErrCodeMigrated}))
 	}
 	if s.fed == nil {
 		return nil
@@ -641,6 +667,9 @@ func (s *Server) admit(ctx context.Context, d delivery, to, origin string) (bool
 // a storage failure: the caller retries rather than drop the delivery, or let it past a
 // block it couldn't check.
 func (s *Server) allowed(ctx context.Context, d delivery, to, origin string) (bool, error) {
+	if s.closedLocal(ctx, to) {
+		return false, nil // migrated to wire version 2 (SPEC §6.8): the caller says so
+	}
 	if to == d.From {
 		return true, nil
 	}

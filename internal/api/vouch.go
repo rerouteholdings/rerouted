@@ -181,6 +181,9 @@ func (s *Server) acceptChain(ctx context.Context, id string, raw [][]byte, from 
 		if err := s.st.Remote().Put(ctx, id, st.Home, raw); err != nil {
 			return nil, nil, false, fmt.Errorf("%w: %w", errStorage, err)
 		}
+		if st.Closed() {
+			s.onMigrated(ctx, st) // SPEC §6.8
+		}
 		return st, raw, true, nil
 	}
 	keep, out, at, err := chain.ResolveFor(s.wv, cached, raw)
@@ -206,6 +209,9 @@ func (s *Server) acceptChain(ctx context.Context, id string, raw [][]byte, from 
 	}
 	if err := s.st.Remote().Put(ctx, id, ast.Home, accepted); err != nil {
 		return nil, nil, false, fmt.Errorf("%w: %w", errStorage, err)
+	}
+	if ast.Closed() {
+		s.onMigrated(ctx, ast) // SPEC §6.8
 	}
 	return ast, accepted, true, nil
 }
