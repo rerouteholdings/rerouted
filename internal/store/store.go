@@ -92,10 +92,11 @@ type Chains interface {
 // it appends the version 1 entry that carries `migrate`, which closes that chain; stores
 // the version 2 genesis it names as a new local identity; hands every handle the version 1
 // identity held, and the one the genesis names, to the version 2 identity; and copies the
-// version 1 identity's allowlists to it. Of the contact list, full contacts, blocks, and
-// declines carry over, not pending requests, which were signed for version 1; an entry for
-// an identity that has itself migrated is rewritten to its version 2 identifier (Contacts
-// maps them), and the rest are kept for when it does. Finally, every local version 2
+// version 1 identity's allowlists to it. Of the contact list, full contacts, blocks,
+// declines, and requests it sent carry over, not requests it received, which were signed
+// for version 1 and can't be accepted in version 2. An entry for an identity that has
+// itself migrated is rewritten to its version 2 identifier (Contacts maps them), and the
+// rest are kept for when it does. Finally, every local version 2
 // identity that lists From as a contact lists To instead (Contacts.RewriteMigrated).
 type Migration struct {
 	From, To string // the version 1 and version 2 identifiers
@@ -227,9 +228,9 @@ type Contacts interface {
 	Owners(ctx context.Context, other string) ([]string, error)
 	// RewriteMigrated replaces `from`, a wire version 1 identity that migrated, with `to`,
 	// its version 2 identity, in the contact list of every local version 2 identity that
-	// has it (SPEC §6.8). State and since carry over; a pending request, signed for version
-	// 1, doesn't. An owner that already lists `to` keeps that entry. It returns the owners
-	// whose lists changed.
+	// has it (SPEC §6.8). State and since carry over, for the states a Migration carries.
+	// An owner that already lists `to` keeps that entry. It returns the owners whose lists
+	// changed.
 	RewriteMigrated(ctx context.Context, from, to string) ([]string, error)
 }
 

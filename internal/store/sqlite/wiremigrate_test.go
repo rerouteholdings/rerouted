@@ -37,7 +37,8 @@ func TestWireMigration(t *testing.T) {
 	put("kat1", "ravi1", store.StateContact)   // migrated, elsewhere: mapped by the caller
 	put("kat1", "sam1", store.StateContact)    // hasn't migrated: kept for when it does
 	put("kat1", "mal1", store.StateBlocked)    // blocks carry over
-	put("kat1", "pat1", store.StatePendingOut) // pending requests don't
+	put("kat1", "pat1", store.StatePendingOut) // requests it sent do
+	put("kat1", "zed1", store.StatePendingIn)  // requests it received don't
 	put("ravi2", "kat1", store.StateContact)   // a version 2 owner: rewritten
 	put("eve1", "kat1", store.StateContact)    // a version 1 owner: left alone
 	if err := s.Contacts().AllowGroup(ctx, "kat1", []byte("g")); err != nil {
@@ -89,7 +90,7 @@ func TestWireMigration(t *testing.T) {
 			t.Fatalf("%s: request %q, since %d", c.ID, c.Request, c.Since)
 		}
 	}
-	if len(got) != 3 || got["ravi2"] != store.StateContact || got["sam1"] != store.StateContact || got["mal1"] != store.StateBlocked {
+	if len(got) != 4 || got["ravi2"] != store.StateContact || got["sam1"] != store.StateContact || got["mal1"] != store.StateBlocked || got["pat1"] != store.StatePendingOut {
 		t.Fatalf("kat2's contacts: %v", got)
 	}
 	if ok, _ := s.Contacts().GroupAllowed(ctx, "kat2", []byte("g")); !ok {

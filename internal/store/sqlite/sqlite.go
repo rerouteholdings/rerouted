@@ -573,9 +573,10 @@ func (c chains) Create(ctx context.Context, id string, genesis []byte, handle st
 	return tx.Commit()
 }
 
-// carried lists the contact states that carry over to a version 2 identity (SPEC §6.8):
-// pending requests were signed for version 1.
-const carried = "('contact', 'blocked', 'declined')"
+// carried lists the contact states that carry over to a version 2 identity (SPEC §6.8). A
+// request the identity received was signed for version 1, so it doesn't; one it sent
+// still lets the other side's deliveries in, until it expires.
+const carried = "('contact', 'pending-out', 'blocked', 'declined')"
 
 func (c chains) Migrate(ctx context.Context, m store.Migration) error {
 	if c.wire != wire.V1 {
