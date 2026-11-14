@@ -220,3 +220,27 @@ func VerifyKPBinding(binding Signed, id string, dev *CompositePublicKey, keyPack
 	}
 	return nil
 }
+
+// Wire versions rerouted speaks (SPEC §20.1). Each has its own signature context, key
+// types, and API base, and a signature of one is never accepted for the other (SPEC §5.1).
+const (
+	V1 = 1
+	V2 = 2
+)
+
+// DecodeSignedFor decodes an envelope under wire version v's rules.
+func DecodeSignedFor(v int, data []byte) (Signed, error) {
+	if v == V2 {
+		return DecodeSignedV2(data)
+	}
+	return DecodeSigned(data)
+}
+
+// CanonicalSignedFor is CanonicalSigned under wire version v's rules.
+func CanonicalSignedFor(v int, data []byte) ([]byte, error) {
+	s, err := DecodeSignedFor(v, data)
+	if err != nil {
+		return nil, err
+	}
+	return s.Encode()
+}

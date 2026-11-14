@@ -12,9 +12,10 @@ import (
 
 // The wire version 2 vectors, as far as this layer goes: envelopes, composite signatures,
 // msg-key, and kp-binding. Not checked here, and why:
-//   - chain.json's final state, fork.json's cases, and migrate.json's cases need wire
-//     version 2 chain validation (SPEC §6.4, §6.4.1, §6.8) in internal/chain, the next phase.
-//     Their signatures, identifiers, and links are checked below.
+//   - chain.json's final state, fork.json's cases, and migrate.json's version 2 genesis are
+//     checked by chain validation, in internal/chain. Accepting or refusing migrate.json's
+//     pairs belongs to the migration (SPEC §6.8), which rerouted doesn't do yet. Their
+//     signatures, identifiers, and links are checked below.
 //   - code.json's Argon2id and HKDF derivation of the code key belongs to community servers
 //     (SPEC §16.6), a later phase; its join proof's signature is checked below.
 //   - s2s.json's request rules (SPEC §8.3) and server document key wait for wire version 2
@@ -317,8 +318,7 @@ func TestVectorChainV2(t *testing.T) {
 	}
 }
 
-// SPEC §6.4.1: every entry's signature. The cases themselves wait for wire version 2
-// chain validation in internal/chain (next phase).
+// SPEC §6.4.1: every entry's signature. The cases themselves are checked in internal/chain.
 func TestVectorForkV2Signatures(t *testing.T) {
 	keys, _ := chainKeys(t)
 	var v struct {
@@ -517,7 +517,7 @@ func TestVectorS2SV2Signature(t *testing.T) {
 
 // SPEC §6.8: the version 2 genesis and the version 1 migrate entry, each under its own
 // version's rules, and the link from migrate to the genesis. Accepting or refusing each
-// pair waits for wire version 2 chain validation in internal/chain (next phase).
+// pair belongs to the migration (SPEC §6.8), which rerouted doesn't do yet.
 func TestVectorMigrateSignatures(t *testing.T) {
 	var v struct {
 		V1ID string `json:"v1_identity_id"`

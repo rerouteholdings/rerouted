@@ -31,14 +31,17 @@ type ChainEntry struct {
 	Ops  []Op   `json:"ops"`
 }
 
-// Op is one chain operation. Which fields apply depends on Op.Op.
+// Op is one chain operation. Which fields apply depends on Op.Op, and on the wire version:
+// Pub and ID are wire version 2's (SPEC §6.3).
 type Op struct {
 	Op     string  `json:"op"`
 	Key    Bytes   `json:"key,omitempty"`    // add-device, remove-device
+	Pub    Bytes   `json:"pub,omitempty"`    // add-device, wire version 2: the composite public key
 	Name   string  `json:"name,omitempty"`   // add-device
 	Home   string  `json:"home,omitempty"`   // set-home
 	Handle *string `json:"handle,omitempty"` // set-handle (nil = clear)
 	Next   Bytes   `json:"next,omitempty"`   // set-recovery: SHA-256 of the next recovery public key
+	ID     *string `json:"id,omitempty"`     // migrated-from, wire version 2: the version 1 identifier
 }
 
 // Chain op names.
@@ -48,6 +51,9 @@ const (
 	OpSetHome      = "set-home"
 	OpSetHandle    = "set-handle"
 	OpSetRecovery  = "set-recovery"
+	// OpMigratedFrom names the wire version 1 identity a version 2 genesis migrates from
+	// (SPEC §6.8). Wire version 2 only, and only in genesis.
+	OpMigratedFrom = "migrated-from"
 )
 
 // TypeChainEntry is the signed type tag for chain entries.
@@ -63,8 +69,34 @@ func HexBytes(b []byte) []byte {
 	return out
 }
 
-// Check rejects members that don't belong to the op (SPEC §20.2: chain ops are closed).
+// Check rejects members that don't belong to the op in wire version 1 (SPEC §20.2: chain
+// ops are closed). Version 2's members, pub and id, don't belong to any version 1 op.
 func (o Op) Check() error {
+	if o.Pub != nil || o.ID != nil {
+		return fmt.Errorf("wire: %s op has members that don't belong to it", o.Op)
+	}
+	return o.check()
+}
+
+// CheckV2 is Check for wire version 2 (SPEC §6.3): add-device also carries pub, and
+// migrated-from carries only id.
+func (o Op) CheckV2() error {
+	extra := false
+	switch o.Op {
+	case OpAddDevice:
+		extra = o.ID != nil
+	case OpMigratedFrom:
+		extra = o.Key != nil || o.Pub != nil || o.Name != "" || o.Home != "" || o.Handle != nil || o.Next != nil
+	default:
+		extra = o.Pub != nil || o.ID != nil
+	}
+	if extra {
+		return fmt.Errorf("wire: %s op has members that don't belong to it", o.Op)
+	}
+	return o.check()
+}
+
+func (o Op) check() error {
 	extra := false
 	switch o.Op {
 	case OpAddDevice:
