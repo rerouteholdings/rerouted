@@ -517,7 +517,7 @@ func TestVectorS2SV2Signature(t *testing.T) {
 
 // SPEC §6.8: the version 2 genesis and the version 1 migrate entry, each under its own
 // version's rules, and the link from migrate to the genesis. Accepting or refusing each
-// pair belongs to the migration (SPEC §6.8), which rerouted doesn't do yet.
+// pair is chain.Linked's job (internal/chain/migrate_test.go).
 func TestVectorMigrateSignatures(t *testing.T) {
 	var v struct {
 		V1ID string `json:"v1_identity_id"`

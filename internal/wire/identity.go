@@ -19,6 +19,16 @@ func IdentityID(encodedGenesis []byte) string {
 	return "tr:" + strings.ToLower(b32.EncodeToString(sum[:15]))
 }
 
+// IdentityIDFromHash is IdentityID for a genesis known only by its hash (SPEC §4.3), such as
+// the one a wire version 1 `migrate` names (SPEC §6.8): the identifier is the first 15
+// bytes of that same SHA-256.
+func IdentityIDFromHash(sum []byte) string {
+	if len(sum) < 15 {
+		return ""
+	}
+	return "tr:" + strings.ToLower(b32.EncodeToString(sum[:15]))
+}
+
 // ValidIdentityID reports whether s is syntactically an identity ID.
 func ValidIdentityID(s string) bool { return identityIDRe.MatchString(s) }
 
@@ -42,6 +52,7 @@ type Op struct {
 	Handle *string `json:"handle,omitempty"` // set-handle (nil = clear)
 	Next   Bytes   `json:"next,omitempty"`   // set-recovery: SHA-256 of the next recovery public key
 	ID     *string `json:"id,omitempty"`     // migrated-from, wire version 2: the version 1 identifier
+	To     Bytes   `json:"to,omitempty"`     // migrate, wire version 1: the hash of the version 2 genesis
 }
 
 // Chain op names.
@@ -54,6 +65,9 @@ const (
 	// OpMigratedFrom names the wire version 1 identity a version 2 genesis migrates from
 	// (SPEC §6.8). Wire version 2 only, and only in genesis.
 	OpMigratedFrom = "migrated-from"
+	// OpMigrate closes a wire version 1 chain, naming the hash of the version 2 genesis it
+	// migrated to (SPEC §6.8). Wire version 1 only.
+	OpMigrate = "migrate"
 )
 
 // TypeChainEntry is the signed type tag for chain entries.
@@ -70,9 +84,16 @@ func HexBytes(b []byte) []byte {
 }
 
 // Check rejects members that don't belong to the op in wire version 1 (SPEC §20.2: chain
-// ops are closed). Version 2's members, pub and id, don't belong to any version 1 op.
+// ops are closed). Version 2's members, pub and id, don't belong to any version 1 op, and
+// to belongs only to migrate (SPEC §6.8).
 func (o Op) Check() error {
-	if o.Pub != nil || o.ID != nil {
+	extra := o.Pub != nil || o.ID != nil
+	if o.Op == OpMigrate {
+		extra = extra || o.Key != nil || o.Name != "" || o.Home != "" || o.Handle != nil || o.Next != nil
+	} else {
+		extra = extra || o.To != nil
+	}
+	if extra {
 		return fmt.Errorf("wire: %s op has members that don't belong to it", o.Op)
 	}
 	return o.check()
@@ -81,14 +102,14 @@ func (o Op) Check() error {
 // CheckV2 is Check for wire version 2 (SPEC §6.3): add-device also carries pub, and
 // migrated-from carries only id.
 func (o Op) CheckV2() error {
-	extra := false
+	extra := o.To != nil // migrate is a version 1 op
 	switch o.Op {
 	case OpAddDevice:
-		extra = o.ID != nil
+		extra = extra || o.ID != nil
 	case OpMigratedFrom:
-		extra = o.Key != nil || o.Pub != nil || o.Name != "" || o.Home != "" || o.Handle != nil || o.Next != nil
+		extra = extra || o.Key != nil || o.Pub != nil || o.Name != "" || o.Home != "" || o.Handle != nil || o.Next != nil
 	default:
-		extra = o.Pub != nil || o.ID != nil
+		extra = extra || o.Pub != nil || o.ID != nil
 	}
 	if extra {
 		return fmt.Errorf("wire: %s op has members that don't belong to it", o.Op)

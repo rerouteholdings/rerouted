@@ -4,6 +4,9 @@
 // new one, including recovery forks (the fork rule, SPEC §6.4.1). Both speak wire
 // version 1; ValidateFor and ResolveFor take the wire version, and version 2 chains
 // (composite keys, the 10-device ceiling, recovery forks of any age) follow its rules.
+//
+// A version 1 chain can end in `migrate`, which names the version 2 identity it became
+// (SPEC §6.8): nothing can follow it, and Linked checks the pair.
 package chain
 
 import (
@@ -43,8 +46,33 @@ type State struct {
 	// which is the key's Ed25519 component (SPEC §6.3).
 	Pubs map[string]*wire.CompositePublicKey
 	// Wire version 2: the version 1 identity this one migrated from, named in genesis
-	// (SPEC §6.8), or "". Whether the version 1 side links back isn't checked here.
+	// (SPEC §6.8), or "". Whether the version 1 side links back is Linked's question.
 	MigratedFrom string
+	// Wire version 1: the hash of the version 2 genesis a `migrate` named, or nil. A chain
+	// with one is closed: no entry can follow it (SPEC §6.8).
+	MigratedTo []byte
+	// GenesisHash is the hash of the genesis entry (SPEC §4.3), which a `migrate` names.
+	GenesisHash []byte
+}
+
+// Closed reports whether a wire version 1 chain ended in `migrate` (SPEC §6.8).
+func (st *State) Closed() bool { return st.MigratedTo != nil }
+
+// MigratedID is the version 2 identifier a closed version 1 chain migrated to, or "".
+func (st *State) MigratedID() string {
+	if st.MigratedTo == nil {
+		return ""
+	}
+	return wire.IdentityIDFromHash(st.MigratedTo)
+}
+
+// Linked reports whether a wire version 1 identity and a version 2 one are the same person
+// (SPEC §6.8): the version 1 chain ends in a `migrate` naming the version 2 genesis's hash,
+// and that genesis names the version 1 identifier in `migrated-from`. Both chains have to
+// have validated, each under its own version's rules, to give these states.
+func Linked(v1, v2 *State) bool {
+	return v1 != nil && v2 != nil && v1.V == wire.V1 && v2.V == wire.V2 &&
+		v1.MigratedTo != nil && bytes.Equal(v1.MigratedTo, v2.GenesisHash) && v2.MigratedFrom == v1.ID
 }
 
 // MaxDevices is how many current devices a wire version 2 identity may have (SPEC §6.4 rule 4).
@@ -214,6 +242,9 @@ func Genesis(s wire.Signed) (*State, *Applied, error) {
 func (st *State) Apply(s wire.Signed) (*Applied, error) {
 	if st.V == wire.V2 {
 		return st.applyV2(s)
+	}
+	if st.Closed() {
+		return nil, invalid("seq %d follows migrate, which closes the chain", st.Seq+1)
 	}
 	key, err := s.VerifySelf(wire.TypeChainEntry)
 	if err != nil {
@@ -408,6 +439,22 @@ func (st *State) applyOp(op wire.Op, genesis bool) error {
 			return invalid("set-recovery commitment size")
 		}
 		st.RecoveryCommit = append([]byte(nil), op.Next...)
+	case wire.OpMigrate:
+		// Wire version 1, never in genesis, at most once, and last: the chain is closed
+		// after it (SPEC §6.8).
+		if st.V != wire.V1 {
+			return fmt.Errorf("%w: %w %q", ErrInvalid, ErrUnknownOp, op.Op)
+		}
+		if genesis {
+			return invalid("migrate can't be in genesis")
+		}
+		if st.Closed() {
+			return invalid("more than one migrate")
+		}
+		if len(op.To) != sha256.Size {
+			return invalid("migrate needs the hash of a version 2 genesis")
+		}
+		st.MigratedTo = append([]byte(nil), op.To...)
 	case wire.OpMigratedFrom:
 		// Wire version 2, and only in genesis (SPEC §6.4 rule 4, §6.8).
 		if st.V != wire.V2 {
@@ -429,6 +476,9 @@ func (st *State) applyOp(op wire.Op, genesis bool) error {
 func (st *State) finish(e wire.ChainEntry, enc []byte) {
 	sum := sha256.Sum256(enc)
 	st.Seq, st.Head, st.HeadTS = e.Seq, sum[:], e.TS
+	if e.Seq == 0 {
+		st.GenesisHash = st.Head
+	}
 }
 
 // Clone returns a deep copy of st.
@@ -442,6 +492,7 @@ func (st *State) clone() *State {
 	}
 	c.Head = append([]byte(nil), st.Head...)
 	c.RecoveryCommit = append([]byte(nil), st.RecoveryCommit...)
+	c.MigratedTo = bytes.Clone(st.MigratedTo)
 	if st.Pubs != nil {
 		c.Pubs = make(map[string]*wire.CompositePublicKey, len(st.Pubs))
 		for k, v := range st.Pubs {
@@ -476,8 +527,8 @@ const (
 	AlertAlarm
 )
 
-// Alert classifies an applied entry. Device-signed set-home or remove-device is
-// an alarm, except a self-rotation (remove own key + add one new key, nothing
+// Alert classifies an applied entry. Device-signed set-home, remove-device, or migrate
+// (SPEC §6.8, which hands the identity to a version 2 one) is an alarm, except a self-rotation (remove own key + add one new key, nothing
 // else, signed by the removed key), which is a calm notice. A device-signed
 // add-device is also a notice, so a device slipped in by a phished approval
 // doesn't go unnoticed (spec/api/client-stage3.md).
@@ -489,7 +540,7 @@ func Alert(a *Applied) AlertLevel {
 	risky, added := false, false
 	for _, op := range a.Entry.Ops {
 		switch op.Op {
-		case wire.OpSetHome, wire.OpRemoveDevice:
+		case wire.OpSetHome, wire.OpRemoveDevice, wire.OpMigrate:
 			risky = true
 		case wire.OpAddDevice:
 			added = true
@@ -647,6 +698,11 @@ func overrides(base *State, r wire.Signed, branch []wire.Signed, window bool) er
 		}
 		if a.Signer != SignerDevice {
 			return invalid("seq %d is recovery-signed and can't be overridden (has the recovery code leaked?)", a.Entry.Seq)
+		}
+		if o.Closed() {
+			// The identity lives on as a version 2 one, which a version 1 entry can't take
+			// back: a migrate is final, like a recovery-signed entry (SPEC §6.8).
+			return invalid("seq %d migrates the identity to wire version 2, and can't be overridden", a.Entry.Seq)
 		}
 		if window && a.Entry.TS+ForkWindow < ra.Entry.TS {
 			tooOld = true
