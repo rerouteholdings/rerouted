@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/ed25519"
 	"net/http"
 	"unicode/utf8"
 
@@ -17,6 +18,41 @@ type reportBody struct {
 	Evidence []wire.Raw `json:"evidence,omitempty"`
 }
 
+// evidenceOK reports whether a report's evidence has its wire version's shape. In wire
+// version 2 each item is an object with the reported app-message, signed by a message key,
+// and the msg-key that certifies that key, signed by a device, with the delivery ID and the
+// blob's hash if the reporter has them (SPEC §17.3). The server keeps the evidence for its
+// admins, who verify it against the reported identity's chain (SPEC §17.2); it doesn't.
+// Version 1's evidence is kept as it comes.
+func (s *Server) evidenceOK(evidence []wire.Raw) bool {
+	if s.wv != wire.V2 {
+		return true
+	}
+	for _, raw := range evidence {
+		var ev struct {
+			Msg      wire.Raw   `json:"msg"`
+			MK       wire.Raw   `json:"mk"`
+			Delivery wire.Bytes `json:"delivery,omitempty"`
+			Blob     wire.Bytes `json:"blob,omitempty"`
+		}
+		if wire.Unmarshal(raw, &ev) != nil || ev.Msg == nil || ev.MK == nil {
+			return false
+		}
+		msg, err := wire.DecodeSignedV2(ev.Msg)
+		if err != nil || msg.T != "app-message" || len(msg.S) != ed25519.SignatureSize {
+			return false
+		}
+		mk, err := wire.DecodeSignedV2(ev.MK)
+		if err != nil || mk.T != wire.TypeMsgKey || len(mk.K) != ed25519.PublicKeySize || len(mk.S) != wire.CompositeSignatureSize {
+			return false
+		}
+		if (ev.Delivery != nil && len(ev.Delivery) != 16) || (ev.Blob != nil && len(ev.Blob) != 32) {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *Server) postReport(w http.ResponseWriter, r *http.Request, sess session) {
 	var req struct {
 		Report  wire.Raw `json:"report"`
@@ -26,7 +62,7 @@ func (s *Server) postReport(w http.ResponseWriter, r *http.Request, sess session
 		return
 	}
 	var rep reportBody
-	if wire.Unmarshal(req.Report, &rep) != nil || !wire.ValidIdentityID(rep.Reported) || utf8.RuneCountInString(rep.Reason) > 2000 {
+	if wire.Unmarshal(req.Report, &rep) != nil || !wire.ValidIdentityID(rep.Reported) || utf8.RuneCountInString(rep.Reason) > 2000 || !s.evidenceOK(rep.Evidence) {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "")
 		return
 	}
@@ -53,7 +89,7 @@ func (s *Server) s2sReport(w http.ResponseWriter, r *http.Request, from string, 
 		Report wire.Raw `json:"report"`
 	}
 	var rep reportBody
-	if wire.Unmarshal(body, &req) != nil || wire.Unmarshal(req.Report, &rep) != nil {
+	if wire.Unmarshal(body, &req) != nil || wire.Unmarshal(req.Report, &rep) != nil || !s.evidenceOK(rep.Evidence) {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "")
 		return
 	}
