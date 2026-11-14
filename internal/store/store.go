@@ -81,6 +81,30 @@ type Chains interface {
 	// PruneReservations deletes reservations whose hold ended before `now`. Registration
 	// never needs one, so this can't strand a move the old home appended.
 	PruneReservations(ctx context.Context, now int64) (int, error)
+	// Migrate commits a wire version 1 identity's migration to version 2 (SPEC §6.8) in one
+	// transaction, on the version 1 view: see Migration. ErrConflict if the version 1 head
+	// isn't m.PrevSeq anymore, ErrExists if m.To already has a chain, ErrHandleTaken if
+	// m.Handle is held for anyone but m.From or m.To.
+	Migrate(ctx context.Context, m Migration) error
+}
+
+// Migration is a wire version 1 identity becoming a version 2 one (SPEC §6.8). Committing
+// it appends the version 1 entry that carries `migrate`, which closes that chain; stores
+// the version 2 genesis it names as a new local identity; hands every handle the version 1
+// identity held, and the one the genesis names, to the version 2 identity; and copies the
+// version 1 identity's allowlists to it. Of the contact list, full contacts, blocks, and
+// declines carry over, not pending requests, which were signed for version 1; an entry for
+// an identity that has itself migrated is rewritten to its version 2 identifier (Contacts
+// maps them), and the rest are kept for when it does. Finally, every local version 2
+// identity that lists From as a contact lists To instead (Contacts.RewriteMigrated).
+type Migration struct {
+	From, To string // the version 1 and version 2 identifiers
+	PrevSeq  uint64 // the version 1 head the migrate entry follows
+	Entry    []byte // the version 1 entry
+	Genesis  []byte // the version 2 genesis
+	Handle   string // the handle the genesis names
+	// Contacts maps contacts of From that have migrated to their version 2 identifiers.
+	Contacts map[string]string
 }
 
 // MoveReservation is a destination's record of a device-signed move it agreed to take
@@ -201,6 +225,12 @@ type Contacts interface {
 	GroupAllowed(ctx context.Context, owner string, group []byte) (bool, error)
 	// Owners lists the local users who have `other` in their contacts (any state but blocked or declined).
 	Owners(ctx context.Context, other string) ([]string, error)
+	// RewriteMigrated replaces `from`, a wire version 1 identity that migrated, with `to`,
+	// its version 2 identity, in the contact list of every local version 2 identity that
+	// has it (SPEC §6.8). State and since carry over; a pending request, signed for version
+	// 1, doesn't. An owner that already lists `to` keeps that entry. It returns the owners
+	// whose lists changed.
+	RewriteMigrated(ctx context.Context, from, to string) ([]string, error)
 }
 
 // Invite is a contact invite code (SPEC §9.1). Only its SHA-256 is stored.

@@ -573,6 +573,136 @@ func (c chains) Create(ctx context.Context, id string, genesis []byte, handle st
 	return tx.Commit()
 }
 
+// carried lists the contact states that carry over to a version 2 identity (SPEC §6.8):
+// pending requests were signed for version 1.
+const carried = "('contact', 'blocked', 'declined')"
+
+func (c chains) Migrate(ctx context.Context, m store.Migration) error {
+	if c.wire != wire.V1 {
+		return errors.New("store: Migrate is for the version 1 view")
+	}
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var head sql.NullInt64
+	if err := tx.QueryRowContext(ctx, "SELECT MAX(seq) FROM chains WHERE id = ? AND wire = ?", m.From, wire.V1).Scan(&head); err != nil {
+		return err
+	}
+	if !head.Valid {
+		return store.ErrNotFound
+	}
+	if uint64(head.Int64) != m.PrevSeq {
+		return store.ErrConflict
+	}
+	var n int
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM chains WHERE id = ?", m.To).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return store.ErrExists
+	}
+	// Every name the version 1 identity held goes with it, then the genesis's own.
+	if _, err := tx.ExecContext(ctx, "UPDATE handles SET id = ? WHERE id = ?", m.To, m.From); err != nil {
+		return err
+	}
+	if m.Handle != "" {
+		if held, err := heldByOther(ctx, tx, m.Handle, m.To, time.Now().Unix()); err != nil {
+			return err
+		} else if held {
+			return store.ErrHandleTaken
+		}
+		if _, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO handles (handle, id) VALUES (?, ?)", m.Handle, m.To); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT INTO chains (id, seq, entry, wire) VALUES (?, ?, ?, ?)", m.From, m.PrevSeq+1, m.Entry, wire.V1); err != nil {
+		if isConstraint(err) {
+			return store.ErrConflict
+		}
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT INTO chains (id, seq, entry, wire) VALUES (?, 0, ?, ?)", m.To, m.Genesis, wire.V2); err != nil {
+		return err
+	}
+	// The allowlists (SPEC §10.3).
+	rows, err := tx.QueryContext(ctx, "SELECT other, state, since FROM contacts WHERE owner = ? AND state IN "+carried, m.From)
+	if err != nil {
+		return err
+	}
+	var list []store.Contact
+	for rows.Next() {
+		var ct store.Contact
+		if err := rows.Scan(&ct.ID, &ct.State, &ct.Since); err != nil {
+			rows.Close()
+			return err
+		}
+		list = append(list, ct)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, ct := range list {
+		other := ct.ID
+		if v2, ok := m.Contacts[other]; ok {
+			other = v2
+		}
+		if other == m.To || other == m.From {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO contacts (owner, other, state, since) VALUES (?, ?, ?, ?)", m.To, other, ct.State, ct.Since); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO groups_allowed (owner, grp) SELECT ?, grp FROM groups_allowed WHERE owner = ?", m.To, m.From); err != nil {
+		return err
+	}
+	if _, err := rewriteMigrated(ctx, tx, m.From, m.To); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// rewriteMigrated is Contacts.RewriteMigrated inside a transaction.
+func rewriteMigrated(ctx context.Context, tx *sql.Tx, from, to string) ([]string, error) {
+	const v2Owners = "owner IN (SELECT id FROM chains WHERE seq = 0 AND wire = 2)"
+	rows, err := tx.QueryContext(ctx, "SELECT owner FROM contacts WHERE other = ? AND state IN "+carried+" AND "+v2Owners, from)
+	if err != nil {
+		return nil, err
+	}
+	var owners []string
+	for rows.Next() {
+		var o string
+		if err := rows.Scan(&o); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		owners = append(owners, o)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	var changed []string
+	for _, o := range owners {
+		if o == to {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO contacts (owner, other, state, since) SELECT owner, ?, state, since FROM contacts WHERE owner = ? AND other = ?", to, o, from); err != nil {
+			return nil, err
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM contacts WHERE owner = ? AND other = ?", o, from); err != nil {
+			return nil, err
+		}
+		changed = append(changed, o)
+	}
+	return changed, nil
+}
+
 func (c chains) Fork(ctx context.Context, id string, from, headSeq uint64, entries [][]byte) error {
 	tx, err := c.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -878,6 +1008,19 @@ func (c contacts) Owners(ctx context.Context, other string) ([]string, error) {
 		out = append(out, o)
 	}
 	return out, rows.Err()
+}
+
+func (c contacts) RewriteMigrated(ctx context.Context, from, to string) ([]string, error) {
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	owners, err := rewriteMigrated(ctx, tx, from, to)
+	if err != nil {
+		return nil, err
+	}
+	return owners, tx.Commit()
 }
 
 func (c contacts) AllowGroup(ctx context.Context, owner string, group []byte) error {
