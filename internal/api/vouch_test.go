@@ -281,8 +281,16 @@ func TestFirstFetchSkips404(t *testing.T) {
 }
 
 // spec/vectors/vouch.json through the real acceptance path (SPEC §6.5).
-func TestVectorVouch(t *testing.T) {
-	raw, err := os.ReadFile("../../testdata/vectors/vouch.json")
+func TestVectorVouch(t *testing.T) { vectorVouch(t, wire.V1, "../../testdata/vectors/vouch.json") }
+
+// The same cases in wire version 2, over chains with composite keys, through the version 2
+// Server's acceptance path.
+func TestVectorVouchV2(t *testing.T) {
+	vectorVouch(t, wire.V2, "../../testdata/vectors/v2/vouch.json")
+}
+
+func vectorVouch(t *testing.T, wv int, path string) {
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,6 +320,9 @@ func TestVectorVouch(t *testing.T) {
 			key, _ := serverkey.LoadOrCreate(t.TempDir())
 			cfg := &config.Config{Name: "b.example", Handles: "b.example", Registration: "closed"}
 			s := New(cfg, key, slog.New(slog.NewTextHandler(io.Discard, nil)), newStore(t))
+			if wv == wire.V2 {
+				s = s.v2
+			}
 			var prev struct {
 				Server  string          `json:"server"`
 				Answers json.RawMessage `json:"answers"`
