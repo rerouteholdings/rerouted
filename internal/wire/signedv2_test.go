@@ -18,8 +18,8 @@ import (
 //     signatures, identifiers, and links are checked below.
 //   - code.json's Argon2id and HKDF derivation of the code key belongs to community servers
 //     (SPEC §16.6), a later phase; its join proof's signature is checked below.
-//   - s2s.json's request rules (SPEC §8.3) and server document key wait for wire version 2
-//     federation in internal/fed; its signature is checked below.
+//   - s2s.json's request rules (SPEC §8.3) and server document key are checked in
+//     internal/fed; its signature is checked below.
 //   - codes.json has no signature: verification codes (SPEC §6.7) are computed by clients
 //     alone, and rerouted never computes one.
 

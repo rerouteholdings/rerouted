@@ -283,3 +283,117 @@ func TestServerDocRefreshedInBackground(t *testing.T) {
 		t.Fatalf("%d fetches, want 2", n)
 	}
 }
+
+// spec/vectors/v2/s2s.json: a wire version 2 S2S request, checked by every rule of SPEC
+// §8.3 at the receiver's clock, against the composite key the sender's document publishes.
+// A version 1 Fed refuses it, and a version 2 Fed refuses version 1's request.
+func TestVectorS2SV2(t *testing.T) {
+	read := func(name string, v any) {
+		raw, err := os.ReadFile("../../testdata/vectors/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(raw, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var v struct {
+		DocKey   map[string]any          `json:"server_document_key"`
+		Request  struct{ Signed string } `json:"request"`
+		Receiver string                  `json:"receiver"`
+		Clock    int64                   `json:"receiver_clock"`
+		Path     string                  `json:"url_path"`
+	}
+	read("v2/s2s.json", &v)
+	var v1 struct {
+		Key struct {
+			Pub string `json:"public_hex"`
+		} `json:"server_key"`
+		Request struct{ Signed string } `json:"request"`
+	}
+	read("s2s.json", &v1)
+	v1pub, _ := hex.DecodeString(v1.Key.Pub)
+	doc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := wire.Marshal(map[string]any{"name": "a.example", "keys": []any{v.DocKey}})
+		w.Write(b)
+	}))
+	defer doc.Close()
+	clock := func() int64 { return v.Clock }
+	f := New(v.Receiver, serverkey.Key{}, map[string]string{"a.example": doc.URL})
+	f.HTTP, f.V, f.Now = doc.Client(), wire.V2, clock
+	from, body, err := f.Verify(context.Background(), []byte(v.Request.Signed), v.Path)
+	if err != nil || from != "a.example" {
+		t.Fatalf("verify: %q %v", from, err)
+	}
+	var b struct{ ID string }
+	if wire.Unmarshal(body, &b) != nil || b.ID != "tr:cnshscx3enbgf6r7zjmj5w2z" {
+		t.Fatalf("body %s", body)
+	}
+	// A replay is refused.
+	if _, _, err := f.Verify(context.Background(), []byte(v.Request.Signed), v.Path); err == nil {
+		t.Fatal("replayed")
+	}
+	// Wire version 1 doesn't take it, even with the clock and a fresh nonce cache.
+	f1 := New(v.Receiver, serverkey.Key{}, map[string]string{"a.example": doc.URL})
+	f1.HTTP, f1.Now = doc.Client(), clock
+	if _, _, err := f1.Verify(context.Background(), []byte(v.Request.Signed), v.Path); err == nil {
+		t.Fatal("a version 1 Fed took a version 2 request")
+	}
+	// Nor does version 2 take version 1's request, under a kid that names a version 1 key.
+	doc1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := wire.Marshal(map[string]any{"name": "a.example", "keys": []any{
+			map[string]any{"kid": "k1", "pub": wire.Bytes(v1pub), "nbf": 0, "exp": 1 << 40},
+		}})
+		w.Write(b)
+	}))
+	defer doc1.Close()
+	f2 := New("b.example", serverkey.Key{}, map[string]string{"a.example": doc1.URL})
+	f2.HTTP, f2.V = doc1.Client(), wire.V2
+	f2.Now = func() int64 {
+		s, _ := wire.DecodeSigned([]byte(v1.Request.Signed))
+		var r s2sRequest
+		s.Open(&r)
+		return r.TS
+	}
+	if _, _, err := f2.Verify(context.Background(), []byte(v1.Request.Signed), "identity/fetch"); err == nil {
+		t.Fatal("a version 2 Fed took a version 1 request")
+	}
+}
+
+// A version 2 Fed signs with the composite key, which a version 2 Fed verifies.
+func TestSignV2RoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	key, err := serverkey.LoadOrCreate(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Unix()
+	doc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := wire.Marshal(map[string]any{"name": "a.test", "keys": []any{
+			map[string]any{"kid": key.KID, "pub": wire.Bytes(key.Public()), "nbf": now - 60, "exp": now + 60},
+			map[string]any{"kid": key.V2.KID, "pub": wire.Bytes(key.V2.Priv.Public().Bytes()), "nbf": now - 60, "exp": now + 60},
+		}})
+		w.Write(b)
+	}))
+	defer doc.Close()
+	sender := New("a.test", key, nil)
+	sender.V = wire.V2
+	sig, err := sender.SignKID("s2s", s2sRequest{From: "a.test", To: "b.test", Path: "ping", TS: now, Nonce: make([]byte, 16), Body: wire.Raw(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	enc, _ := sig.Encode()
+	recv := New("b.test", serverkey.Key{}, map[string]string{"a.test": doc.URL})
+	recv.HTTP, recv.V = doc.Client(), wire.V2
+	if from, _, err := recv.Verify(context.Background(), enc, "ping"); err != nil || from != "a.test" {
+		t.Fatalf("%q %v", from, err)
+	}
+	if len(sig.S) != wire.CompositeSignatureSize || sig.KID != key.V2.KID || key.V2.KID == key.KID {
+		t.Fatal("not signed with the composite key")
+	}
+	// The key files load back the same keys.
+	again, err := serverkey.LoadOrCreate(dir)
+	if err != nil || again.KID != key.KID || again.V2.KID != key.V2.KID || !again.V2.Priv.Public().Equal(key.V2.Priv.Public()) {
+		t.Fatalf("keys reloaded differently: %v", err)
+	}
+}

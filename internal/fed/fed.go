@@ -32,10 +32,13 @@ const (
 	docRefresh = 10 * time.Minute
 )
 
-// Fed holds what federation needs: who we are, and how to reach everyone else.
+// Fed holds what federation needs: who we are, and how to reach everyone else. Each Fed
+// speaks one wire version (V): its requests go to that version's S2S API, signed with that
+// version's server key, and it accepts only that version's signatures (SPEC §5.1).
 type Fed struct {
 	Name string
 	Key  serverkey.Key
+	V    int // wire version: wire.V1 (the zero value counts as 1) or wire.V2
 	// Peers maps a server name to a base URL, overriding https://{name}.
 	// Dev mode only: it lets servers federate over http on localhost (SPEC §5.1).
 	Peers map[string]string
@@ -50,6 +53,8 @@ type Fed struct {
 	// whether it was fresh, in one step, in storage that outlives a restart (SPEC §8.3).
 	// Nil keeps nonces in memory, for tests.
 	UseNonce func(ctx context.Context, key string, expires, now int64) (fresh bool, err error)
+	// Now, if set, is the clock incoming requests are checked against. Nil is the system clock.
+	Now func() int64
 
 	mu         sync.Mutex
 	docs       map[string]cachedDoc
@@ -87,17 +92,32 @@ type Doc struct {
 	} `json:"keys"`
 }
 
-// Version is the wire version rerouted speaks (SPEC §20.1).
-const Version = 1
+// Version is the wire version a Fed speaks unless it says otherwise (SPEC §20.1).
+const Version = wire.V1
 
-// S2SBase finds a server's S2S API from its document: follow your nose (SPEC §8.1).
+func (f *Fed) version() int {
+	if f.V == wire.V2 {
+		return wire.V2
+	}
+	return wire.V1
+}
+
+func (f *Fed) now() int64 {
+	if f.Now != nil {
+		return f.Now()
+	}
+	return time.Now().Unix()
+}
+
+// S2SBase finds a server's S2S API for this Fed's wire version from its document: follow
+// your nose (SPEC §8.1).
 func (f *Fed) S2SBase(ctx context.Context, name string) (string, error) {
 	d, err := f.ServerDoc(ctx, name)
 	if err != nil {
 		return "", err
 	}
 	for _, a := range d.APIs {
-		if a.V != Version {
+		if int(a.V) != f.version() {
 			continue
 		}
 		u, err := url.Parse(a.S2S)
@@ -110,12 +130,27 @@ func (f *Fed) S2SBase(ctx context.Context, name string) (string, error) {
 		}
 		return a.S2S, nil
 	}
-	return "", fmt.Errorf("%s doesn't speak wire version %d", name, Version)
+	return "", fmt.Errorf("%s doesn't speak wire version %d", name, f.version())
 }
 
+// Speaks reports whether a server's document lists this Fed's wire version in apis.
+func (f *Fed) Speaks(ctx context.Context, name string) (bool, error) {
+	d, err := f.ServerDoc(ctx, name)
+	if err != nil {
+		return false, err
+	}
+	for _, a := range d.APIs {
+		if int(a.V) == f.version() {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// New makes a Fed for wire version 1. Set V for version 2.
 func New(name string, key serverkey.Key, peers map[string]string) *Fed {
 	return &Fed{
-		Name: name, Key: key, Peers: peers,
+		Name: name, Key: key, Peers: peers, V: wire.V1,
 		HTTP: &http.Client{Timeout: 15 * time.Second, Transport: newTransport()},
 		docs: map[string]cachedDoc{}, nonces: map[string]int64{},
 	}
@@ -233,7 +268,7 @@ func (f *Fed) fetchDoc(ctx context.Context, name string) (Doc, error) {
 	return d, nil
 }
 
-// KeyFor finds a server's public key by key ID, valid at time t.
+// KeyFor finds a server's wire version 1 public key by key ID, valid at time t.
 func (f *Fed) KeyFor(ctx context.Context, server, kid string, t int64) (ed25519.PublicKey, error) {
 	d, err := f.ServerDoc(ctx, server)
 	if err != nil {
@@ -247,6 +282,65 @@ func (f *Fed) KeyFor(ctx context.Context, server, kid string, t int64) (ed25519.
 	return nil, fmt.Errorf("%s has no valid key %q", server, kid)
 }
 
+// CompositeKeyFor finds a server's composite public key (wire version 2) by key ID, valid
+// at time t (SPEC §5.1). A version 1 key under that ID doesn't count.
+func (f *Fed) CompositeKeyFor(ctx context.Context, server, kid string, t int64) (*wire.CompositePublicKey, error) {
+	d, err := f.ServerDoc(ctx, server)
+	if err != nil {
+		return nil, &UnavailableError{err}
+	}
+	for _, k := range d.Keys {
+		if k.KID == kid && t >= k.NBF && t <= k.EXP && len(k.Pub) == wire.CompositePublicKeySize {
+			if pub, err := wire.ParseCompositePublicKey(k.Pub); err == nil {
+				return pub, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("%s has no valid key %q", server, kid)
+}
+
+// ErrServerSignature is a signature that doesn't verify with the key it names.
+var ErrServerSignature = errors.New("fed: bad server signature")
+
+// VerifyServerSigned checks an object a server signed with kid (SPEC §4.3): type t, and a
+// signature by the key the server publishes under kid, valid at time at, of this Fed's wire
+// version. An *UnavailableError means the server's document couldn't be fetched.
+func (f *Fed) VerifyServerSigned(ctx context.Context, server string, sig wire.Signed, t string, at int64) error {
+	kid, ok := sig.KeyID()
+	if !ok {
+		return errors.New("fed: not signed with a server key")
+	}
+	if f.version() == wire.V2 {
+		pub, err := f.CompositeKeyFor(ctx, server, kid, at)
+		if err != nil {
+			return err
+		}
+		if sig.VerifyComposite(t, pub) != nil {
+			return ErrServerSignature
+		}
+		return nil
+	}
+	pub, err := f.KeyFor(ctx, server, kid, at)
+	if err != nil {
+		return err
+	}
+	if sig.Verify(t, pub) != nil {
+		return ErrServerSignature
+	}
+	return nil
+}
+
+// SignKID signs an object with this server's key for the Fed's wire version, naming it by
+// key ID (SPEC §4.3): S2S requests, commit receipts, and move reservations.
+func (f *Fed) SignKID(t string, body any) (wire.Signed, error) {
+	if f.version() == wire.V2 {
+		if f.Key.V2.Priv == nil {
+			return wire.Signed{}, errors.New("fed: no wire version 2 server key")
+		}
+		return wire.SignCompositeKID(t, body, f.Key.V2.Priv, f.Key.V2.KID)
+	}
+	return wire.SignKID(t, body, f.Key.Priv, f.Key.KID)
+}
 // s2sRequest is the signed body of every S2S call (SPEC §8.3).
 type s2sRequest struct {
 	From  string     `json:"from"`
@@ -290,7 +384,7 @@ const MaxResponse = 64<<20 + 1024
 func (f *Fed) Fetch(ctx context.Context, dest, path string, body []byte) (string, []byte, error) {
 	nonce := make([]byte, 16)
 	rand.Read(nonce)
-	sig, err := wire.SignKID("s2s", s2sRequest{From: f.Name, To: dest, Path: path, TS: time.Now().Unix(), Nonce: nonce, Body: body}, f.Key.Priv, f.Key.KID)
+	sig, err := f.SignKID("s2s", s2sRequest{From: f.Name, To: dest, Path: path, TS: time.Now().Unix(), Nonce: nonce, Body: body})
 	if err != nil {
 		return "", nil, err
 	}
@@ -350,21 +444,21 @@ func (f *Fed) noteDate(peer, date string, sent, got time.Time) {
 	}
 }
 
-// Verify checks an incoming S2S request (SPEC §8.3) and returns the sender and the endpoint body.
+// Verify checks an incoming S2S request (SPEC §8.3), signed under this Fed's wire version,
+// and returns the sender and the endpoint body.
 func (f *Fed) Verify(ctx context.Context, raw []byte, path string) (from string, body wire.Raw, err error) {
-	sig, err := wire.DecodeSigned(raw)
+	sig, err := wire.DecodeSignedFor(f.version(), raw)
 	if err != nil || sig.T != "s2s" {
 		return "", nil, errors.New("not a signed s2s request")
 	}
-	kid, ok := sig.KeyID()
-	if !ok {
+	if _, ok := sig.KeyID(); !ok {
 		return "", nil, errors.New("s2s request must name a server key")
 	}
 	var req s2sRequest
 	if err := sig.OpenClosed(&req); err != nil {
 		return "", nil, err
 	}
-	now := time.Now().Unix()
+	now := f.now()
 	switch {
 	case req.To != f.Name:
 		return "", nil, fmt.Errorf("request is for %q", req.To)
@@ -375,11 +469,7 @@ func (f *Fed) Verify(ctx context.Context, raw []byte, path string) (from string,
 	case len(req.Nonce) != 16:
 		return "", nil, errors.New("bad nonce")
 	}
-	pub, err := f.KeyFor(ctx, req.From, kid, req.TS)
-	if err != nil {
-		return "", nil, err
-	}
-	if err := sig.Verify("s2s", pub); err != nil {
+	if err := f.VerifyServerSigned(ctx, req.From, sig, "s2s", req.TS); err != nil {
 		return "", nil, err
 	}
 	// Recorded only now, once the signature checks out, so unsigned junk can't fill the
