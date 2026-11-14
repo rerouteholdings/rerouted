@@ -87,19 +87,8 @@ func (s *Server) identity(ctx context.Context, id string) (*chain.State, [][]byt
 	if err != nil {
 		return nil, nil, err
 	}
-	st, err := decodeChain(raw)
+	st, err := s.decodeChain(raw)
 	return st, raw, err
-}
-
-// decodeSignedField decodes a signed object carried inside a leniently decoded body.
-// The envelope itself must be canonical, because it's hashed (SPEC §4.1).
-func decodeSignedField(w http.ResponseWriter, raw wire.Raw) (wire.Signed, bool) {
-	sig, err := wire.DecodeSigned(raw)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "signed object: "+err.Error())
-		return wire.Signed{}, false
-	}
-	return sig, true
 }
 
 // ---- POST register ----
@@ -155,11 +144,11 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		s.registerMove(w, r, req.Chain, req.Move, req.Check)
 		return
 	}
-	sig, ok := decodeSignedField(w, req.Genesis)
+	sig, ok := s.decodeSignedField(w, req.Genesis)
 	if !ok {
 		return
 	}
-	st, applied, err := chain.Genesis(sig)
+	st, applied, err := s.genesis(sig)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeInvalidChain, err.Error())
 		return
@@ -234,11 +223,11 @@ func (s *Server) authSession(w http.ResponseWriter, r *http.Request) {
 	if !readBody(w, r, &req) {
 		return
 	}
-	sig, ok := decodeSignedField(w, req.Auth)
+	sig, ok := s.decodeSignedField(w, req.Auth)
 	if !ok {
 		return
 	}
-	key, err := sig.VerifySelf("auth")
+	key, err := s.signer(sig, "auth")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "")
 		return
@@ -265,6 +254,10 @@ func (s *Server) authSession(w http.ResponseWriter, r *http.Request) {
 	st, _, err := s.identity(r.Context(), body.ID)
 	if err != nil || !st.HasDevice(key) {
 		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "")
+		return
+	}
+	if !s.deviceSigned(st, sig, "auth", key) { // wire version 2: the composite key in the chain
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "")
 		return
 	}
 	if err := s.st.Sessions().TakeNonce(r.Context(), body.ID, key, body.Nonce, now()); err != nil {
@@ -362,7 +355,7 @@ func (s *Server) appendChain(w http.ResponseWriter, r *http.Request, sess sessio
 	if !readBody(w, r, &req) {
 		return
 	}
-	sig, ok := decodeSignedField(w, req.Entry)
+	sig, ok := s.decodeSignedField(w, req.Entry)
 	if !ok {
 		return
 	}
@@ -506,11 +499,11 @@ func (s *Server) checkReservation(ctx context.Context, raw wire.Raw, id, dest st
 	if raw == nil {
 		return http.StatusForbidden, wire.ErrCodeNotAllowed, noReservation
 	}
-	sig, err := wire.DecodeSigned(raw)
+	sig, err := s.decodeSigned(raw)
 	if err != nil {
 		return http.StatusBadRequest, wire.ErrCodeBadRequest, "reservation: " + err.Error()
 	}
-	kid, ok := sig.KeyID()
+	_, ok := sig.KeyID()
 	var body reservationBody
 	if sig.T != "move-reservation" || !ok || sig.OpenClosed(&body) != nil {
 		return http.StatusForbidden, wire.ErrCodeNotAllowed, "that isn't a move reservation"
@@ -527,8 +520,7 @@ func (s *Server) checkReservation(ctx context.Context, raw wire.Raw, id, dest st
 	if _, err := s.fed.ServerDoc(ctx, dest); err != nil {
 		return http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "couldn't reach " + dest + " to check its reservation"
 	}
-	key, err := s.fed.KeyFor(ctx, dest, kid, now())
-	if err != nil || sig.Verify("move-reservation", key) != nil {
+	if s.fed.VerifyServerSigned(ctx, dest, sig, "move-reservation", now()) != nil {
 		return http.StatusBadRequest, wire.ErrCodeBadSignature, "the reservation isn't signed by " + dest
 	}
 	return 0, "", ""
@@ -552,12 +544,12 @@ func (s *Server) checkMove(raw wire.Raw, st *chain.State, head []byte) (*moveBod
 	if raw == nil {
 		return nil, wire.ErrCodeBadRequest, "moving here needs a move signed by one of your devices"
 	}
-	sig, err := wire.DecodeSigned(raw)
+	sig, err := s.decodeSigned(raw)
 	if err != nil || sig.T != "move" {
 		return nil, wire.ErrCodeBadRequest, "move: not a signed move"
 	}
-	key, err := sig.VerifySelf("move")
-	if err != nil || !st.HasDevice(key) {
+	key, err := s.signer(sig, "move")
+	if err != nil || !s.deviceSigned(st, sig, "move", key) {
 		return nil, wire.ErrCodeBadSignature, "the move isn't signed by a current device"
 	}
 	var mv moveBody
@@ -594,12 +586,12 @@ func (s *Server) registerMove(w http.ResponseWriter, r *http.Request, in []wire.
 	for i, e := range in {
 		raw[i] = e
 	}
-	raw, err := canonChain(raw)
+	raw, err := s.canonChain(raw)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeInvalidChain, err.Error())
 		return
 	}
-	st, err := decodeChain(raw)
+	st, err := s.decodeChain(raw)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeInvalidChain, err.Error())
 		return
@@ -611,13 +603,13 @@ func (s *Server) registerMove(w http.ResponseWriter, r *http.Request, in []wire.
 	// Moves paused by the operator: a device-signed move isn't taken, or checked as if it
 	// would be. A recovery-signed one still is.
 	if s.cfg.PauseMoves {
-		if _, byRecovery, n := replay(raw); n == len(raw) && !byRecovery[n-1] {
+		if _, byRecovery, n := s.replay(raw); n == len(raw) && !byRecovery[n-1] {
 			s.log.Info("move refused: moves are paused", "id", st.ID, "check", check)
 			writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, movesPausedMsg)
 			return
 		}
 	}
-	last, _ := wire.DecodeSigned(raw[len(raw)-1])
+	last, _ := s.decodeSigned(raw[len(raw)-1])
 	var e wire.ChainEntry
 	if last.OpenClosed(&e) != nil {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeInvalidChain, "")
@@ -661,9 +653,9 @@ func (s *Server) registerMove(w http.ResponseWriter, r *http.Request, in []wire.
 		return
 	}
 	if len(have) > 0 && len(have) < len(raw) && hasPrefix(raw, have) {
-		local, localErr := decodeChain(have)
+		local, localErr := s.decodeChain(have)
 		if localErr == nil && local.Home != s.cfg.Name {
-			homes, _, _ := replay(have)
+			homes, _, _ := s.replay(have)
 			for _, home := range homes {
 				if home == s.cfg.Name {
 					expected = have
@@ -702,7 +694,7 @@ func (s *Server) registerMove(w http.ResponseWriter, r *http.Request, in []wire.
 	// A device-signed move asked about before the old home appends it gets a reservation:
 	// the old home won't append it without one (SPEC §6.6). Recovery-signed moves don't.
 	var res *reservationBody
-	if prev, byRecovery, n := replay(raw); check && n == len(raw) && !byRecovery[n-1] && prev[n-1] != s.cfg.Name {
+	if prev, byRecovery, n := s.replay(raw); check && n == len(raw) && !byRecovery[n-1] && prev[n-1] != s.cfg.Name {
 		res = &reservationBody{ID: st.ID, Server: s.cfg.Name, Entry: head, Exp: now() + reservationTTL}
 		reg.Reserve = &store.MoveReservation{ID: st.ID, Entry: head, Handle: st.Handle, Exp: res.Exp, Hold: res.Exp + reservationHold}
 	}
@@ -732,7 +724,7 @@ func (s *Server) registerMove(w http.ResponseWriter, r *http.Request, in []wire.
 	if check {
 		out := map[string]any{"id": st.ID}
 		if committed && res != nil {
-			signed, err := wire.SignKID("move-reservation", res, s.key.Priv, s.key.KID)
+			signed, err := s.fed.SignKID("move-reservation", res)
 			if err != nil {
 				writeError(w, http.StatusInternalServerError, wire.ErrCodeUnavailable, "")
 				return

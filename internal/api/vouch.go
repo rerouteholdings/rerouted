@@ -68,27 +68,27 @@ func (s *Server) fetchChain(ctx context.Context, home, id string) ([][]byte, boo
 	for i, e := range res.Entries {
 		raw[i] = e
 	}
-	raw, err = canonChain(raw)
+	raw, err = s.canonChain(raw)
 	return raw, res.Cached, err
 }
 
-// replay walks a chain and reports, for each entry, the home before it and whether the
-// recovery key signed it. It stops at the first entry that doesn't validate.
-func replay(raw [][]byte) (prevHome []string, byRecovery []bool, n int) {
+// replayFor walks a chain of wire version v and reports, for each entry, the home before it
+// and whether the recovery key signed it. It stops at the first entry that doesn't validate.
+func replayFor(v int, raw [][]byte) (prevHome []string, byRecovery []bool, n int) {
 	if len(raw) == 0 {
 		return nil, nil, 0
 	}
-	sig, err := wire.DecodeSigned(raw[0])
+	sig, err := wire.DecodeSignedFor(v, raw[0])
 	if err != nil {
 		return nil, nil, 0
 	}
-	st, _, err := chain.Genesis(sig)
+	st, _, err := chain.GenesisFor(v, sig)
 	if err != nil {
 		return nil, nil, 0
 	}
 	prevHome, byRecovery = []string{""}, []bool{false}
 	for i := 1; i < len(raw); i++ {
-		sig, err := wire.DecodeSigned(raw[i])
+		sig, err := wire.DecodeSignedFor(v, raw[i])
 		if err != nil {
 			return prevHome, byRecovery, i
 		}
@@ -117,7 +117,7 @@ func lastRecovery(byRecovery []bool, n int) int {
 // vouched returns the longest prefix of candidate whose new entries (index >= start) the
 // rule accepts, given that candidate came from server `from`.
 func (s *Server) vouched(ctx context.Context, id string, candidate [][]byte, start int, from string) [][]byte {
-	prevHome, byRecovery, n := replay(candidate)
+	prevHome, byRecovery, n := s.replay(candidate)
 	if n == 0 {
 		return nil
 	}
@@ -156,11 +156,11 @@ var errStorage = errors.New("storage failure")
 // part of what's new is kept. With nothing cached, the chain is taken as its current home
 // serves it. Returns the resulting state and entries, and whether anything changed.
 func (s *Server) acceptChain(ctx context.Context, id string, raw [][]byte, from string) (*chain.State, [][]byte, bool, error) {
-	raw, err := canonChain(raw)
+	raw, err := s.canonChain(raw)
 	if err != nil {
 		return nil, nil, false, err
 	}
-	st, err := decodeChain(raw)
+	st, err := s.decodeChain(raw)
 	if err != nil {
 		return nil, nil, false, err
 	}
@@ -183,7 +183,7 @@ func (s *Server) acceptChain(ctx context.Context, id string, raw [][]byte, from 
 		}
 		return st, raw, true, nil
 	}
-	keep, out, at, err := chain.Resolve(cached, raw)
+	keep, out, at, err := chain.ResolveFor(s.wv, cached, raw)
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("conflicts with the cached chain: %w", err)
 	}
@@ -197,10 +197,10 @@ func (s *Server) acceptChain(ctx context.Context, id string, raw [][]byte, from 
 	}
 	accepted := s.vouched(ctx, id, raw, start, from)
 	if len(accepted) <= start {
-		cst, _ := decodeChain(cached)
+		cst, _ := s.decodeChain(cached)
 		return cst, cached, false, nil
 	}
-	ast, err := decodeChain(accepted)
+	ast, err := s.decodeChain(accepted)
 	if err != nil {
 		return nil, nil, false, err
 	}
@@ -213,16 +213,21 @@ func (s *Server) acceptChain(ctx context.Context, id string, raw [][]byte, from 
 // fromHome reports whether `from` may speak for an identity (SPEC §10.2): its current home,
 // or, with grace, the home it moved from, within the grace window (SPEC §6.6). Grace is only
 // for deliveries the old home had already queued; anything new it asks for in the user's
-// name (a key-package claim, a contact request) needs the current home.
+// name (a key-package claim, a contact request) needs the current home. Wire version 1;
+// fromHomeFor takes the version.
 func fromHome(raw [][]byte, from string, now int64, grace bool) bool {
+	return fromHomeFor(wire.V1, raw, from, now, grace)
+}
+
+func fromHomeFor(v int, raw [][]byte, from string, now int64, grace bool) bool {
 	var st *chain.State
 	for i, b := range raw {
-		sig, err := wire.DecodeSigned(b)
+		sig, err := wire.DecodeSignedFor(v, b)
 		if err != nil {
 			return false
 		}
 		if i == 0 {
-			if st, _, err = chain.Genesis(sig); err != nil {
+			if st, _, err = chain.GenesisFor(v, sig); err != nil {
 				return false
 			}
 			continue
@@ -254,7 +259,7 @@ func (s *Server) checkMoves(ctx context.Context, id string, raw [][]byte, from s
 // without the newest entry, which the previous home hasn't been given yet (SPEC §6.6). It
 // also says whether the newest entry is a move its previous home confirmed it appended.
 func (s *Server) confirmMoves(ctx context.Context, id string, raw [][]byte, from string, upto int) (newestConfirmed bool, err error) {
-	prevHome, byRecovery, n := replay(raw)
+	prevHome, byRecovery, n := s.replay(raw)
 	if n != len(raw) {
 		return false, errors.New("chain doesn't validate")
 	}
@@ -263,7 +268,7 @@ func (s *Server) confirmMoves(ctx context.Context, id string, raw [][]byte, from
 		next := ""
 		if i+1 < n {
 			next = prevHome[i+1]
-		} else if st, err := decodeChain(raw); err == nil {
+		} else if st, err := s.decodeChain(raw); err == nil {
 			next = st.Home
 		}
 		moved := next != prevHome[i]

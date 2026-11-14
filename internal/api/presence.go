@@ -118,7 +118,7 @@ func (s *Server) dropStaleProfile(id string, pv int64) {
 	if !ok {
 		return
 	}
-	if sig, err := wire.DecodeSigned(c.signed); err == nil {
+	if sig, err := s.decodeSigned(c.signed); err == nil {
 		var body struct {
 			V int64 `json:"v"`
 		}
@@ -134,7 +134,7 @@ func (s *Server) profileVersion(ctx context.Context, id string) int64 {
 	if err != nil {
 		return 0
 	}
-	sig, err := wire.DecodeSigned(b)
+	sig, err := s.decodeSigned(b)
 	if err != nil {
 		return 0
 	}

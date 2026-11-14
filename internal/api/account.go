@@ -123,9 +123,13 @@ func recoveryPositions(chain [][]byte) (map[string]int, []int64) {
 	var at []int64
 	n := 0
 	for _, raw := range chain {
+		// The identity's own stored chain, so the body is all that's read. A wire version 2
+		// entry's envelope has version 2's shape.
 		sig, err := wire.DecodeSigned(raw)
 		if err != nil {
-			continue
+			if sig, err = wire.DecodeSignedV2(raw); err != nil {
+				continue
+			}
 		}
 		var e wire.ChainEntry
 		if sig.Open(&e) != nil {

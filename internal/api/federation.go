@@ -41,12 +41,13 @@ func (s *Server) local(ctx context.Context, id string) (bool, error) {
 	return false, nil // unknown here, or a chain that doesn't validate
 }
 
-// canonChain re-encodes chain entries received from elsewhere as JCS, so stored
-// copies compare byte for byte whatever formatting they arrived in (SPEC §4.3).
-func canonChain(in [][]byte) ([][]byte, error) {
+// canonChainFor re-encodes chain entries received from elsewhere as JCS, under wire
+// version v's rules, so stored copies compare byte for byte whatever formatting they
+// arrived in (SPEC §4.3).
+func canonChainFor(v int, in [][]byte) ([][]byte, error) {
 	out := make([][]byte, len(in))
 	for i, e := range in {
-		c, err := wire.CanonicalSigned(e)
+		c, err := wire.CanonicalSignedFor(v, e)
 		if err != nil {
 			return nil, err
 		}
@@ -55,29 +56,32 @@ func canonChain(in [][]byte) ([][]byte, error) {
 	return out, nil
 }
 
-// decodeChain decodes and validates a chain. A chain that validated before isn't checked
-// again: the state is remembered by a hash of the exact bytes (see validChains).
-func decodeChain(raw [][]byte) (*chain.State, error) {
+// decodeChain decodes and validates a wire version 1 chain. A chain that validated before
+// isn't checked again: the state is remembered by a hash of the exact bytes (see
+// validChains). decodeChainFor takes the wire version.
+func decodeChain(raw [][]byte) (*chain.State, error) { return decodeChainFor(wire.V1, raw) }
+
+func decodeChainFor(v int, raw [][]byte) (*chain.State, error) {
 	sum := chainSum(raw)
-	if st := validChains.get(sum); st != nil {
+	if st := validChains.get(sum); st != nil && st.V == v {
 		return st, nil
 	}
-	st, err := validateChain(raw)
+	st, err := validateChain(v, raw)
 	if err == nil {
 		validChains.put(sum, st)
 	}
 	return st, err
 }
 
-func validateChain(raw [][]byte) (*chain.State, error) {
+func validateChain(v int, raw [][]byte) (*chain.State, error) {
 	entries := make([]wire.Signed, len(raw))
 	for i, b := range raw {
 		var err error
-		if entries[i], err = wire.DecodeSigned(b); err != nil {
+		if entries[i], err = wire.DecodeSignedFor(v, b); err != nil {
 			return nil, err
 		}
 	}
-	return chain.Validate(entries)
+	return chain.ValidateFor(v, entries)
 }
 
 // lookup finds any identity's chain: local, cached from another server, or fetched
@@ -97,7 +101,7 @@ func (s *Server) lookup(ctx context.Context, id, homeHint string) (*chain.State,
 		homeHint = tomb.Home
 	}
 	if home, raw, err := s.st.Remote().Get(ctx, id); err == nil && (homeHint == "" || homeHint == home) {
-		if st, err := decodeChain(raw); err == nil {
+		if st, err := s.decodeChain(raw); err == nil {
 			return st, raw, nil
 		}
 	}
@@ -123,7 +127,7 @@ func (s *Server) lookupCached(ctx context.Context, id string) ([][]byte, error) 
 		return tombRaw, nil
 	}
 	if _, raw, rerr := s.st.Remote().Get(ctx, id); rerr == nil {
-		if _, derr := decodeChain(raw); derr == nil {
+		if _, derr := s.decodeChain(raw); derr == nil {
 			return raw, nil
 		}
 	}
@@ -147,7 +151,7 @@ func (s *Server) fetchRemote(ctx context.Context, id, home string, follow bool) 
 	if err != nil {
 		return nil, nil, err
 	}
-	st, err := decodeChain(raw)
+	st, err := s.decodeChain(raw)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -187,7 +191,13 @@ func (s *Server) enqueue(ctx context.Context, dest, path string, body any) error
 
 // RunOutbox delivers queued S2S requests until ctx ends: each destination has its own
 // worker, so a slow or unreachable server holds up only what's queued for it.
+//
+// On the version 1 Server, it also runs its version 2 sibling's outbox: each sends only
+// its own version's requests.
 func (s *Server) RunOutbox(ctx context.Context) {
+	if s.v2 != nil {
+		go s.v2.RunOutbox(ctx)
+	}
 	s.out.mu.Lock()
 	s.out.base = ctx
 	s.out.mu.Unlock()
@@ -495,11 +505,11 @@ func (s *Server) remoteSender(ctx context.Context, id, from string) bool {
 
 func (s *Server) speaksFor(ctx context.Context, id, from string, grace bool) bool {
 	_, raw, err := s.lookup(ctx, id, from)
-	if err == nil && !fromHome(raw, from, now(), grace) {
+	if err == nil && !s.fromHome(raw, from, now(), grace) {
 		// The cache may be stale: re-fetch from the sender once.
 		_, raw, err = s.fetchRemote(ctx, id, from, false)
 	}
-	return err == nil && fromHome(raw, from, now(), grace)
+	return err == nil && s.fromHome(raw, from, now(), grace)
 }
 
 func (s *Server) s2sKeyPackageClaim(w http.ResponseWriter, r *http.Request, from string, body wire.Raw) {
@@ -535,7 +545,7 @@ func (s *Server) s2sContactRequest(w http.ResponseWriter, r *http.Request, from 
 	}
 	// The requester's chain goes into the cache under the usual rules (SPEC §6.5), and the
 	// request has to come from the requester's home.
-	ids, err := decodeChain(raw)
+	ids, err := s.decodeChain(raw)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeInvalidChain, err.Error())
 		return
@@ -545,17 +555,17 @@ func (s *Server) s2sContactRequest(w http.ResponseWriter, r *http.Request, from 
 		s.unavailableRead(w, "caching a requester's chain", err)
 		return
 	}
-	if err != nil || !fromHome(accepted, from, now(), false) {
+	if err != nil || !s.fromHome(accepted, from, now(), false) {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeInvalidChain, "requester's chain must name the calling server")
 		return
 	}
-	sig, err := wire.DecodeSigned(req.Request)
+	sig, err := s.decodeSigned(req.Request)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "")
 		return
 	}
-	key, err := sig.VerifySelf("contact-request")
-	if err != nil || !st.HasDevice(key) {
+	key, err := s.signer(sig, "contact-request")
+	if err != nil || !s.deviceSigned(st, sig, "contact-request", key) {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "")
 		return
 	}

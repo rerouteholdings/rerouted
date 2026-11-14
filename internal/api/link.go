@@ -59,11 +59,13 @@ func (s *Server) postLinkProof(w http.ResponseWriter, r *http.Request) {
 		writeBody(w, http.StatusTooManyRequests, wire.Error{Code: wire.ErrCodeRateLimited, Retry: 3600})
 		return
 	}
-	sig, ok := decodeSignedField(w, req.Proof)
+	sig, ok := s.decodeSignedField(w, req.Proof)
 	if !ok {
 		return
 	}
-	key, err := sig.VerifySelf("link-proof")
+	// The new device isn't in the chain yet, so the proof carries its key in k: in wire
+	// version 2, its whole composite key, which add-device needs (SPEC §7.2).
+	key, err := s.selfSigned(sig, "link-proof")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "")
 		return
@@ -119,7 +121,7 @@ func (s *Server) postLinkProof(w http.ResponseWriter, r *http.Request) {
 		p.attempts++
 	} else if p.enc != nil && p.expires > t {
 		parked := false
-		if old, err := wire.DecodeSigned(p.enc); err == nil {
+		if old, err := s.decodeSigned(p.enc); err == nil {
 			var ob struct {
 				Code string `json:"code"`
 			}

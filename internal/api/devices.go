@@ -50,7 +50,7 @@ func (s *Server) recoverAccount(w http.ResponseWriter, r *http.Request) {
 	if !readBody(w, r, &req) {
 		return
 	}
-	sig, ok := decodeSignedField(w, req.Entry)
+	sig, ok := s.decodeSignedField(w, req.Entry)
 	if !ok {
 		return
 	}
@@ -95,7 +95,7 @@ func (s *Server) recoverAccount(w http.ResponseWriter, r *http.Request) {
 	case e.Seq >= 1 && e.Seq <= st.Seq:
 		// A fork that undoes recent device changes (SPEC §6.4.1).
 		candidate := append(append([][]byte(nil), raw[:e.Seq]...), enc)
-		next, out, at, err := chain.Resolve(raw, candidate)
+		next, out, at, err := chain.ResolveFor(s.wv, raw, candidate)
 		if err != nil || out != chain.Fork {
 			msg := "not a valid recovery fork"
 			if err != nil {

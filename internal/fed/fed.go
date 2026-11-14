@@ -341,6 +341,7 @@ func (f *Fed) SignKID(t string, body any) (wire.Signed, error) {
 	}
 	return wire.SignKID(t, body, f.Key.Priv, f.Key.KID)
 }
+
 // s2sRequest is the signed body of every S2S call (SPEC §8.3).
 type s2sRequest struct {
 	From  string     `json:"from"`

@@ -76,7 +76,8 @@ func main() {
 	}()
 
 	log.Info("rerouted starting", "name", cfg.Name, "listen", cfg.Listen,
-		"client", cfg.ClientBase(), "s2s", cfg.S2SBase(), "kid", key.KID)
+		"client", cfg.ClientBase(), "s2s", cfg.S2SBase(), "kid", key.KID,
+		"client_v2", cfg.ClientBaseV2(), "s2s_v2", cfg.S2SBaseV2(), "kid_v2", key.V2.KID)
 	go server.RunOutbox(ctx)
 	go server.RunMaintenance(ctx)
 	if cfg.Dev {

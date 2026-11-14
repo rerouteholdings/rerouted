@@ -17,6 +17,7 @@ type Config struct {
 	DataDir          string            // REROUTED_DATA_DIR
 	PublicURL        string            // REROUTED_PUBLIC_URL: origin the APIs are reached at (default https://{name})
 	APIPath          string            // REROUTED_API_PATH: where the v1 APIs live (default /.well-known/tieroute/v1/)
+	APIPathV2        string            // REROUTED_API_PATH_V2: where the v2 APIs live (default /.well-known/tieroute/v2/)
 	Handles          string            // REROUTED_HANDLES: domain to give out handles under
 	Registration     string            // REROUTED_REGISTRATION: invite or closed (SPEC §8.2)
 	Store            string            // REROUTED_STORE: sqlite (default) or temp
@@ -61,6 +62,7 @@ func Load(envFile string) (*Config, error) {
 		DataDir:            get("REROUTED_DATA_DIR", "./data"),
 		PublicURL:          strings.TrimRight(os.Getenv("REROUTED_PUBLIC_URL"), "/"),
 		APIPath:            get("REROUTED_API_PATH", "/.well-known/tieroute/v1/"),
+		APIPathV2:          get("REROUTED_API_PATH_V2", "/.well-known/tieroute/v2/"),
 		Handles:            os.Getenv("REROUTED_HANDLES"),
 		Registration:       get("REROUTED_REGISTRATION", "closed"),
 		Store:              get("REROUTED_STORE", "sqlite"),
@@ -111,6 +113,9 @@ func (c *Config) validate() error {
 		return errors.New("REROUTED_NAME must be a bare DNS name, never an IP literal or URL (SPEC §5.1)")
 	case !strings.HasPrefix(c.PublicURL, "https://") && !c.Dev:
 		return errors.New("REROUTED_PUBLIC_URL must be https:// outside dev mode")
+	}
+	if c.APIPath == c.APIPathV2 {
+		return errors.New("REROUTED_API_PATH and REROUTED_API_PATH_V2 must differ: each wire version has its own API base (SPEC §8.1)")
 	}
 	if len(c.Peers) > 0 && !c.Dev {
 		return errors.New("REROUTED_DEV_PEERS needs REROUTED_DEV=on (it disables TLS for those peers)")
@@ -196,6 +201,10 @@ func (c *Config) ClientBase() string { return c.PublicURL + c.APIPath + "client/
 // S2SBase is the S2S API base URL published in the server document (SPEC §8.1).
 func (c *Config) S2SBase() string { return c.PublicURL + c.APIPath + "s2s/" }
 
+// ClientBaseV2 and S2SBaseV2 are ClientBase and S2SBase for wire version 2.
+func (c *Config) ClientBaseV2() string { return c.PublicURL + c.APIPathV2 + "client/" }
+func (c *Config) S2SBaseV2() string    { return c.PublicURL + c.APIPathV2 + "s2s/" }
+
 // Defaults fills in the public URL and API path when they're unset.
 func (c *Config) Defaults() {
 	if c.MediaQuota == 0 {
@@ -210,10 +219,19 @@ func (c *Config) Defaults() {
 	if c.APIPath == "" {
 		c.APIPath = "/.well-known/tieroute/v1/"
 	}
-	if !strings.HasPrefix(c.APIPath, "/") {
-		c.APIPath = "/" + c.APIPath
+	if c.APIPathV2 == "" {
+		c.APIPathV2 = "/.well-known/tieroute/v2/"
 	}
-	if !strings.HasSuffix(c.APIPath, "/") {
-		c.APIPath += "/"
+	c.APIPath, c.APIPathV2 = slashed(c.APIPath), slashed(c.APIPathV2)
+}
+
+// slashed makes an API path start and end with "/".
+func slashed(p string) string {
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
 	}
+	if !strings.HasSuffix(p, "/") {
+		p += "/"
+	}
+	return p
 }

@@ -396,6 +396,11 @@ func (s *Server) sendOne(ctx context.Context, sess session, o outgoing) sendResu
 	}
 	d := delivery{ID: o.ID, Kind: o.Kind, From: sess.id, To: o.To, Group: o.Group, Epoch: o.Epoch, MLS: o.MLS, Data: o.Data}
 	res := sendResult{ID: o.ID, Status: "sent"}
+	if o.MLS == "commit" && s.wv == wire.V2 {
+		// Commits go through the group's hub, whose wire version 2 form (composite epoch
+		// keys and receipts, SPEC §11.6) rerouted doesn't serve yet.
+		return reject(o.ID, wire.ErrCodeNotImplemented)
+	}
 
 	if o.MLS == "commit" {
 		var enc []byte

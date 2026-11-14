@@ -54,11 +54,11 @@ func (s *Server) postProfile(w http.ResponseWriter, r *http.Request, sess sessio
 	if !readBody(w, r, &req) {
 		return
 	}
-	sig, ok := decodeSignedField(w, req.Profile)
+	sig, ok := s.decodeSignedField(w, req.Profile)
 	if !ok {
 		return
 	}
-	key, err := sig.VerifySelf("profile")
+	key, err := s.signer(sig, "profile")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "")
 		return
@@ -73,7 +73,7 @@ func (s *Server) postProfile(w http.ResponseWriter, r *http.Request, sess sessio
 		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "a profile is published by its own identity")
 		return
 	}
-	if me, _, err := s.identity(ctx, sess.id); err != nil || !me.HasDevice(key) {
+	if me, _, err := s.identity(ctx, sess.id); err != nil || !s.deviceSigned(me, sig, "profile", key) {
 		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "the signer isn't a current device")
 		return
 	}

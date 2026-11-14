@@ -9,6 +9,12 @@ import (
 
 // The server document (SPEC §5.1). It's the only fixed path in the protocol:
 // clients and servers find both APIs from its "apis" list (SPEC §8.1).
+//
+// rerouted lists wire versions 1 and 2, each with its own bases, while its users migrate
+// (SPEC §5.1, §6.8). keys holds both versions' server keys: the version 1 Ed25519 key and
+// the version 2 composite key, under different key IDs. A reader picks the key a signature
+// names by kid, and each version's verifier takes only its own kind of key (32 or 1,984
+// bytes), so a version 1 reader that looks keys up by kid isn't confused by the other.
 type serverKeyDoc struct {
 	KID string     `json:"kid"`
 	Pub wire.Bytes `json:"pub"`
@@ -17,7 +23,7 @@ type serverKeyDoc struct {
 }
 
 type apiBase struct {
-	V      uint   `json:"v"`
+	V      int    `json:"v"`
 	Client string `json:"client,omitempty"`
 	S2S    string `json:"s2s"`
 }
@@ -36,12 +42,20 @@ func (s *Server) serverDoc(w http.ResponseWriter, r *http.Request) {
 	doc := serverDoc{
 		Name:  s.cfg.Name,
 		Roles: []string{"home"},
-		APIs:  []apiBase{{V: 1, Client: s.cfg.ClientBase(), S2S: s.cfg.S2SBase()}},
+		APIs: []apiBase{
+			{V: wire.V1, Client: s.cfg.ClientBase(), S2S: s.cfg.S2SBase()},
+			{V: wire.V2, Client: s.cfg.ClientBaseV2(), S2S: s.cfg.S2SBaseV2()},
+		},
 		Keys: []serverKeyDoc{{
 			KID: s.key.KID,
 			Pub: wire.Bytes(s.key.Public()),
 			NBF: s.key.Created.Unix(),
 			EXP: s.key.Created.Add(serverkey.Lifetime).Unix(),
+		}, {
+			KID: s.key.V2.KID,
+			Pub: wire.Bytes(s.key.V2.Priv.Public().Bytes()),
+			NBF: s.key.V2.Created.Unix(),
+			EXP: s.key.V2.Created.Add(serverkey.Lifetime).Unix(),
 		}},
 		Handles:      s.cfg.Handles,
 		Registration: s.cfg.Registration,

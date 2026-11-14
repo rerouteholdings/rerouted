@@ -75,13 +75,20 @@ func TestServerDoc(t *testing.T) {
 	if err := wire.Unmarshal(b, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc.Name != "chat.test" || len(doc.Roles) != 1 || doc.Roles[0] != "home" || len(doc.Keys) != 1 || len(doc.Keys[0].Pub) != 32 {
-		t.Fatalf("unexpected doc: %+v", doc)
+	// Both versions' keys: version 1's Ed25519 key, and version 2's composite key, under
+	// another key ID (SPEC §5.1).
+	if doc.Name != "chat.test" || len(doc.Roles) != 1 || doc.Roles[0] != "home" || len(doc.Keys) != 2 ||
+		len(doc.Keys[0].Pub) != 32 || len(doc.Keys[1].Pub) != wire.CompositePublicKeySize || doc.Keys[0].KID == doc.Keys[1].KID {
+		t.Fatalf("unexpected doc: name %q, roles %v, %d keys", doc.Name, doc.Roles, len(doc.Keys))
 	}
-	// Follow your nose (SPEC §8.1): the APIs are wherever the document says.
-	if len(doc.APIs) != 1 || doc.APIs[0].V != 1 ||
+	// Follow your nose (SPEC §8.1): the APIs are wherever the document says, one base for
+	// each wire version while users migrate (SPEC §5.1).
+	if len(doc.APIs) != 2 || doc.APIs[0].V != 1 ||
 		doc.APIs[0].Client != "https://chat.test/.well-known/tieroute/v1/client/" ||
-		doc.APIs[0].S2S != "https://chat.test/.well-known/tieroute/v1/s2s/" {
+		doc.APIs[0].S2S != "https://chat.test/.well-known/tieroute/v1/s2s/" ||
+		doc.APIs[1].V != 2 ||
+		doc.APIs[1].Client != "https://chat.test/.well-known/tieroute/v2/client/" ||
+		doc.APIs[1].S2S != "https://chat.test/.well-known/tieroute/v2/s2s/" {
 		t.Fatalf("apis: %+v", doc.APIs)
 	}
 	if doc.Registration != "invite" || doc.Invite != "" {

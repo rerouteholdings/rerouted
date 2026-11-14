@@ -121,6 +121,10 @@ func (s *Server) contactOrRequested(ctx context.Context, owner, other string) (b
 // ---- key packages (SPEC §11.4) ----
 
 func (s *Server) kpUpload(w http.ResponseWriter, r *http.Request, sess session) {
+	if s.wv == wire.V2 {
+		s.kpUploadV2(w, r, sess)
+		return
+	}
 	var req struct {
 		Packages   []wire.Bytes `json:"packages"`
 		LastResort wire.Bytes   `json:"last-resort,omitempty"`
@@ -142,6 +146,85 @@ func (s *Server) kpUpload(w http.ResponseWriter, r *http.Request, sess session) 
 	var lastResort *store.KeyPackage
 	if req.LastResort != nil {
 		lastResort = &store.KeyPackage{Data: req.LastResort}
+	}
+	n, err := s.st.KeyPackages().Upload(r.Context(), sess.id, sess.device, packages, lastResort)
+	if err != nil {
+		writeError(w, http.StatusRequestEntityTooLarge, wire.ErrCodeOverQuota, "")
+		return
+	}
+	writeBody(w, http.StatusOK, map[string]any{"count": n})
+}
+
+// kpWithBinding is a wire version 2 key package with its kp-binding (SPEC §3.2.2), the
+// shape spec/api/community.md gives community servers' uploads.
+type kpWithBinding struct {
+	KP      wire.Bytes `json:"kp"`
+	Binding wire.Raw   `json:"binding"`
+}
+
+// kpUploadV2 is POST keypackages/upload in wire version 2: each package comes with its
+// kp-binding, which has to be signed by the token device's composite key, name the
+// token's identity, and hash the package (SPEC §3.2.2). Claimants check it again. The
+// server never parses the package, so the msg-key in its leaf (SPEC §7.1) is theirs to check.
+func (s *Server) kpUploadV2(w http.ResponseWriter, r *http.Request, sess session) {
+	var req struct {
+		Packages   []kpWithBinding `json:"packages"`
+		LastResort *kpWithBinding  `json:"last-resort,omitempty"`
+		Replace    bool            `json:"replace,omitempty"`
+	}
+	if !readBody(w, r, &req) {
+		return
+	}
+	me, _, err := s.identity(r.Context(), sess.id)
+	if err != nil {
+		s.unavailableRead(w, "reading the uploader's chain", err)
+		return
+	}
+	dev := me.DevicePub(sess.device)
+	if dev == nil {
+		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "not a current device")
+		return
+	}
+	check := func(p kpWithBinding) (store.KeyPackage, bool) {
+		if len(p.KP) == 0 {
+			writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "a key package needs kp and binding")
+			return store.KeyPackage{}, false
+		}
+		sig, err := s.decodeSigned(p.Binding)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "binding: "+err.Error())
+			return store.KeyPackage{}, false
+		}
+		if err := wire.VerifyKPBinding(sig, sess.id, dev, p.KP); errors.Is(err, wire.ErrBadSignature) {
+			writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "the binding isn't signed by this device")
+			return store.KeyPackage{}, false
+		} else if err != nil {
+			writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "the binding doesn't match its key package and identity")
+			return store.KeyPackage{}, false
+		}
+		enc, _ := sig.Encode()
+		return store.KeyPackage{Data: p.KP, Binding: enc}, true
+	}
+	packages := make([]store.KeyPackage, len(req.Packages))
+	for i, p := range req.Packages {
+		var ok bool
+		if packages[i], ok = check(p); !ok {
+			return
+		}
+	}
+	var lastResort *store.KeyPackage
+	if req.LastResort != nil {
+		lr, ok := check(*req.LastResort)
+		if !ok {
+			return
+		}
+		lastResort = &lr
+	}
+	if req.Replace {
+		if err := s.st.KeyPackages().Clear(r.Context(), sess.id, sess.device); err != nil {
+			s.unavailableRead(w, "clearing key packages", err)
+			return
+		}
 	}
 	n, err := s.st.KeyPackages().Upload(r.Context(), sess.id, sess.device, packages, lastResort)
 	if err != nil {
@@ -244,7 +327,11 @@ func (s *Server) claimFor(w http.ResponseWriter, r *http.Request, target, claima
 	}
 	out := []map[string]any{}
 	for _, kp := range kps {
-		out = append(out, map[string]any{"dev": kp.Device, "kp": kp.Data, "last-resort": kp.LastResort})
+		p := map[string]any{"dev": kp.Device, "kp": kp.Data, "last-resort": kp.LastResort}
+		if kp.Binding != nil {
+			p["binding"] = wire.Raw(kp.Binding) // wire version 2 (SPEC §3.2.2)
+		}
+		out = append(out, p)
 	}
 	writeBody(w, http.StatusOK, map[string]any{"packages": out})
 }
@@ -266,11 +353,11 @@ func (s *Server) contactRequest(w http.ResponseWriter, r *http.Request, sess ses
 	if !readBody(w, r, &req) {
 		return
 	}
-	sig, ok := decodeSignedField(w, req.Request)
+	sig, ok := s.decodeSignedField(w, req.Request)
 	if !ok {
 		return
 	}
-	key, err := sig.VerifySelf("contact-request")
+	key, err := s.signer(sig, "contact-request")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "")
 		return
@@ -281,7 +368,7 @@ func (s *Server) contactRequest(w http.ResponseWriter, r *http.Request, sess ses
 		return
 	}
 	me, myChain, err := s.identity(r.Context(), sess.id)
-	if err != nil || !me.HasDevice(key) {
+	if err != nil || !s.deviceSigned(me, sig, "contact-request", key) {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "signer isn't a current device")
 		return
 	}

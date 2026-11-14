@@ -30,11 +30,11 @@ func (s *Server) contactDeclineReq(w http.ResponseWriter, r *http.Request, sess 
 	if !readBody(w, r, &req) {
 		return
 	}
-	sig, ok := decodeSignedField(w, req.Decline)
+	sig, ok := s.decodeSignedField(w, req.Decline)
 	if !ok {
 		return
 	}
-	key, err := sig.VerifySelf("contact-decline")
+	key, err := s.signer(sig, "contact-decline")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "")
 		return
@@ -45,7 +45,7 @@ func (s *Server) contactDeclineReq(w http.ResponseWriter, r *http.Request, sess 
 		return
 	}
 	ctx := r.Context()
-	if me, _, err := s.identity(ctx, sess.id); err != nil || !me.HasDevice(key) {
+	if me, _, err := s.identity(ctx, sess.id); err != nil || !s.deviceSigned(me, sig, "contact-decline", key) {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "signer isn't a current device")
 		return
 	}
@@ -55,7 +55,7 @@ func (s *Server) contactDeclineReq(w http.ResponseWriter, r *http.Request, sess 
 		s.notFound(w, err, noMatch)
 		return
 	}
-	if c.State != store.StatePendingIn || !requestMatches(c.Request, d.Request) {
+	if c.State != store.StatePendingIn || !requestMatches(s.wv, c.Request, d.Request) {
 		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, noMatch)
 		return
 	}
@@ -86,7 +86,7 @@ func (s *Server) receiveDecline(ctx context.Context, d contactDecline, raw wire.
 	if err != nil {
 		return err
 	}
-	if c.State != store.StatePendingOut || !requestMatches(c.Request, d.Request) {
+	if c.State != store.StatePendingOut || !requestMatches(s.wv, c.Request, d.Request) {
 		return nil
 	}
 	if err := s.st.Contacts().Delete(ctx, d.To, d.From); err != nil {
@@ -95,12 +95,13 @@ func (s *Server) receiveDecline(ctx context.Context, d contactDecline, raw wire.
 	return s.notify(ctx, d.To, map[string]any{"t": "contact-declined", "decline": raw})
 }
 
-// requestMatches reports whether stored (an encoded signed contact-request) hashes to h.
-func requestMatches(stored []byte, h []byte) bool {
+// requestMatches reports whether stored (an encoded signed contact-request of wire version v)
+// hashes to h.
+func requestMatches(v int, stored []byte, h []byte) bool {
 	if stored == nil {
 		return false
 	}
-	sig, err := wire.DecodeSigned(stored)
+	sig, err := wire.DecodeSignedFor(v, stored)
 	if err != nil {
 		return false
 	}
@@ -118,12 +119,12 @@ func (s *Server) s2sContactDecline(w http.ResponseWriter, r *http.Request, from 
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "")
 		return
 	}
-	sig, err := wire.DecodeSigned(req.Decline)
+	sig, err := s.decodeSigned(req.Decline)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "")
 		return
 	}
-	key, err := sig.VerifySelf("contact-decline")
+	key, err := s.signer(sig, "contact-decline")
 	var d contactDecline
 	if err != nil || sig.OpenClosed(&d) != nil {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "")
@@ -135,7 +136,7 @@ func (s *Server) s2sContactDecline(w http.ResponseWriter, r *http.Request, from 
 		writeBody(w, http.StatusAccepted, map[string]any{})
 		return
 	}
-	if st, _, err := s.lookup(ctx, d.From, ""); err != nil || !st.HasDevice(key) {
+	if st, _, err := s.lookup(ctx, d.From, ""); err != nil || !s.deviceSigned(st, sig, "contact-decline", key) {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "signer isn't a current device")
 		return
 	}

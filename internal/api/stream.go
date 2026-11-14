@@ -184,7 +184,7 @@ func (s *Server) closeDevice(id string, device []byte) {
 }
 
 func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
-	conn, err := ws.Upgrade(w, r, "tieroute.v1")
+	conn, err := ws.Upgrade(w, r, "tieroute.v"+strconv.Itoa(s.wv)) // SPEC §20.1
 	if err != nil {
 		return // Upgrade wrote the HTTP error
 	}
