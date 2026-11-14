@@ -53,7 +53,7 @@ Run these on the server, with the same settings file as rerouted. They work whil
 | `rerouted -env /etc/rerouted/rerouted.env release-handle HANDLE --confirm` | Frees a handle so a new identity can register it. The old identity keeps its chain, but the handle no longer resolves to it, so clients show the handle as no longer valid (SPEC §5.3). It also ends a handle's 30-day hold early, or undoes `keep-handle`. |
 | `rerouted -env /etc/rerouted/rerouted.env keep-handle HANDLE` | Keeps a handle reserved for the identity that holds it, instead of freeing it when its 30-day hold ends (below). Nobody else can register it until you run `release-handle`. |
 
-When someone changes their handle, or moves to another homeserver, rerouted holds the old name for them for 30 days (SPEC §5.3). During the hold nobody else can register it or move here with it, and it resolves as no longer valid, so their contacts have time to see the change. The person can take the name back. After 30 days rerouted frees it. Use `keep-handle` for a name you'd rather nobody took, for example one that's easy to confuse with another.
+When someone changes their handle, or moves to another homeserver, rerouted holds the old name for them for 30 days (SPEC §5.3). During the hold nobody else can register it, move here with it, or rename to it (they get `409 handle-taken`), and it resolves as no longer valid, so their contacts have time to see the change. The person can take the name back. After 30 days rerouted frees it. Use `keep-handle` for a name you'd rather nobody took, for example one that's easy to confuse with another.
 
 Run them as the `rerouted` user, so the files they touch keep the right owner: `sudo -u rerouted rerouted -env …`.
 
