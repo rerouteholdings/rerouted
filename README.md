@@ -80,7 +80,7 @@ go vet ./...
 go test -race ./...
 ```
 
-Tests run against real SQLite databases in temporary directories, and the federation tests start two homeservers in one process. The files in `testdata/vectors/` are copies of the spec's test vectors, which are for wire version 1.
+Tests run against real SQLite databases in temporary directories, and the federation tests start two homeservers in one process. The files in `testdata/vectors/` are copies of the spec's test vectors for wire version 1, and those in `testdata/vectors/v2/` are for wire version 2.
 
 | Path | What's there |
 |---|---|

@@ -1,0 +1,28 @@
+{
+  "contact": {
+    "code": "TCH1-QER2",
+    "commitments_hex": [
+      "015f6dd1346748178280d7a5468980b62ab9a14c87c9f126537e347517a57066",
+      "5470a2dcf2ef59647606c4f3c831c9c9390ab1a4445a7ca642f284939ab445ae"
+    ],
+    "digest_hex": "d3221bbb0217f8d62ea56abd71dc8b84b4855759ad79324468388dd266061a1e",
+    "epoch_authenticator_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+    "heads_hex": [
+      "6161616161616161616161616161616161616161616161616161616161616161",
+      "6262626262626262626262626262626262626262626262626262626262626262"
+    ],
+    "identity_ids": [
+      "tr:aaaaaaaaaaaaaaaaaaaaaaaa",
+      "tr:cnshscx3enbgf6r7zjmj5w2z"
+    ],
+    "input": "[\"tieroute/v2\",\"code\",\"contact\",[[\"tr:aaaaaaaaaaaaaaaaaaaaaaaa\",\"tr:cnshscx3enbgf6r7zjmj5w2z\"],\"MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM\",[\"YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE\",\"YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI\"]],[\"REREREREREREREREREREREREREREREREREREREREREQ\",\"VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU\"]]",
+    "kind": "contact",
+    "reveals_hex": [
+      "4444444444444444444444444444444444444444444444444444444444444444",
+      "5555555555555555555555555555555555555555555555555555555555555555"
+    ],
+    "transcript_note": "[sorted identifiers, base64url(MLS epoch_authenticator), heads]; stand-ins: an authenticator of 32 bytes 0x33, and heads of 0x61 and 0x62"
+  },
+  "description": "A contact verification-code round (SPEC §6.7), as in ../codes.json but with the version 2 context: digest = SHA-256(JCS([\"tieroute/v2\", \"code\", \"contact\", transcript, reveals])).",
+  "notice": "Test vectors for Tieroute wire version 2 (SPEC version 2.0, draft). These keys are public: never use them for anything real."
+}
