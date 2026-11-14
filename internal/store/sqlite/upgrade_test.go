@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rerouteholdings/rerouted/internal/store"
+	"github.com/rerouteholdings/rerouted/internal/wire"
 )
 
 // Earlier schemas (versions 3, 4, and 5), verbatim, for upgrade tests.
@@ -376,8 +378,8 @@ func TestMigrateV7ToV8(t *testing.T) {
 	}
 	defer st.Close()
 	var uv int
-	if err := st.db.QueryRow("PRAGMA user_version").Scan(&uv); err != nil || uv != SchemaVersion || SchemaVersion != 8 {
-		t.Fatalf("user_version %d (%v), want 8", uv, err)
+	if err := st.db.QueryRow("PRAGMA user_version").Scan(&uv); err != nil || uv != SchemaVersion {
+		t.Fatalf("user_version %d (%v), want %d", uv, err, SchemaVersion)
 	}
 	ctx := context.Background()
 	v1, v2 := store.Store(st), st.ForWire(2)
@@ -473,5 +475,123 @@ func TestWireViews(t *testing.T) {
 	}
 	if kps, _ := v2.KeyPackages().Claim(ctx, "kat2", [][]byte{{2}}); len(kps) != 1 || !kps[0].LastResort || string(kps[0].Binding) != "binding" {
 		t.Fatalf("last resort %+v", kps)
+	}
+}
+
+// Version 8's schema, verbatim, for the upgrade to version 9.
+const schemaV8 = `
+CREATE TABLE IF NOT EXISTS move_registrations (id TEXT NOT NULL, operation BLOB NOT NULL, PRIMARY KEY (id, operation));
+CREATE TABLE IF NOT EXISTS move_reservations (id TEXT NOT NULL, entry BLOB NOT NULL, handle TEXT NOT NULL, exp INTEGER NOT NULL, hold INTEGER NOT NULL, PRIMARY KEY (id, entry));
+CREATE INDEX IF NOT EXISTS move_reservations_handle ON move_reservations (handle);
+CREATE TABLE IF NOT EXISTS chains   (id TEXT NOT NULL, seq INTEGER NOT NULL, entry BLOB NOT NULL, wire INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (id, seq));
+CREATE TABLE IF NOT EXISTS handles  (handle TEXT PRIMARY KEY, id TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS nonces   (k TEXT PRIMARY KEY, expires INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS nonces_expires ON nonces (expires);
+CREATE TABLE IF NOT EXISTS tokens   (hash BLOB PRIMARY KEY, id TEXT NOT NULL, device BLOB NOT NULL, name TEXT NOT NULL, expires INTEGER NOT NULL, wire INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS kps      (n INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL, device BLOB NOT NULL, data BLOB NOT NULL, last_resort INTEGER NOT NULL, binding BLOB);
+CREATE TABLE IF NOT EXISTS contacts (owner TEXT NOT NULL, other TEXT NOT NULL, state TEXT NOT NULL, since INTEGER NOT NULL, request BLOB, PRIMARY KEY (owner, other));
+CREATE TABLE IF NOT EXISTS invites  (owner TEXT NOT NULL, hash BLOB NOT NULL, public INTEGER NOT NULL, uses INTEGER NOT NULL, expires INTEGER NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (owner, hash));
+CREATE TABLE IF NOT EXISTS groups_allowed (owner TEXT NOT NULL, grp BLOB NOT NULL, PRIMARY KEY (owner, grp));
+CREATE TABLE IF NOT EXISTS inbox    (cursor INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT NOT NULL, ts INTEGER NOT NULL, delivery BLOB, notice BLOB);
+CREATE INDEX IF NOT EXISTS inbox_owner ON inbox (owner, cursor);
+CREATE TABLE IF NOT EXISTS acks     (owner TEXT NOT NULL, device BLOB NOT NULL, upto INTEGER NOT NULL, PRIMARY KEY (owner, device));
+CREATE TABLE IF NOT EXISTS seen     (owner TEXT NOT NULL, did BLOB NOT NULL, ts INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (owner, did));
+CREATE TABLE IF NOT EXISTS sent     (sender TEXT NOT NULL, did BLOB NOT NULL, result BLOB NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (sender, did));
+CREATE TABLE IF NOT EXISTS hub      (grp BLOB PRIMARY KEY, epoch INTEGER NOT NULL, key BLOB NOT NULL, awaiting INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS commits  (grp BLOB NOT NULL, epoch INTEGER NOT NULL, data BLOB NOT NULL, receipt BLOB NOT NULL, ts INTEGER NOT NULL DEFAULT 0, request BLOB, PRIMARY KEY (grp, epoch));
+CREATE TABLE IF NOT EXISTS remote   (id TEXT PRIMARY KEY, home TEXT NOT NULL, entries BLOB NOT NULL, wire INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS outbox   (n INTEGER PRIMARY KEY AUTOINCREMENT, dest TEXT NOT NULL, path TEXT NOT NULL, body BLOB NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next INTEGER NOT NULL, created INTEGER NOT NULL, wire INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS profiles (id TEXT PRIMARY KEY, v INTEGER NOT NULL, signed BLOB NOT NULL);
+CREATE TABLE IF NOT EXISTS media    (id BLOB PRIMARY KEY, owner TEXT NOT NULL, size INTEGER NOT NULL, sha256 BLOB NOT NULL, mime TEXT NOT NULL, public INTEGER NOT NULL, created INTEGER NOT NULL, removed INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS account_keys (id TEXT NOT NULL, via TEXT NOT NULL, wrapped BLOB NOT NULL, stored INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (id, via));
+CREATE TABLE IF NOT EXISTS account_data (id TEXT PRIMARY KEY, version INTEGER NOT NULL, ct BLOB NOT NULL);
+CREATE TABLE IF NOT EXISTS backups  (id TEXT NOT NULL, seq INTEGER NOT NULL, ct BLOB NOT NULL, snapshot INTEGER NOT NULL, PRIMARY KEY (id, seq));
+CREATE TABLE IF NOT EXISTS reports  (n INTEGER PRIMARY KEY AUTOINCREMENT, received INTEGER NOT NULL, origin TEXT NOT NULL, reporter TEXT NOT NULL, reported TEXT NOT NULL, body BLOB NOT NULL);
+`
+
+// Version 9: groups the hub sequences record their wire version. Those registered before
+// are version 1, with their commits, and the version 2 view doesn't see them.
+func TestMigrateV8ToV9(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rerouted.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		schemaV8,
+		"INSERT INTO hub (grp, epoch, key, awaiting) VALUES (x'01', 1, x'aa', 0)",
+		"INSERT INTO commits (grp, epoch, data, receipt, ts, request) VALUES (x'01', 0, x'0c', '{\"t\":\"commit-receipt\",\"b\":\"{}\",\"kid\":\"k\",\"s\":\"" + strings.Repeat("A", 86) + "\"}', 5, NULL)",
+		"PRAGMA user_version = 8",
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+	st, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	var uv int
+	if err := st.db.QueryRow("PRAGMA user_version").Scan(&uv); err != nil || uv != SchemaVersion {
+		t.Fatalf("user_version %d (%v), want %d", uv, err, SchemaVersion)
+	}
+	ctx := context.Background()
+	v1, v2 := store.Store(st), st.ForWire(2)
+	if g, err := v1.Hub().Group(ctx, []byte{1}); err != nil || g.Epoch != 1 || string(g.EpochKey) != "\xaa" {
+		t.Fatalf("version 1 hub group after upgrade: %+v %v", g, err)
+	}
+	if cs, err := v1.Hub().Commits(ctx, []byte{1}, 0); err != nil || len(cs) != 1 || cs[0].Receipt.T != "commit-receipt" {
+		t.Fatalf("version 1 commits after upgrade: %+v %v", cs, err)
+	}
+	if _, err := v2.Hub().Group(ctx, []byte{1}); err != store.ErrNotFound {
+		t.Fatalf("version 2 view sees a version 1 hub group: %v", err)
+	}
+	st.Close()
+	st2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st2.Close()
+}
+
+// Each wire version's hub keeps its own groups, in one namespace of group IDs: a version 2
+// group can't take a version 1 group's ID, and neither view advances the other's.
+func TestHubWireViews(t *testing.T) {
+	st, err := OpenTemp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	v1, v2 := store.Store(st), st.ForWire(2)
+	if err := v1.Hub().Register(ctx, store.HubGroup{Group: []byte{1}, EpochKey: []byte{0xa1}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := v2.Hub().Register(ctx, store.HubGroup{Group: []byte{1}, EpochKey: []byte{0xa2}}); err != store.ErrConflict {
+		t.Fatalf("a version 1 group's ID registered in version 2: %v", err)
+	}
+	if err := v2.Hub().Register(ctx, store.HubGroup{Group: []byte{2}, EpochKey: []byte{0xb0}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v1.Hub().Group(ctx, []byte{2}); err != store.ErrNotFound {
+		t.Fatalf("version 1 sees a version 2 group: %v", err)
+	}
+	c := store.Commit{Epoch: 0, Data: []byte("c"), Receipt: wire.Signed{T: "commit-receipt", B: "{}", KID: "k", S: make([]byte, wire.CompositeSignatureSize)}, TS: 5}
+	if err := v1.Hub().Accept(ctx, []byte{2}, 0, []byte{0xb1}, false, c); err != store.ErrNotFound {
+		t.Fatalf("version 1 accepted a commit for a version 2 group: %v", err)
+	}
+	if err := v1.Hub().SetKey(ctx, []byte{2}, 0, []byte{0xb0}, []byte{0xb1}); err != store.ErrConflict {
+		t.Fatalf("version 1 set a version 2 group's key: %v", err)
+	}
+	if err := v2.Hub().Accept(ctx, []byte{2}, 0, []byte{0xb1}, false, c); err != nil {
+		t.Fatal(err)
+	}
+	if cs, err := v2.Hub().Commits(ctx, []byte{2}, 0); err != nil || len(cs) != 1 || len(cs[0].Receipt.S) != wire.CompositeSignatureSize {
+		t.Fatalf("version 2 commits: %+v %v", cs, err)
+	}
+	if _, err := v1.Hub().Commits(ctx, []byte{2}, 0); err != store.ErrNotFound {
+		t.Fatalf("version 1 lists a version 2 group's commits: %v", err)
 	}
 }

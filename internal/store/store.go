@@ -324,7 +324,8 @@ type Commit struct {
 }
 
 // Hub sequences commits for groups this server hosts. Writes MUST be durable
-// before a receipt goes out (SPEC §11.6).
+// before a receipt goes out (SPEC §11.6). Each wire version's view (ForWire) sees only
+// the groups registered through it, but a group ID taken in one is taken in both.
 type Hub interface {
 	Register(ctx context.Context, g HubGroup) error // ErrConflict if the group exists
 	Group(ctx context.Context, group []byte) (*HubGroup, error)

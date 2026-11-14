@@ -23,7 +23,7 @@ import (
 
 // SchemaVersion is stored in PRAGMA user_version. Bump it with a migration
 // whenever the schema changes.
-const SchemaVersion = 8
+const SchemaVersion = 9
 
 const schema = `
 CREATE TABLE IF NOT EXISTS move_registrations (id TEXT NOT NULL, operation BLOB NOT NULL, PRIMARY KEY (id, operation));
@@ -43,7 +43,7 @@ CREATE INDEX IF NOT EXISTS inbox_owner ON inbox (owner, cursor);
 CREATE TABLE IF NOT EXISTS acks     (owner TEXT NOT NULL, device BLOB NOT NULL, upto INTEGER NOT NULL, PRIMARY KEY (owner, device));
 CREATE TABLE IF NOT EXISTS seen     (owner TEXT NOT NULL, did BLOB NOT NULL, ts INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (owner, did));
 CREATE TABLE IF NOT EXISTS sent     (sender TEXT NOT NULL, did BLOB NOT NULL, result BLOB NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (sender, did));
-CREATE TABLE IF NOT EXISTS hub      (grp BLOB PRIMARY KEY, epoch INTEGER NOT NULL, key BLOB NOT NULL, awaiting INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS hub      (grp BLOB PRIMARY KEY, epoch INTEGER NOT NULL, key BLOB NOT NULL, awaiting INTEGER NOT NULL DEFAULT 0, wire INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS commits  (grp BLOB NOT NULL, epoch INTEGER NOT NULL, data BLOB NOT NULL, receipt BLOB NOT NULL, ts INTEGER NOT NULL DEFAULT 0, request BLOB, PRIMARY KEY (grp, epoch));
 CREATE TABLE IF NOT EXISTS remote   (id TEXT PRIMARY KEY, home TEXT NOT NULL, entries BLOB NOT NULL, wire INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS outbox   (n INTEGER PRIMARY KEY AUTOINCREMENT, dest TEXT NOT NULL, path TEXT NOT NULL, body BLOB NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next INTEGER NOT NULL, created INTEGER NOT NULL, wire INTEGER NOT NULL DEFAULT 1);
@@ -184,6 +184,15 @@ func open(path, sync string) (*Store, error) {
 			return nil, err
 		}
 	}
+	// Version 9: the groups a hub sequences record their wire version (SPEC §11.6), whose
+	// epoch keys and receipts differ, and each version's view sees only its own. Every
+	// group registered before is version 1. One column, added in one statement.
+	if v < 9 && !hasColumn(db, "hub", "wire") {
+		if _, err := db.Exec("ALTER TABLE hub ADD COLUMN wire INTEGER NOT NULL DEFAULT 1"); err != nil {
+			db.Close()
+			return nil, err
+		}
+	}
 	// Indexes on columns that older databases only have after the migrations above.
 	if _, err := db.Exec(indexes); err != nil {
 		db.Close()
@@ -294,7 +303,7 @@ func (s *Store) Contacts() store.Contacts       { return contacts{s.db, s.rdb} }
 func (s *Store) Invites() store.Invites         { return invites{s.db} }
 func (s *Store) Sent() store.Sent               { return sent{s.db} }
 func (s *Store) Inbox() store.Inbox             { return inbox{s.db, s.rdb} }
-func (s *Store) Hub() store.Hub                 { return hub{s.db} }
+func (s *Store) Hub() store.Hub                 { return hub{s.db, s.wire} }
 func (s *Store) Remote() store.Remote           { return remote{s.db, s.rdb, s.wire} }
 func (s *Store) Outbox() store.Outbox           { return outbox{s.db, s.rdb, s.wire} }
 func (s *Store) Profiles() store.Profiles       { return profiles{s.db} }
@@ -1191,10 +1200,16 @@ func (x sent) Prune(ctx context.Context, before int64) (int, error) {
 
 // ---- hub ----
 
-type hub struct{ db *sql.DB }
+// hub keeps the groups this server sequences, each under its wire version, and a view
+// sees only its own version's. Group IDs are one namespace: an ID registered in either
+// version is taken in both (SPEC §11.5).
+type hub struct {
+	db   *sql.DB
+	wire int
+}
 
 func (h hub) Register(ctx context.Context, g store.HubGroup) error {
-	_, err := h.db.ExecContext(ctx, "INSERT INTO hub (grp, epoch, key) VALUES (?, ?, ?)", g.Group, g.Epoch, g.EpochKey)
+	_, err := h.db.ExecContext(ctx, "INSERT INTO hub (grp, epoch, key, wire) VALUES (?, ?, ?, ?)", g.Group, g.Epoch, g.EpochKey, h.wire)
 	if isConstraint(err) {
 		return store.ErrConflict
 	}
@@ -1203,7 +1218,7 @@ func (h hub) Register(ctx context.Context, g store.HubGroup) error {
 
 func (h hub) Group(ctx context.Context, group []byte) (*store.HubGroup, error) {
 	g := store.HubGroup{Group: group}
-	err := h.db.QueryRowContext(ctx, "SELECT epoch, key, awaiting FROM hub WHERE grp = ?", group).Scan(&g.Epoch, &g.EpochKey, &g.Awaiting)
+	err := h.db.QueryRowContext(ctx, "SELECT epoch, key, awaiting FROM hub WHERE grp = ? AND wire = ?", group, h.wire).Scan(&g.Epoch, &g.EpochKey, &g.Awaiting)
 	if err != nil {
 		return nil, notFound(err)
 	}
@@ -1220,7 +1235,7 @@ func (h hub) Accept(ctx context.Context, group []byte, epoch uint64, nextKey []b
 		return err
 	}
 	defer tx.Rollback()
-	res, err := tx.ExecContext(ctx, "UPDATE hub SET epoch = epoch + 1, key = ?, awaiting = ? WHERE grp = ? AND epoch = ? AND awaiting = 0", nextKey, awaiting, group, epoch)
+	res, err := tx.ExecContext(ctx, "UPDATE hub SET epoch = epoch + 1, key = ?, awaiting = ? WHERE grp = ? AND epoch = ? AND awaiting = 0 AND wire = ?", nextKey, awaiting, group, epoch, h.wire)
 	if err != nil {
 		return err
 	}
@@ -1228,7 +1243,7 @@ func (h hub) Accept(ctx context.Context, group []byte, epoch uint64, nextKey []b
 		// Asked inside the transaction: it holds the one writer connection, so a query
 		// outside it would wait for the connection forever.
 		var one int
-		switch err := tx.QueryRowContext(ctx, "SELECT 1 FROM hub WHERE grp = ?", group).Scan(&one); {
+		switch err := tx.QueryRowContext(ctx, "SELECT 1 FROM hub WHERE grp = ? AND wire = ?", group, h.wire).Scan(&one); {
 		case errors.Is(err, sql.ErrNoRows):
 			return store.ErrNotFound
 		case err != nil:
@@ -1243,7 +1258,7 @@ func (h hub) Accept(ctx context.Context, group []byte, epoch uint64, nextKey []b
 }
 
 func (h hub) SetKey(ctx context.Context, group []byte, epoch uint64, reg, next []byte) error {
-	res, err := h.db.ExecContext(ctx, "UPDATE hub SET key = ?, awaiting = 0 WHERE grp = ? AND epoch = ? AND awaiting = 1 AND key = ?", next, group, epoch, reg)
+	res, err := h.db.ExecContext(ctx, "UPDATE hub SET key = ?, awaiting = 0 WHERE grp = ? AND epoch = ? AND awaiting = 1 AND key = ? AND wire = ?", next, group, epoch, reg, h.wire)
 	if err != nil {
 		return err
 	}
@@ -1269,7 +1284,7 @@ func (h hub) Commits(ctx context.Context, group []byte, from uint64) ([]store.Co
 		if err := rows.Scan(&c.Epoch, &c.Data, &receipt, &c.TS, &c.Request); err != nil {
 			return nil, err
 		}
-		if c.Receipt, err = wire.DecodeSigned(receipt); err != nil {
+		if c.Receipt, err = wire.DecodeSignedFor(h.wire, receipt); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
