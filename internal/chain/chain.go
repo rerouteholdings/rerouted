@@ -272,6 +272,13 @@ func (st *State) applyV2(s wire.Signed) (*Applied, error) {
 		if _, err := s.VerifyCompositeSelf(wire.TypeChainEntry); err != nil {
 			return nil, invalid("seq %d signature: %v", e.Seq, err)
 		}
+		// The key is spent once it's revealed (SPEC §6.3): committing to it again would
+		// authorize a public key.
+		for _, op := range e.Ops {
+			if op.Op == wire.OpSetRecovery && bytes.Equal(op.Next, commit[:]) {
+				return nil, invalid("a recovery entry can't commit to the key it spends")
+			}
+		}
 		signer = SignerRecovery
 	default:
 		return nil, invalid("signer is neither a current device nor the committed recovery key")
@@ -361,9 +368,13 @@ func (st *State) applyOp(op wire.Op, genesis bool) error {
 			if err != nil || !bytes.Equal(pub.Ed25519(), op.Key) {
 				return invalid("add-device key doesn't match its pub")
 			}
-			// The 10-device ceiling, op by op (SPEC §6.4 rule 4). Adding a key that's
-			// already a device replaces its entry, as in wire version 1, and adds none.
-			if _, ok := st.Devices[k]; !ok && len(st.Devices) >= MaxDevices {
+			// A key that's already a device can't be added again: that would swap its
+			// composite key under the same name. Then the 10-device ceiling, op by op
+			// (SPEC §6.4 rule 4).
+			if _, ok := st.Devices[k]; ok {
+				return invalid("add-device of a key that's already a current device")
+			}
+			if len(st.Devices) >= MaxDevices {
 				return invalid("add-device would make more than %d current devices", MaxDevices)
 			}
 			st.Pubs[k] = pub

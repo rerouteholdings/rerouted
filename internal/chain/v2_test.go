@@ -340,10 +340,13 @@ func TestV2DeviceCeiling(t *testing.T) {
 		t.Fatalf("add before remove: %v", err)
 	}
 	w.apply(w.next(w.devs[1], false, wire.Op{Op: wire.OpRemoveDevice, Key: ed(w.devs[1])}, addOp(w.devs[10], "")))
-	// Re-adding a current device isn't a new one.
-	w.apply(w.next(w.devs[0], false, addOp(w.devs[2], "renamed")))
-	if w.st.Devices[hex.EncodeToString(ed(w.devs[2]))] != "renamed" {
-		t.Fatal("re-added device keeps its old name")
+	// Re-adding a current device is invalid, even below the ceiling.
+	if _, err := w.st.Clone().Apply(w.next(w.devs[0], false, addOp(w.devs[2], "renamed"))); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("re-added device: %v", err)
+	}
+	w.apply(w.next(w.devs[0], false, wire.Op{Op: wire.OpRemoveDevice, Key: ed(w.devs[3])}))
+	if _, err := w.st.Clone().Apply(w.next(w.devs[0], false, addOp(w.devs[2], "again"))); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("re-added device below the ceiling: %v", err)
 	}
 	// The ceiling holds in genesis too.
 	var extra []wire.Op
@@ -383,6 +386,7 @@ func TestV2EntryRules(t *testing.T) {
 	bad("uncommitted recovery key", w.next(w.rec[1], true, wire.Op{Op: wire.OpSetRecovery, Next: commitTo(w.rec[0])}))
 	bad("recovery without a new commitment", w.next(w.rec[0], true, addOp(w.devs[1], "")))
 	bad("set-recovery by a device", w.next(w.devs[0], false, rot))
+	bad("recovery recommits to the key it spends", w.next(w.rec[0], true, wire.Op{Op: wire.OpSetRecovery, Next: commitTo(w.rec[0])}))
 	// migrated-from appears only in genesis.
 	v1 := "tr:aaaaaaaaaaaaaaaaaaaaaaaa"
 	bad("migrated-from after genesis", w.next(w.devs[0], false, wire.Op{Op: wire.OpMigratedFrom, ID: &v1}))
