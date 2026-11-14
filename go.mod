@@ -2,6 +2,8 @@ module github.com/rerouteholdings/rerouted
 
 go 1.27.3
 
+toolchain go1.27.4
+
 require (
 	golang.org/x/net v0.62.0
 	modernc.org/sqlite v1.62.0
