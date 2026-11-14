@@ -23,14 +23,14 @@ import (
 
 // SchemaVersion is stored in PRAGMA user_version. Bump it with a migration
 // whenever the schema changes.
-const SchemaVersion = 9
+const SchemaVersion = 10
 
 const schema = `
 CREATE TABLE IF NOT EXISTS move_registrations (id TEXT NOT NULL, operation BLOB NOT NULL, PRIMARY KEY (id, operation));
 CREATE TABLE IF NOT EXISTS move_reservations (id TEXT NOT NULL, entry BLOB NOT NULL, handle TEXT NOT NULL, exp INTEGER NOT NULL, hold INTEGER NOT NULL, PRIMARY KEY (id, entry));
 CREATE INDEX IF NOT EXISTS move_reservations_handle ON move_reservations (handle);
 CREATE TABLE IF NOT EXISTS chains   (id TEXT NOT NULL, seq INTEGER NOT NULL, entry BLOB NOT NULL, wire INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (id, seq));
-CREATE TABLE IF NOT EXISTS handles  (handle TEXT PRIMARY KEY, id TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS handles  (handle TEXT PRIMARY KEY, id TEXT NOT NULL, hold INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS nonces   (k TEXT PRIMARY KEY, expires INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS nonces_expires ON nonces (expires);
 CREATE TABLE IF NOT EXISTS tokens   (hash BLOB PRIMARY KEY, id TEXT NOT NULL, device BLOB NOT NULL, name TEXT NOT NULL, expires INTEGER NOT NULL, wire INTEGER NOT NULL DEFAULT 1);
@@ -193,6 +193,15 @@ func open(path, sync string) (*Store, error) {
 			return nil, err
 		}
 	}
+	// Version 10: a handle an identity stops using is held for it for 30 days, then freed
+	// (SPEC §5.3). hold is 0 for a name in use, when the hold ends for one that isn't, or
+	// -1 for one the operator keeps reserved. Every handle stored before is in use.
+	if v < 10 && !hasColumn(db, "handles", "hold") {
+		if _, err := db.Exec("ALTER TABLE handles ADD COLUMN hold INTEGER NOT NULL DEFAULT 0"); err != nil {
+			db.Close()
+			return nil, err
+		}
+	}
 	// Indexes on columns that older databases only have after the migrations above.
 	if _, err := db.Exec(indexes); err != nil {
 		db.Close()
@@ -219,6 +228,7 @@ const indexes = `
 CREATE INDEX IF NOT EXISTS seen_ts ON seen (ts);
 CREATE INDEX IF NOT EXISTS sent_ts ON sent (ts);
 CREATE INDEX IF NOT EXISTS outbox_dest ON outbox (dest, next);
+CREATE INDEX IF NOT EXISTS handles_id ON handles (id);
 `
 
 func migrateWire(db *sql.DB) error {
@@ -350,12 +360,14 @@ type chains struct {
 	wire    int
 }
 
-// heldByOther reports whether another identity owns `handle`, or holds it with a move
-// reservation whose hold hasn't ended at `now` (SPEC §6.6).
+// heldByOther reports whether `handle` is held for another identity at `now`: in use, in
+// the hold after it stopped using it (SPEC §5.3), kept reserved by the operator, or held
+// with a move reservation whose hold hasn't ended (SPEC §6.6).
 func heldByOther(ctx context.Context, tx *sql.Tx, handle, id string, now int64) (bool, error) {
 	var owner string
-	err := tx.QueryRowContext(ctx, "SELECT id FROM handles WHERE handle = ?", handle).Scan(&owner)
-	if err == nil && owner != id {
+	var hold int64
+	err := tx.QueryRowContext(ctx, "SELECT id, hold FROM handles WHERE handle = ?", handle).Scan(&owner, &hold)
+	if err == nil && owner != id && (hold <= 0 || hold >= now) {
 		return true, nil
 	}
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -366,6 +378,39 @@ func heldByOther(ctx context.Context, tx *sql.Tx, handle, id string, now int64) 
 		return false, err
 	}
 	return n > 0, nil
+}
+
+// claimHandle gives `handle` to id, in use, unless it's held for another identity
+// (ErrHandleTaken). Its hold, if it was in one, ends.
+func claimHandle(ctx context.Context, tx *sql.Tx, handle, id string, now int64) error {
+	if held, err := heldByOther(ctx, tx, handle, id, now); err != nil {
+		return err
+	} else if held {
+		return store.ErrHandleTaken
+	}
+	// A name the operator keeps reserved for this identity stays reserved.
+	_, err := tx.ExecContext(ctx, `INSERT INTO handles (handle, id, hold) VALUES (?, ?, 0)
+		ON CONFLICT (handle) DO UPDATE SET id = excluded.id, hold = CASE WHEN handles.id = excluded.id AND handles.hold < 0 THEN -1 ELSE 0 END`, handle, id)
+	return err
+}
+
+// holdOthers starts the 30-day hold (SPEC §5.3) on every name id has in use but `keep`.
+func holdOthers(ctx context.Context, tx *sql.Tx, id, keep string, now int64) error {
+	_, err := tx.ExecContext(ctx, "UPDATE handles SET hold = ? WHERE id = ? AND handle != ? AND hold = 0", now+store.HandleHold, id, keep)
+	return err
+}
+
+// applyHandle is a chain write's effect on the names this server gives out (SPEC §5.3).
+func applyHandle(ctx context.Context, tx *sql.Tx, id string, h store.HandleChange, now int64) error {
+	keep := h.Handle
+	if keep != "" {
+		if err := claimHandle(ctx, tx, keep, id, now); errors.Is(err, store.ErrHandleTaken) && h.BestEffort {
+			keep = ""
+		} else if err != nil {
+			return err
+		}
+	}
+	return holdOthers(ctx, tx, id, keep, now)
 }
 
 func (c chains) Reservations(ctx context.Context, id string) ([]store.MoveReservation, error) {
@@ -469,7 +514,9 @@ func (c chains) RegisterMove(ctx context.Context, m store.MoveRegistration) (boo
 		}
 		return true, tx.Commit()
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT OR REPLACE INTO handles (handle, id) VALUES (?, ?)", m.Handle, m.ID); err != nil {
+	// The handle is the identity's again, and a name it used before, on an earlier stay
+	// here, stays in its hold (SPEC §5.3).
+	if err = applyHandle(ctx, tx, m.ID, store.HandleChange{Handle: m.Handle}, time.Now().Unix()); err != nil {
 		return false, err
 	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM chains WHERE id = ?", m.ID); err != nil {
@@ -567,12 +614,7 @@ func (c chains) Create(ctx context.Context, id string, genesis []byte, handle st
 		return err
 	}
 	if handle != "" {
-		if held, err := heldByOther(ctx, tx, handle, id, time.Now().Unix()); err != nil {
-			return err
-		} else if held {
-			return store.ErrHandleTaken
-		}
-		if _, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO handles (handle, id) VALUES (?, ?)", handle, id); err != nil {
+		if err := claimHandle(ctx, tx, handle, id, time.Now().Unix()); err != nil {
 			return err
 		}
 	}
@@ -617,13 +659,10 @@ func (c chains) Migrate(ctx context.Context, m store.Migration) error {
 	if _, err := tx.ExecContext(ctx, "UPDATE handles SET id = ? WHERE id = ?", m.To, m.From); err != nil {
 		return err
 	}
+	// A name the version 1 identity used that the genesis doesn't name goes into its hold
+	// (SPEC §5.3).
 	if m.Handle != "" {
-		if held, err := heldByOther(ctx, tx, m.Handle, m.To, time.Now().Unix()); err != nil {
-			return err
-		} else if held {
-			return store.ErrHandleTaken
-		}
-		if _, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO handles (handle, id) VALUES (?, ?)", m.Handle, m.To); err != nil {
+		if err := applyHandle(ctx, tx, m.To, store.HandleChange{Handle: m.Handle}, time.Now().Unix()); err != nil {
 			return err
 		}
 	}
@@ -714,6 +753,14 @@ func rewriteMigrated(ctx context.Context, tx *sql.Tx, from, to string) ([]string
 }
 
 func (c chains) Fork(ctx context.Context, id string, from, headSeq uint64, entries [][]byte) error {
+	return c.fork(ctx, id, from, headSeq, entries, nil)
+}
+
+func (c chains) ForkHandle(ctx context.Context, id string, from, headSeq uint64, entries [][]byte, h store.HandleChange) error {
+	return c.fork(ctx, id, from, headSeq, entries, &h)
+}
+
+func (c chains) fork(ctx context.Context, id string, from, headSeq uint64, entries [][]byte, h *store.HandleChange) error {
 	tx, err := c.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -737,10 +784,23 @@ func (c chains) Fork(ctx context.Context, id string, from, headSeq uint64, entri
 			return err
 		}
 	}
+	if h != nil {
+		if err := applyHandle(ctx, tx, id, *h, time.Now().Unix()); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
 }
 
 func (c chains) Append(ctx context.Context, id string, prevSeq uint64, entry []byte) error {
+	return c.append(ctx, id, prevSeq, entry, nil)
+}
+
+func (c chains) AppendHandle(ctx context.Context, id string, prevSeq uint64, entry []byte, h store.HandleChange) error {
+	return c.append(ctx, id, prevSeq, entry, &h)
+}
+
+func (c chains) append(ctx context.Context, id string, prevSeq uint64, entry []byte, h *store.HandleChange) error {
 	tx, err := c.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -761,6 +821,11 @@ func (c chains) Append(ctx context.Context, id string, prevSeq uint64, entry []b
 			return store.ErrConflict
 		}
 		return err
+	}
+	if h != nil {
+		if err := applyHandle(ctx, tx, id, *h, time.Now().Unix()); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
@@ -787,8 +852,33 @@ func (c chains) Entries(ctx context.Context, id string, after int64) ([][]byte, 
 
 func (c chains) ByHandle(ctx context.Context, handle string) (string, error) {
 	var id string
-	err := c.rdb.QueryRowContext(ctx, "SELECT id FROM handles WHERE handle = ?", handle).Scan(&id)
+	err := c.rdb.QueryRowContext(ctx, "SELECT id FROM handles WHERE handle = ? AND (hold <= 0 OR hold >= ?)", handle, time.Now().Unix()).Scan(&id)
 	return id, notFound(err)
+}
+
+func (c chains) PruneHandles(ctx context.Context, now int64) (int, error) {
+	res, err := c.db.ExecContext(ctx, "DELETE FROM handles WHERE hold > 0 AND hold < ?", now)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	return int(n), err
+}
+
+func (c chains) KeepHandle(ctx context.Context, handle string) (string, error) {
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+	var id string
+	if err := tx.QueryRowContext(ctx, "SELECT id FROM handles WHERE handle = ?", handle).Scan(&id); err != nil {
+		return "", notFound(err)
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE handles SET hold = -1 WHERE handle = ?", handle); err != nil {
+		return "", err
+	}
+	return id, tx.Commit()
 }
 
 func (c chains) ReleaseHandle(ctx context.Context, handle string) (string, error) {

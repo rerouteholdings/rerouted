@@ -64,13 +64,28 @@ type Chains interface {
 	Create(ctx context.Context, id string, genesis []byte, handle string) error
 	// Append adds an entry if prevSeq is still the head. ErrConflict if not (stale-head).
 	Append(ctx context.Context, id string, prevSeq uint64, entry []byte) error
+	// AppendHandle is Append for an entry that changes the identity's handle or home, with
+	// that change's effect on the names this server gives out (HandleChange), in the same
+	// transaction. ErrHandleTaken, and nothing stored, if h.Handle is held for another
+	// identity and h isn't BestEffort.
+	AppendHandle(ctx context.Context, id string, prevSeq uint64, entry []byte, h HandleChange) error
 	// Fork replaces the entries with seq >= from by `entries` (a recovery fork, SPEC §6.4.1).
 	// ErrConflict if the head isn't headSeq anymore.
 	Fork(ctx context.Context, id string, from, headSeq uint64, entries [][]byte) error
+	// ForkHandle is Fork with a HandleChange, as AppendHandle.
+	ForkHandle(ctx context.Context, id string, from, headSeq uint64, entries [][]byte, h HandleChange) error
 	// Entries returns encoded entries with seq > after, in order.
 	Entries(ctx context.Context, id string, after int64) ([][]byte, error)
-	// ByHandle finds the local identity holding a handle.
+	// ByHandle finds the local identity holding a handle: in use, in its hold (SPEC §5.3),
+	// or kept reserved by the operator. ErrNotFound once a hold has ended.
 	ByHandle(ctx context.Context, handle string) (id string, err error)
+	// PruneHandles frees the names whose hold ended before `now` (SPEC §5.3), so someone
+	// else can register them. Names the operator keeps reserved stay.
+	PruneHandles(ctx context.Context, now int64) (int, error)
+	// KeepHandle keeps a name reserved for the identity holding it, in use or in its hold,
+	// instead of freeing it when the hold ends, and returns that identity: SPEC §5.3 lets an
+	// operator. ErrNotFound if nobody holds it. ReleaseHandle undoes it.
+	KeepHandle(ctx context.Context, handle string) (id string, err error)
 	// ReleaseHandle frees a handle, so a new identity can register it, and returns the
 	// identity that held it. ErrNotFound if nobody does. The old identity's chain still
 	// names the handle, but it no longer resolves to it, so clients show "handle no longer
@@ -106,6 +121,22 @@ type Migration struct {
 	Handle   string // the handle the genesis names
 	// Contacts maps contacts of From that have migrated to their version 2 identifiers.
 	Contacts map[string]string
+}
+
+// HandleHold is how long, in seconds, a name an identity stops using stays held for it,
+// after a rename or a move away, before the homeserver frees it (SPEC §5.3). During the
+// hold nobody else can register it or move here with it, and it no longer resolves, since
+// the identity's chain doesn't name it. The identity can take it back.
+const HandleHold = 30 * 24 * 3600
+
+// HandleChange is a chain write's effect on the names this server gives out (SPEC §5.3):
+// Handle, if it isn't "", is the identity's name here now, and every other name it has
+// in use here starts its hold.
+type HandleChange struct {
+	Handle string // the chain's handle, if this server gives it out to the identity; "" for none
+	// BestEffort writes the chain even if Handle is held for another identity, without
+	// claiming it: a recovery-signed entry, which nothing may refuse over a name.
+	BestEffort bool
 }
 
 // MoveReservation is a destination's record of a device-signed move it agreed to take
