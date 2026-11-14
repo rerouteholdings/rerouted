@@ -163,6 +163,13 @@ func (s *Server) pushChain(ctx context.Context, id string) {
 		}
 		if st, _, err := s.lookup(ctx, c.ID, ""); err == nil {
 			homes[st.Home] = true
+		} else if s.wv == wire.V2 {
+			// A version 1 contact the migration carried over, who hasn't migrated yet (SPEC
+			// §6.8): its version 2 identity will start on its version 1 home, which keeps our
+			// chain current until then, for the contact carrying over on its side.
+			if st, _, err := s.legacy().lookup(ctx, c.ID, ""); err == nil && st.Home != s.cfg.Name {
+				homes[st.Home] = true
+			}
 		}
 	}
 	if s.fed == nil {

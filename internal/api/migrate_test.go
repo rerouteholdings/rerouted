@@ -397,7 +397,24 @@ func federatedContacts(t *testing.T, katFirst bool) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+	// The first's version 2 chain changes while the second is still on version 1: its server
+	// pushes the change to the second's anyway, for the contact carried over there.
+	if c, e := first2.appendSigned(signed2(t, "chain-entry", first2.entry(addDevice(newComposite(t), "phone")), first2.dev)); c != 200 {
+		t.Fatalf("first2 adds a device: %d %+v", c, e)
+	}
 	second2 := second.migrateTo(secondTS, secondName)
+	var chain struct {
+		Entries []wire.Raw `json:"entries"`
+	}
+	for range 100 {
+		if c := call2(t, secondTS, "GET", "chain/"+first2.id, second2.token, nil, &chain); c == 200 && len(chain.Entries) == 2 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if len(chain.Entries) != 2 {
+		t.Fatalf("%s's copy of %s's chain has %d entries, not the pushed 2", secondName, firstName, len(chain.Entries))
+	}
 	kat2, sam2 := first2, second2
 	if !katFirst {
 		kat2, sam2 = second2, first2
