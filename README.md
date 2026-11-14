@@ -25,10 +25,10 @@ The wire version 2 API serves the same endpoints for version 2 identities: compo
 
 A version 1 identity migrates to version 2 (§6.8) in one request: the version 1 `POST chain/append` that carries `migrate` also carries the version 2 genesis it names, in `genesis`. One transaction appends the entry, registers the version 2 identity on the same server, hands it the handle, and copies the contact and group allowlists, so neither half can be left without the other. The version 2 `POST register` with that genesis only confirms a migration that happened (`200`), and before it answers `403 not-allowed`. After it:
 
-- The version 1 chain is closed: any later entry is `400 invalid-chain`, and no recovery fork can override the `migrate`.
-- Deliveries, key-package claims, and contact requests for the version 1 identity are refused with `410 migrated`, a code rerouted adds. A delivery refused by another server reaches the sender's devices as a `delivery-failed` event with reason `migrated`. The version 1 identity can't send, but its devices can still read its version 1 inbox.
+- The version 1 chain is closed: any later entry is `400 invalid-chain`, and no recovery fork can override the `migrate`. The entry that carries `migrate` carries no other op, except a recovery-signed entry's `set-recovery`.
+- Deliveries, key-package claims, and contact requests for the version 1 identity are refused with `410 migrated` (SPEC §6.8, and the error registry in the API conventions). A delivery refused by another server reaches the sender's devices as a `delivery-failed` event with reason `migrated`. The version 1 identity can't send, but its devices can still read its version 1 inbox.
 - On the version 1 API its handle doesn't resolve (`404`). On the version 2 API it resolves to the version 2 identity, as does a handle record that still names the version 1 identity.
-- A contact that has migrated too is listed under its version 2 identifier, on both servers: at the migration, when another server pushes a closed version 1 chain, and when a version 2 client lists its contacts. Contacts that haven't migrated stay listed under their version 1 identifiers until they do.
+- A contact that has migrated too is listed under its version 2 identifier, on both servers: at the migration, when another server pushes a closed version 1 chain, and when a version 2 client lists its contacts. Contacts that haven't migrated stay listed under their version 1 identifiers until they do, and changes to the version 2 identity's chain are pushed to their servers meanwhile.
 - A version 2 client can fetch a closed version 1 chain with `GET chain/{id}`, to check the link.
 
 | Area | Spec | What rerouted does |
