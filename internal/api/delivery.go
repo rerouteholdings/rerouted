@@ -29,7 +29,7 @@ func (s *Server) groupCreate(w http.ResponseWriter, r *http.Request, sess sessio
 	if !readBody(w, r, &req) {
 		return
 	}
-	if len(req.Group) != 32 || len(req.EpochKey) != 32 || (req.Kind != "direct" && req.Kind != "group") {
+	if len(req.Group) != 32 || !s.epochKeyOK(req.EpochKey) || (req.Kind != "direct" && req.Kind != "group") {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "")
 		return
 	}
@@ -79,7 +79,7 @@ func (s *Server) s2sGroupRegister(w http.ResponseWriter, r *http.Request, from s
 		Epoch    uint64     `json:"epoch"`
 		EpochKey wire.Bytes `json:"epoch-key"`
 	}
-	if wire.Unmarshal(body, &req) != nil || len(req.Group) != 32 || len(req.EpochKey) != 32 {
+	if wire.Unmarshal(body, &req) != nil || len(req.Group) != 32 || !s.epochKeyOK(req.EpochKey) {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "")
 		return
 	}
@@ -409,12 +409,11 @@ func (s *Server) sendOne(ctx context.Context, sess session, o outgoing) sendResu
 	}
 	d := delivery{ID: o.ID, Kind: o.Kind, From: sess.id, To: o.To, Group: o.Group, Epoch: o.Epoch, MLS: o.MLS, Data: o.Data}
 	res := sendResult{ID: o.ID, Status: "sent"}
-	if o.MLS == "commit" && s.wv == wire.V2 {
-		// Commits go through the group's hub, whose wire version 2 form (composite epoch
-		// keys and receipts, SPEC §11.6) rerouted doesn't serve yet.
-		return reject(o.ID, wire.ErrCodeNotImplemented)
+	if s.wv == wire.V2 && publicMessage(o.Data) {
+		// Members send everything as PrivateMessage; only a community code join's external
+		// commit is a PublicMessage (SPEC §10.1, §11.1), and community groups aren't here.
+		return reject(o.ID, wire.ErrCodeBadRequest)
 	}
-
 	if o.MLS == "commit" {
 		var enc []byte
 		var code string
@@ -488,7 +487,7 @@ func (s *Server) sequence(ctx context.Context, commit wire.Raw, data, group []by
 	if commit == nil {
 		return wire.Signed{}, wire.ErrCodeBadRequest
 	}
-	sig, err := wire.DecodeSigned(commit)
+	sig, err := s.decodeSigned(commit)
 	if err != nil || sig.T != "commit-request" {
 		return wire.Signed{}, wire.ErrCodeBadRequest
 	}
@@ -506,6 +505,11 @@ func (s *Server) sequence(ctx context.Context, commit wire.Raw, data, group []by
 	// Exactly one of next and reg.
 	key, awaiting := []byte(cr.Next), false
 	switch {
+	case s.wv == wire.V2 && cr.Next != nil && cr.Reg == nil && s.epochKeyOK(cr.Next):
+	case s.wv == wire.V2 && cr.Reg != nil && cr.Next == nil && s.epochKeyOK(cr.Reg):
+		key, awaiting = cr.Reg, true
+	case s.wv == wire.V2:
+		return wire.Signed{}, wire.ErrCodeBadRequest
 	case len(cr.Next) == 32 && cr.Reg == nil:
 	case len(cr.Reg) == 32 && cr.Next == nil && !wire.SmallOrder(cr.Reg) && wire.Canonical25519(cr.Reg):
 		key, awaiting = cr.Reg, true
@@ -522,12 +526,13 @@ func (s *Server) sequence(ctx context.Context, commit wire.Raw, data, group []by
 	if g.Awaiting {
 		return wire.Signed{}, wire.ErrCodeAwaitingKey
 	}
-	if k, ok := sig.KeyBytes(); !ok || !bytes.Equal(k, g.EpochKey) || sig.Verify("commit-request", k) != nil {
+	if !s.epochSigned(sig, "commit-request", g.EpochKey) {
 		return wire.Signed{}, wire.ErrCodeBadSignature
 	}
-	receipt, err := wire.SignKID("commit-receipt", map[string]any{
+	// Signed with this server's key for the wire version: composite in version 2.
+	receipt, err := s.fed.SignKID("commit-receipt", map[string]any{
 		"hub": s.cfg.Name, "group": o.Group, "epoch": o.Epoch, "hash": sum[:], "ts": now(),
-	}, s.key.Priv, s.key.KID)
+	})
 	if err != nil {
 		return wire.Signed{}, wire.ErrCodeUnavailable
 	}
@@ -741,11 +746,11 @@ func (s *Server) ackInbox(w http.ResponseWriter, r *http.Request, sess session) 
 // The signature by the one-time `reg` key, committed to in the accepted commit request,
 // is the whole authorization: nobody but the committing device holds it.
 func (s *Server) registerKey(ctx context.Context, raw wire.Raw) (int, string) {
-	sig, err := wire.DecodeSigned(raw)
+	sig, err := s.decodeSigned(raw)
 	if err != nil {
 		return http.StatusBadRequest, wire.ErrCodeBadRequest
 	}
-	reg, err := sig.VerifySelf("epoch-key")
+	reg, err := s.selfKey(sig, "epoch-key")
 	if err != nil {
 		return http.StatusBadRequest, wire.ErrCodeBadSignature
 	}
@@ -754,7 +759,14 @@ func (s *Server) registerKey(ctx context.Context, raw wire.Raw) (int, string) {
 		Epoch uint64     `json:"epoch"`
 		Next  wire.Bytes `json:"next"`
 	}
-	if sig.OpenClosed(&body) != nil || len(body.Group) != 32 || len(body.Next) != 32 || wire.SmallOrder(body.Next) || !wire.Canonical25519(body.Next) {
+	if sig.OpenClosed(&body) != nil || len(body.Group) != 32 {
+		return http.StatusBadRequest, wire.ErrCodeBadRequest
+	}
+	nextOK := len(body.Next) == 32 && !wire.SmallOrder(body.Next) && wire.Canonical25519(body.Next)
+	if s.wv == wire.V2 {
+		nextOK = s.epochKeyOK(body.Next)
+	}
+	if !nextOK {
 		return http.StatusBadRequest, wire.ErrCodeBadRequest
 	}
 	if _, err := s.st.Hub().Group(ctx, body.Group); err != nil {
@@ -780,7 +792,7 @@ func (s *Server) keyRegistered(ctx context.Context, group []byte, epoch uint64, 
 	if err != nil || len(cs) == 0 || cs[0].Epoch != epoch-1 {
 		return false
 	}
-	sig, err := wire.DecodeSigned(cs[0].Request)
+	sig, err := s.decodeSigned(cs[0].Request)
 	var cr struct {
 		Reg wire.Bytes `json:"reg"`
 	}

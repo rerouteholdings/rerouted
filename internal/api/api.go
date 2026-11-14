@@ -238,11 +238,11 @@ func (s *Server) apiRoutes() {
 		"POST invites/create":        s.authed(s.inviteCreate),
 		"POST invites/revoke":        s.authed(s.inviteRevoke),
 		"GET invites":                s.authed(s.inviteList),
-		"POST groups/create":         s.v1Only(s.authed(s.groupCreate)),
-		"POST groups/epoch-key":      s.v1Only(s.authed(s.groupEpochKey)),
+		"POST groups/create":         s.authed(s.groupCreate),
+		"POST groups/epoch-key":      s.authed(s.groupEpochKey),
 		"POST groups/register":       s.authed(s.groupRegister(true)),
 		"POST groups/unregister":     s.authed(s.groupRegister(false)),
-		"GET groups/{group}/commits": s.v1Only(s.authed(s.groupCommits)),
+		"GET groups/{group}/commits": s.authed(s.groupCommits),
 		"POST send":                  s.authed(s.send),
 		"GET inbox":                  s.authed(s.getInbox),
 		"POST inbox/ack":             s.authed(s.ackInbox),
@@ -272,8 +272,7 @@ func (s *Server) apiRoutes() {
 		}
 		s.mux.Handle(method+" "+client+path, s.jsonIn(h))
 	}
-	// S2S (SPEC Appendix A). The hub's endpoints wait for groups in wire version 2.
-	hub := map[string]bool{"commit": true, "commit/fetch": true, "group/epoch-key": true, "group/register": true}
+	// S2S (SPEC Appendix A).
 	for path, h := range map[string]func(http.ResponseWriter, *http.Request, string, wire.Raw){
 		"identity/fetch":    s.s2sIdentityFetch,
 		"keypackages/claim": s.s2sKeyPackageClaim,
@@ -290,10 +289,6 @@ func (s *Server) apiRoutes() {
 		"report":            s.s2sReport,
 		"group/register":    s.s2sGroupRegister,
 	} {
-		if hub[path] && s.wv == wire.V2 {
-			s.mux.Handle("POST "+s.apiPath+"s2s/"+path, http.HandlerFunc(notImplemented))
-			continue
-		}
 		s.mux.Handle("POST "+s.apiPath+"s2s/"+path, s.jsonIn(s.s2s(path, h)))
 	}
 }

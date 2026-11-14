@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"errors"
 	"net/http"
@@ -104,12 +105,53 @@ func (s *Server) selfSigned(sig wire.Signed, t string) ([]byte, error) {
 	return pub.Ed25519(), nil
 }
 
-// v1Only answers 501 on the version 2 API, for endpoints whose version 2 form rerouted
-// doesn't serve yet: groups and their hub (SPEC §11.6), which wait for version 2's epoch
-// keys and receipts.
-func (s *Server) v1Only(h http.HandlerFunc) http.HandlerFunc {
-	if s.wv == wire.V2 {
-		return notImplemented
+// epochKeyOK reports whether b can be a group's epoch key, `next`, or one-time `reg` key
+// (SPEC §11.6). In wire version 1 it's 32 bytes. In version 2 it's a composite public key
+// (SPEC §3.2.2) whose Ed25519 component is canonical and not of small order (SPEC §4.3):
+// nothing could ever sign for any other, so a group whose next key it was would freeze.
+func (s *Server) epochKeyOK(b []byte) bool {
+	if s.wv != wire.V2 {
+		return len(b) == ed25519.PublicKeySize
 	}
-	return h
+	pub, err := wire.ParseCompositePublicKey(b)
+	if err != nil {
+		return false
+	}
+	ed := pub.Ed25519()
+	return !wire.SmallOrder(ed) && wire.Canonical25519(ed)
+}
+
+// epochSigned reports whether sig, of type t, was signed with the epoch key the hub holds
+// (SPEC §11.6): in wire version 1, the Ed25519 key in k; in version 2, the composite key in
+// k, which has to be that key exactly.
+func (s *Server) epochSigned(sig wire.Signed, t string, key []byte) bool {
+	if s.wv != wire.V2 {
+		k, ok := sig.KeyBytes()
+		return ok && bytes.Equal(k, key) && sig.Verify(t, k) == nil
+	}
+	if sig.KID != "" || !bytes.Equal(sig.K, key) {
+		return false
+	}
+	_, err := sig.VerifyCompositeSelf(t)
+	return err == nil
+}
+
+// selfKey verifies an object signed by the key it carries in k, and returns that key: a
+// one-time `reg` key's epoch-key registration (SPEC §11.6). In wire version 2 it's the
+// whole composite key.
+func (s *Server) selfKey(sig wire.Signed, t string) ([]byte, error) {
+	if s.wv != wire.V2 {
+		return sig.VerifySelf(t)
+	}
+	pub, err := sig.VerifyCompositeSelf(t)
+	if err != nil {
+		return nil, err
+	}
+	return pub.Bytes(), nil
+}
+
+// publicMessage reports whether data is an MLSMessage framed as a PublicMessage: protocol
+// version mls10 (1), then wire_format public_message (1) (RFC 9420 §6).
+func publicMessage(data []byte) bool {
+	return len(data) >= 4 && data[0] == 0 && data[1] == 1 && data[2] == 0 && data[3] == 1
 }

@@ -232,7 +232,7 @@ func (s *Server) s2sCommit(w http.ResponseWriter, r *http.Request, _ string, bod
 		return
 	}
 	// The commit-request names the group and epoch; the epoch key signature is the authorization.
-	sig, err := wire.DecodeSigned(req.Commit)
+	sig, err := s.decodeSigned(req.Commit)
 	var cr struct {
 		Group wire.Bytes `json:"group"`
 		Epoch uint64     `json:"epoch"`

@@ -298,7 +298,7 @@ func TestV2Flow(t *testing.T) {
 	}
 
 	// Deliveries: a Welcome from a contact allowlists its group, then messages arrive.
-	// Commits wait for the hub's wire version 2 form, and say so.
+	// A commit for a group the hub doesn't know is refused (groups_v2_test.go has the hub).
 	group := randBytes(32)
 	var sr struct {
 		Results []sendResult `json:"results"`
@@ -307,7 +307,7 @@ func TestV2Flow(t *testing.T) {
 	app := map[string]any{"id": randBytes(16), "kind": "mls", "to": []string{kat.id, eve.id}, "group": group, "epoch": 1, "mls": "app", "data": []byte("ciphertext")}
 	commit := map[string]any{"id": randBytes(16), "kind": "mls", "to": []string{kat.id}, "group": group, "epoch": 1, "mls": "commit", "data": []byte("c")}
 	if c := call2(t, ts, "POST", "send", ravi.token, map[string]any{"deliveries": []any{welcome, app, commit}}, &sr); c != 200 ||
-		sr.Results[0].Status != "sent" || sr.Results[1].Status != "sent" || sr.Results[2].Error != wire.ErrCodeNotImplemented {
+		sr.Results[0].Status != "sent" || sr.Results[1].Status != "sent" || sr.Results[2].Error != wire.ErrCodeBadRequest {
 		t.Fatalf("send: %d %+v", c, sr)
 	}
 	items := kat.inbox()
@@ -317,8 +317,8 @@ func TestV2Flow(t *testing.T) {
 	if items := eve.inbox(); len(items) != 0 {
 		t.Fatalf("eve got %d", len(items))
 	}
-	if c := call2(t, ts, "POST", "groups/create", ravi.token, map[string]any{"group": group, "kind": "direct", "epoch-key": randBytes(32)}, nil); c != 501 {
-		t.Fatalf("groups/create: %d", c)
+	if c := call2(t, ts, "POST", "groups/create", ravi.token, map[string]any{"group": group, "kind": "direct", "epoch-key": randBytes(32)}, nil); c != 400 {
+		t.Fatalf("groups/create with a version 1 epoch key: %d", c)
 	}
 
 	// The stream speaks tieroute.v2, and pushes what arrives.
@@ -413,11 +413,11 @@ func TestV2Isolation(t *testing.T) {
 	}
 }
 
-// Every client endpoint is routed under the version 2 base too. The hub's answer 501.
+// Every client endpoint is routed under the version 2 base too, and implemented: none
+// answers 501, but GET turn on a server with no call relay.
 func TestV2EveryEndpointRouted(t *testing.T) {
 	ts := testServer(t)
 	u := newV2User(t, ts, "kat", "chat.test")
-	hub := []string{"POST groups/create", "POST groups/epoch-key", "GET groups/{group}/commits"}
 	for _, e := range clientEndpoints {
 		method, path, _ := strings.Cut(e, " ")
 		path = strings.NewReplacer("{id}", "tr:aaaaaaaaaaaaaaaaaaaaaaaa", "{handle}", "x.chat.test", "{device}", "AAAA", "{server}", "chat.test", "{name}", "chat.test", "{group}", "AAAA").Replace(path)
@@ -434,7 +434,7 @@ func TestV2EveryEndpointRouted(t *testing.T) {
 		if res.Msg == "no such endpoint" {
 			t.Errorf("%s isn't routed", e)
 		}
-		if slices.Contains(hub, e) != (c == 501) {
+		if c == 501 && e != "GET turn" {
 			t.Errorf("%s: %d", e, c)
 		}
 	}
@@ -444,7 +444,7 @@ func TestV2EveryEndpointRouted(t *testing.T) {
 			t.Fatal(err)
 		}
 		resp.Body.Close()
-		if resp.StatusCode != 501 {
+		if resp.StatusCode == 501 || resp.StatusCode == 404 {
 			t.Errorf("s2s %s: %d", p, resp.StatusCode)
 		}
 	}
