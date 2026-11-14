@@ -23,7 +23,7 @@ import (
 
 // SchemaVersion is stored in PRAGMA user_version. Bump it with a migration
 // whenever the schema changes.
-const SchemaVersion = 10
+const SchemaVersion = 11
 
 const schema = `
 CREATE TABLE IF NOT EXISTS move_registrations (id TEXT NOT NULL, operation BLOB NOT NULL, PRIMARY KEY (id, operation));
@@ -202,6 +202,12 @@ func open(path, sync string) (*Store, error) {
 			return nil, err
 		}
 	}
+	// Version 11: community servers (SPEC §16), in new tables only, so nothing stored
+	// before changes. Created here for every database, new or upgraded.
+	if _, err := db.Exec(communitySchema); err != nil {
+		db.Close()
+		return nil, err
+	}
 	// Indexes on columns that older databases only have after the migrations above.
 	if _, err := db.Exec(indexes); err != nil {
 		db.Close()
@@ -321,6 +327,9 @@ func (s *Store) Media() store.Media             { return media{s.db, s.mediaDir}
 func (s *Store) Account() store.Account         { return account{s.db, s.wire} }
 func (s *Store) Backups() store.Backups         { return backups{s.db} }
 func (s *Store) Reports() store.Reports         { return reports{s.db} }
+func (s *Store) Communities() store.Communities {
+	return communities{s.db, s.rdb, filepath.Join(s.mediaDir, "community")}
+}
 
 // hasColumn reports whether a table has a column, for migrations.
 func hasColumn(db *sql.DB, table, column string) bool {

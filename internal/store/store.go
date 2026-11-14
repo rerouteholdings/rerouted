@@ -40,6 +40,9 @@ type Store interface {
 	Account() Account
 	Backups() Backups
 	Reports() Reports
+	// Communities is what this server keeps as a community server (SPEC §16). It's the
+	// same in every wire version's view: communities are wire version 2 only.
+	Communities() Communities
 	// ForWire is a view of the same storage for wire version v's identities (SPEC §6.8):
 	// local chains, cached remote chains, session tokens, and queued S2S requests are kept
 	// apart by version, and each view sees only its own. Everything else is keyed by
