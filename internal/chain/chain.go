@@ -680,9 +680,10 @@ func ResolveFor(v int, cached, candidate [][]byte) (st *State, out Outcome, at u
 		// device branch it would override. Which one stands doesn't depend on which arrived
 		// first: if the recovery entry couldn't have overridden these device
 		// entries, they're final, and the recovery entry was made on a copy that missed them.
+		// A branch that migrates the identity to wire version 2 is final too (SPEC §6.8).
 		if err := overrides(base, old[0], cand[p:], true); err == nil {
 			return nil, 0, 0, invalid("seq %d: the cached recovery entry overrides this branch", p)
-		} else if !errors.Is(err, errTooOld) {
+		} else if !errors.Is(err, errTooOld) && !errors.Is(err, errMigrated) {
 			return nil, 0, 0, invalid("conflicting entry at seq %d isn't recovery-signed", p)
 		}
 		return candSt, Fork, uint64(p), nil
@@ -695,6 +696,10 @@ func ResolveFor(v int, cached, candidate [][]byte) (st *State, out Outcome, at u
 }
 
 var errTooOld = invalid("the device branch is more than 72 hours older than the recovery entry")
+
+// errMigrated says the branch a recovery entry would override migrates the identity to wire
+// version 2, which makes it final (SPEC §6.8).
+var errMigrated = invalid("the branch migrates the identity to wire version 2, and can't be overridden")
 
 // overrides checks the fork rule (SPEC §6.4.1) for a recovery-signed entry r forking from
 // base over branch: every entry in branch has to be device-signed, and with window, at most
@@ -723,7 +728,7 @@ func overrides(base *State, r wire.Signed, branch []wire.Signed, window bool) er
 		if o.Closed() {
 			// The identity lives on as a version 2 one, which a version 1 entry can't take
 			// back: a migrate is final, like a recovery-signed entry (SPEC §6.8).
-			return invalid("seq %d migrates the identity to wire version 2, and can't be overridden", a.Entry.Seq)
+			return fmt.Errorf("seq %d: %w", a.Entry.Seq, errMigrated)
 		}
 		if window && a.Entry.TS+ForkWindow < ra.Entry.TS {
 			tooOld = true

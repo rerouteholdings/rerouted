@@ -172,6 +172,10 @@ func TestMigrateClosesTheChain(t *testing.T) {
 	if _, _, _, err := ResolveFor(wire.V1, w.enc, [][]byte{w.enc[0], fenc}); !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "migrates the identity") {
 		t.Fatalf("a recovery fork over migrate: %v", err)
 	}
+	// Whichever branch arrived first: with the recovery fork cached, the migrate replaces it.
+	if st, out, at, err := ResolveFor(wire.V1, [][]byte{w.enc[0], fenc}, w.enc); err != nil || out != Fork || at != 1 || !st.Closed() {
+		t.Fatalf("migrate over a cached recovery fork: %v %v %d", err, out, at)
+	}
 	// Version 2 doesn't know migrate.
 	st2 := &State{V: wire.V2, Devices: map[string]string{}, Pubs: map[string]*wire.CompositePublicKey{}}
 	if err := st2.applyOp(wire.Op{Op: wire.OpMigrate, To: to}, false); !errors.Is(err, ErrUnknownOp) {
