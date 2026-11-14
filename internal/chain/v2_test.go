@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
@@ -387,6 +388,18 @@ func TestV2EntryRules(t *testing.T) {
 	bad("recovery without a new commitment", w.next(w.rec[0], true, addOp(w.devs[1], "")))
 	bad("set-recovery by a device", w.next(w.devs[0], false, rot))
 	bad("recovery recommits to the key it spends", w.next(w.rec[0], true, wire.Op{Op: wire.OpSetRecovery, Next: commitTo(w.rec[0])}))
+	bad("recovery commits to the key it spends, then a new one", w.next(w.rec[0], true, wire.Op{Op: wire.OpSetRecovery, Next: commitTo(w.rec[0])}, rot))
+	// add-device's key has to be a valid Ed25519 public key under SPEC §4.3 (§6.4 rule 6):
+	// canonical, and not of small order, even with the sign bit set.
+	for name, key := range invalidEd25519Keys() {
+		bad("add-device of a "+name+" key", w.next(w.devs[0], false, withEd25519(w.devs[1], key)))
+		g := newV2World(t)
+		handle := "kat.chat.example"
+		ops := []wire.Op{addOp(g.devs[0], ""), withEd25519(g.devs[1], key), {Op: wire.OpSetHome, Home: "chat.example"}, {Op: wire.OpSetHandle, Handle: &handle}, {Op: wire.OpSetRecovery, Next: commitTo(g.rec[0])}}
+		if _, _, err := GenesisFor(wire.V2, g.sign(wire.ChainEntry{TS: 1, Ops: ops}, g.devs[0], false)); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("genesis adding a %s key: %v", name, err)
+		}
+	}
 	// migrated-from appears only in genesis.
 	v1 := "tr:aaaaaaaaaaaaaaaaaaaaaaaa"
 	bad("migrated-from after genesis", w.next(w.devs[0], false, wire.Op{Op: wire.OpMigratedFrom, ID: &v1}))
@@ -409,6 +422,25 @@ func TestV2EntryRules(t *testing.T) {
 		t.Fatal("removed device kept its composite key")
 	}
 	bad("removed device", w.next(w.devs[0], false, addOp(w.devs[2], "")))
+}
+
+// invalidEd25519Keys are 32-byte encodings no Ed25519 public key may have (SPEC §4.3).
+func invalidEd25519Keys() map[string][]byte {
+	identity := make([]byte, 32)
+	identity[0] = 1
+	signed := bytes.Clone(identity)
+	signed[31] = 0x80
+	yIsP := bytes.Repeat([]byte{0xff}, 32)
+	yIsP[0], yIsP[31] = 0xed, 0x7f
+	return map[string][]byte{"small-order": identity, "small-order, sign bit set,": signed, "non-canonical": yIsP, "zero": make([]byte, 32)}
+}
+
+// withEd25519 is an add-device of k's composite key with its Ed25519 component replaced by
+// key, and key matching it.
+func withEd25519(k *wire.CompositePrivateKey, key []byte) wire.Op {
+	pub := k.Public().Bytes()
+	copy(pub[len(pub)-32:], key)
+	return wire.Op{Op: wire.OpAddDevice, Key: wire.Bytes(key), Pub: pub}
 }
 
 func TestV2Genesis(t *testing.T) {

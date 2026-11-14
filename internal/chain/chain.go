@@ -368,6 +368,11 @@ func (st *State) applyOp(op wire.Op, genesis bool) error {
 			if err != nil || !bytes.Equal(pub.Ed25519(), op.Key) {
 				return invalid("add-device key doesn't match its pub")
 			}
+			// And it's a valid Ed25519 public key under SPEC §4.3, canonical and not of
+			// small order (§6.4 rule 6): no signature could ever verify under anything else.
+			if !wire.Canonical25519(op.Key) || wire.SmallOrder(op.Key) {
+				return invalid("add-device key isn't a valid Ed25519 public key")
+			}
 			// A key that's already a device can't be added again: that would swap its
 			// composite key under the same name. Then the 10-device ceiling, op by op
 			// (SPEC §6.4 rule 4).
