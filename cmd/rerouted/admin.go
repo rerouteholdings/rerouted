@@ -83,7 +83,20 @@ func admin(st store.Store, args []string) int {
 		}
 		fmt.Printf("released %s (was %s)\n", handle, id)
 		return 0
+	case "keep-handle":
+		if len(args) != 2 {
+			fmt.Fprintln(os.Stderr, "keep-handle HANDLE: keeps a name reserved instead of freeing it when its 30-day hold ends")
+			return 2
+		}
+		handle := strings.ToLower(strings.TrimPrefix(args[1], "@"))
+		id, err := st.Chains().KeepHandle(ctx, handle)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "nobody here holds %s\n", handle)
+			return 1
+		}
+		fmt.Printf("kept %s for %s: nobody else can register it. release-handle frees it\n", handle, id)
+		return 0
 	}
-	fmt.Fprintf(os.Stderr, "unknown command %q: use reports, remove-media, or release-handle\n", args[0])
+	fmt.Fprintf(os.Stderr, "unknown command %q: use reports, remove-media, release-handle, or keep-handle\n", args[0])
 	return 2
 }

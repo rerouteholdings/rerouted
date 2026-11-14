@@ -6,6 +6,7 @@
 //	                                        delete a reported file: fetches answer 410 removed
 //	rerouted [-env FILE] release-handle HANDLE --confirm
 //	                                        free a handle so a new identity can register it
+//	rerouted [-env FILE] keep-handle HANDLE keep a handle reserved after its 30-day hold
 package main
 
 import (

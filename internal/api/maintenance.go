@@ -57,6 +57,12 @@ func (s *Server) maintain(ctx context.Context) {
 	} else if n > 0 {
 		s.log.Info("pruned move reservations", "n", n)
 	}
+	// Names whose 30-day hold ended are freed, but those the operator keeps (SPEC §5.3).
+	if n, err := s.st.Chains().PruneHandles(ctx, now()); err != nil {
+		s.log.Error("freeing held handles", "err", err)
+	} else if n > 0 {
+		s.log.Info("freed handles whose hold ended", "n", n)
+	}
 	// Delivery IDs and send results are kept as long as inbox items: far longer than any
 	// retry, since the outbox gives up after 72 hours.
 	if _, err := s.st.Inbox().PruneSeen(ctx, before); err != nil {

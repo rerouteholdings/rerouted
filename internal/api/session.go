@@ -78,6 +78,10 @@ func writeChainWriteError(w http.ResponseWriter, s *Server, err error) {
 		writeError(w, http.StatusConflict, wire.ErrCodeStaleHead, "")
 		return
 	}
+	if errors.Is(err, store.ErrHandleTaken) {
+		writeError(w, http.StatusConflict, wire.ErrCodeHandleTaken, "")
+		return
+	}
 	s.unavailableRead(w, "writing a chain", err)
 }
 
@@ -428,7 +432,7 @@ func (s *Server) appendChain(w http.ResponseWriter, r *http.Request, sess sessio
 	}
 	before := st.Seq
 	devicesBefore := st.Devices
-	homeBefore := st.Home
+	homeBefore, handleBefore := st.Home, st.Handle
 	applied, err := st.Apply(sig)
 	switch {
 	case errors.Is(err, chain.ErrUnknownOp):
@@ -466,6 +470,12 @@ func (s *Server) appendChain(w http.ResponseWriter, r *http.Request, sess sessio
 			return
 		}
 	}
+	// A new name here has to be free, and the one it replaces is held (SPEC §5.3).
+	names, status, code, msg := s.handleChange(handleBefore, homeBefore, st, applied.Signer == chain.SignerRecovery)
+	if code != "" {
+		writeError(w, status, code, msg)
+		return
+	}
 	// Removed devices lose their sessions right away (spec/api/conventions.md). A move
 	// away doesn't end any: if a thief made it, the owner's devices still have to see the
 	// alarm, and recover within 72 hours (SPEC §6.4.1). Deliveries go to the new home now.
@@ -474,7 +484,7 @@ func (s *Server) appendChain(w http.ResponseWriter, r *http.Request, sess sessio
 		s.unavailableRead(w, "revoking a removed device's sessions", err)
 		return
 	}
-	if err := s.st.Chains().Append(r.Context(), sess.id, before, enc); err != nil {
+	if err := s.appendEntry(r.Context(), sess.id, before, enc, names); err != nil {
 		writeChainWriteError(w, s, err)
 		return
 	}

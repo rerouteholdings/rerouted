@@ -77,6 +77,7 @@ func (s *Server) recoverAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	enc, _ := sig.Encode()
 	devicesBefore := st.Devices
+	homeBefore, handleBefore := st.Home, st.Handle
 	var removed [][]byte
 	switch {
 	case e.Seq == st.Seq+1 && bytes.Equal(e.Prev, st.Head):
@@ -95,7 +96,8 @@ func (s *Server) recoverAccount(w http.ResponseWriter, r *http.Request) {
 			s.unavailableRead(w, "revoking a removed device's sessions", err)
 			return
 		}
-		if err := s.st.Chains().Append(r.Context(), e.ID, before, enc); err != nil {
+		names, _, _, _ := s.handleChange(handleBefore, homeBefore, st, true) // never refused over a name (SPEC §5.3)
+		if err := s.appendEntry(r.Context(), e.ID, before, enc, names); err != nil {
 			writeChainWriteError(w, s, err)
 			return
 		}
@@ -115,7 +117,12 @@ func (s *Server) recoverAccount(w http.ResponseWriter, r *http.Request) {
 			s.unavailableRead(w, "revoking a removed device's sessions", err)
 			return
 		}
-		if err := s.st.Chains().Fork(r.Context(), e.ID, at, st.Seq, [][]byte{enc}); err != nil {
+		if names, _, _, _ := s.handleChange(handleBefore, homeBefore, next, true); names != nil {
+			err = s.st.Chains().ForkHandle(r.Context(), e.ID, at, st.Seq, [][]byte{enc}, *names)
+		} else {
+			err = s.st.Chains().Fork(r.Context(), e.ID, at, st.Seq, [][]byte{enc})
+		}
+		if err != nil {
 			writeChainWriteError(w, s, err)
 			return
 		}

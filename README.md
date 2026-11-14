@@ -34,7 +34,7 @@ A version 1 identity migrates to version 2 (§6.8) in one request: the version 1
 | Area | Spec | What rerouted does |
 |---|---|---|
 | Encoding | §4 | I-JSON (the Internet JSON profile) with duplicate-name, UTF-8, and integer checks; strict base64url; and the JSON Canonicalization Scheme (JCS) for everything signed or hashed |
-| Discovery | §5, §8.1 | The server document and handle documents. Reserved handles can't be registered. |
+| Discovery | §5, §8.1 | The server document and handle documents. Reserved handles can't be registered. Handle changes: a new name under the handle domain has to be free, and a name an identity stops using, by a rename or a move away, is held for it for 30 days, then freed unless the operator keeps it (`keep-handle`). |
 | Identities | §6 | Identity chains and the fork rule, vouching, tombstones, recovery with the recovery key, alerts on device changes, and moves between homeservers |
 | Devices | §7 | Two-way device approval with link proofs, wrapped account keys, versioned account data, and backups |
 | Contacts | §9 | Registration and contact requests by invite code; accept, decline, cancel, remove, block, and unblock; and the rate limits |
@@ -53,7 +53,6 @@ What isn't built yet:
 - Community groups on the version 2 API (§16): a delivery's `channel`, `seq`, and `proof`, and code joins' PublicMessages at the hub.
 - Batching several deliveries into one server-to-server `deliver` call. Each call carries one, which the spec allows.
 - Registration codes with use counts or expiry dates. There's one code, `REROUTED_REGISTRATION_CODE`.
-- Changing handle within the same homeserver. A `set-handle` entry is accepted, but the new handle doesn't resolve, and the old one isn't freed.
 - Combining presence updates for each destination server. A small server may send each one right away (SPEC §13.2).
 - A rate limit on `recover` for each identity and address.
 
