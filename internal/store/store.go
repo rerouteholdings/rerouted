@@ -40,6 +40,12 @@ type Store interface {
 	Account() Account
 	Backups() Backups
 	Reports() Reports
+	// ForWire is a view of the same storage for wire version v's identities (SPEC §6.8):
+	// local chains, cached remote chains, session tokens, and queued S2S requests are kept
+	// apart by version, and each view sees only its own. Everything else is keyed by
+	// identifiers, which never collide across versions, or by handles, which are one
+	// namespace, since they're DNS names. The Store itself is the version 1 view.
+	ForWire(v int) Store
 	Close() error
 }
 
@@ -145,14 +151,19 @@ type Sessions interface {
 
 // KeyPackage is one stored MLS key package. The server never parses it (SPEC §2.3).
 type KeyPackage struct {
-	Device     []byte
-	Data       []byte
+	Device []byte
+	Data   []byte
+	// Binding is the encoded kp-binding the device uploaded the package with, in wire
+	// version 2 (SPEC §3.2.2); nil in version 1.
+	Binding    []byte
 	LastResort bool
 }
 
 // KeyPackages stores MLS key packages per device (SPEC §11.4).
 type KeyPackages interface {
-	Upload(ctx context.Context, id string, device []byte, packages [][]byte, lastResort []byte) (count int, err error)
+	// Upload stores one-time packages, and replaces the last-resort one if it's given. Only
+	// Data and Binding are read.
+	Upload(ctx context.Context, id string, device []byte, packages []KeyPackage, lastResort *KeyPackage) (count int, err error)
 	// Clear deletes a device's unclaimed one-time key packages (before a replacing upload).
 	Clear(ctx context.Context, id string, device []byte) error
 	Count(ctx context.Context, id string, device []byte) (count int, hasLastResort bool, err error)

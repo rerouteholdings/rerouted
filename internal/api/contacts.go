@@ -135,7 +135,15 @@ func (s *Server) kpUpload(w http.ResponseWriter, r *http.Request, sess session) 
 			return
 		}
 	}
-	n, err := s.st.KeyPackages().Upload(r.Context(), sess.id, sess.device, plain(req.Packages), req.LastResort)
+	packages := make([]store.KeyPackage, len(req.Packages))
+	for i, p := range req.Packages {
+		packages[i] = store.KeyPackage{Data: p}
+	}
+	var lastResort *store.KeyPackage
+	if req.LastResort != nil {
+		lastResort = &store.KeyPackage{Data: req.LastResort}
+	}
+	n, err := s.st.KeyPackages().Upload(r.Context(), sess.id, sess.device, packages, lastResort)
 	if err != nil {
 		writeError(w, http.StatusRequestEntityTooLarge, wire.ErrCodeOverQuota, "")
 		return

@@ -23,18 +23,18 @@ import (
 
 // SchemaVersion is stored in PRAGMA user_version. Bump it with a migration
 // whenever the schema changes.
-const SchemaVersion = 7
+const SchemaVersion = 8
 
 const schema = `
 CREATE TABLE IF NOT EXISTS move_registrations (id TEXT NOT NULL, operation BLOB NOT NULL, PRIMARY KEY (id, operation));
 CREATE TABLE IF NOT EXISTS move_reservations (id TEXT NOT NULL, entry BLOB NOT NULL, handle TEXT NOT NULL, exp INTEGER NOT NULL, hold INTEGER NOT NULL, PRIMARY KEY (id, entry));
 CREATE INDEX IF NOT EXISTS move_reservations_handle ON move_reservations (handle);
-CREATE TABLE IF NOT EXISTS chains   (id TEXT NOT NULL, seq INTEGER NOT NULL, entry BLOB NOT NULL, PRIMARY KEY (id, seq));
+CREATE TABLE IF NOT EXISTS chains   (id TEXT NOT NULL, seq INTEGER NOT NULL, entry BLOB NOT NULL, wire INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (id, seq));
 CREATE TABLE IF NOT EXISTS handles  (handle TEXT PRIMARY KEY, id TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS nonces   (k TEXT PRIMARY KEY, expires INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS nonces_expires ON nonces (expires);
-CREATE TABLE IF NOT EXISTS tokens   (hash BLOB PRIMARY KEY, id TEXT NOT NULL, device BLOB NOT NULL, name TEXT NOT NULL, expires INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS kps      (n INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL, device BLOB NOT NULL, data BLOB NOT NULL, last_resort INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS tokens   (hash BLOB PRIMARY KEY, id TEXT NOT NULL, device BLOB NOT NULL, name TEXT NOT NULL, expires INTEGER NOT NULL, wire INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS kps      (n INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL, device BLOB NOT NULL, data BLOB NOT NULL, last_resort INTEGER NOT NULL, binding BLOB);
 CREATE TABLE IF NOT EXISTS contacts (owner TEXT NOT NULL, other TEXT NOT NULL, state TEXT NOT NULL, since INTEGER NOT NULL, request BLOB, PRIMARY KEY (owner, other));
 CREATE TABLE IF NOT EXISTS invites  (owner TEXT NOT NULL, hash BLOB NOT NULL, public INTEGER NOT NULL, uses INTEGER NOT NULL, expires INTEGER NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (owner, hash));
 CREATE TABLE IF NOT EXISTS groups_allowed (owner TEXT NOT NULL, grp BLOB NOT NULL, PRIMARY KEY (owner, grp));
@@ -45,8 +45,8 @@ CREATE TABLE IF NOT EXISTS seen     (owner TEXT NOT NULL, did BLOB NOT NULL, ts 
 CREATE TABLE IF NOT EXISTS sent     (sender TEXT NOT NULL, did BLOB NOT NULL, result BLOB NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (sender, did));
 CREATE TABLE IF NOT EXISTS hub      (grp BLOB PRIMARY KEY, epoch INTEGER NOT NULL, key BLOB NOT NULL, awaiting INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS commits  (grp BLOB NOT NULL, epoch INTEGER NOT NULL, data BLOB NOT NULL, receipt BLOB NOT NULL, ts INTEGER NOT NULL DEFAULT 0, request BLOB, PRIMARY KEY (grp, epoch));
-CREATE TABLE IF NOT EXISTS remote   (id TEXT PRIMARY KEY, home TEXT NOT NULL, entries BLOB NOT NULL);
-CREATE TABLE IF NOT EXISTS outbox   (n INTEGER PRIMARY KEY AUTOINCREMENT, dest TEXT NOT NULL, path TEXT NOT NULL, body BLOB NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next INTEGER NOT NULL, created INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS remote   (id TEXT PRIMARY KEY, home TEXT NOT NULL, entries BLOB NOT NULL, wire INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS outbox   (n INTEGER PRIMARY KEY AUTOINCREMENT, dest TEXT NOT NULL, path TEXT NOT NULL, body BLOB NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next INTEGER NOT NULL, created INTEGER NOT NULL, wire INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS profiles (id TEXT PRIMARY KEY, v INTEGER NOT NULL, signed BLOB NOT NULL);
 CREATE TABLE IF NOT EXISTS media    (id BLOB PRIMARY KEY, owner TEXT NOT NULL, size INTEGER NOT NULL, sha256 BLOB NOT NULL, mime TEXT NOT NULL, public INTEGER NOT NULL, created INTEGER NOT NULL, removed INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS account_keys (id TEXT NOT NULL, via TEXT NOT NULL, wrapped BLOB NOT NULL, stored INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (id, via));
@@ -60,6 +60,7 @@ type Store struct {
 	rdb      *sql.DB // readers, for the reads on every request: see openReaders
 	mediaDir string  // files live here, beside the database
 	tempDir  string  // removed on Close: set by OpenTemp
+	wire     int     // the wire version of the identities this view sees (ForWire)
 }
 
 // Open opens (or creates) the database at path.
@@ -172,6 +173,17 @@ func open(path, sync string) (*Store, error) {
 			return nil, err
 		}
 	}
+	// Version 8: wire version 2 identities live beside version 1's (SPEC §6.8). Local
+	// chains, cached remote chains, sessions, and queued S2S requests record their wire
+	// version, and everything stored before is version 1. Key packages keep their
+	// kp-binding (SPEC §3.2.2), which version 1 ones don't have. One transaction, so a
+	// crash leaves the database as it was.
+	if v < 8 {
+		if err := migrateWire(db); err != nil {
+			db.Close()
+			return nil, err
+		}
+	}
 	// Indexes on columns that older databases only have after the migrations above.
 	if _, err := db.Exec(indexes); err != nil {
 		db.Close()
@@ -191,7 +203,7 @@ func open(path, sync string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{db: db, rdb: rdb, mediaDir: mediaDir}, nil
+	return &Store{db: db, rdb: rdb, mediaDir: mediaDir, wire: wire.V1}, nil
 }
 
 const indexes = `
@@ -199,6 +211,33 @@ CREATE INDEX IF NOT EXISTS seen_ts ON seen (ts);
 CREATE INDEX IF NOT EXISTS sent_ts ON sent (ts);
 CREATE INDEX IF NOT EXISTS outbox_dest ON outbox (dest, next);
 `
+
+func migrateWire(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, c := range []struct{ table, column, def string }{
+		{"chains", "wire", "INTEGER NOT NULL DEFAULT 1"},
+		{"remote", "wire", "INTEGER NOT NULL DEFAULT 1"},
+		{"outbox", "wire", "INTEGER NOT NULL DEFAULT 1"},
+		{"tokens", "wire", "INTEGER NOT NULL DEFAULT 1"},
+		{"kps", "binding", "BLOB"},
+	} {
+		var n int
+		if err := tx.QueryRow("SELECT count(*) FROM pragma_table_info(?) WHERE name = ?", c.table, c.column).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			continue
+		}
+		if _, err := tx.Exec("ALTER TABLE " + c.table + " ADD COLUMN " + c.column + " " + c.def); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
 
 func migrateSeenTimes(db *sql.DB) error {
 	tx, err := db.Begin()
@@ -239,19 +278,28 @@ func (s *Store) Close() error {
 	return err
 }
 
-func (s *Store) Chains() store.Chains           { return chains{s.db, s.rdb} }
-func (s *Store) Sessions() store.Sessions       { return sessions{s.db, s.rdb} }
+// ForWire is a view of the same database for wire version v's identities (store.Store).
+// It shares the connections: close only the Store Open returned.
+func (s *Store) ForWire(v int) store.Store {
+	c := *s
+	c.wire = v
+	c.tempDir = ""
+	return &c
+}
+
+func (s *Store) Chains() store.Chains           { return chains{s.db, s.rdb, s.wire} }
+func (s *Store) Sessions() store.Sessions       { return sessions{s.db, s.rdb, s.wire} }
 func (s *Store) KeyPackages() store.KeyPackages { return keyPackages{s.db} }
 func (s *Store) Contacts() store.Contacts       { return contacts{s.db, s.rdb} }
 func (s *Store) Invites() store.Invites         { return invites{s.db} }
 func (s *Store) Sent() store.Sent               { return sent{s.db} }
 func (s *Store) Inbox() store.Inbox             { return inbox{s.db, s.rdb} }
 func (s *Store) Hub() store.Hub                 { return hub{s.db} }
-func (s *Store) Remote() store.Remote           { return remote{s.db, s.rdb} }
-func (s *Store) Outbox() store.Outbox           { return outbox{s.db, s.rdb} }
+func (s *Store) Remote() store.Remote           { return remote{s.db, s.rdb, s.wire} }
+func (s *Store) Outbox() store.Outbox           { return outbox{s.db, s.rdb, s.wire} }
 func (s *Store) Profiles() store.Profiles       { return profiles{s.db} }
 func (s *Store) Media() store.Media             { return media{s.db, s.mediaDir} }
-func (s *Store) Account() store.Account         { return account{s.db} }
+func (s *Store) Account() store.Account         { return account{s.db, s.wire} }
 func (s *Store) Backups() store.Backups         { return backups{s.db} }
 func (s *Store) Reports() store.Reports         { return reports{s.db} }
 
@@ -284,7 +332,14 @@ func isConstraint(err error) bool {
 
 // ---- chains ----
 
-type chains struct{ db, rdb *sql.DB }
+// chains holds local identities' chains. Each row records its wire version, and a view
+// sees only its own version's: identifiers never collide across versions, but a version 1
+// API must never be handed a version 2 chain, or the reverse (SPEC §5.1). Handles are one
+// namespace, since they're DNS names, so a handle held in either version is taken.
+type chains struct {
+	db, rdb *sql.DB
+	wire    int
+}
 
 // heldByOther reports whether another identity owns `handle`, or holds it with a move
 // reservation whose hold hasn't ended at `now` (SPEC §6.6).
@@ -363,7 +418,7 @@ func (c chains) RegisterMove(ctx context.Context, m store.MoveRegistration) (boo
 	if conflict {
 		return false, store.ErrConflict
 	}
-	rows, err := tx.QueryContext(ctx, "SELECT entry FROM chains WHERE id = ? ORDER BY seq", m.ID)
+	rows, err := tx.QueryContext(ctx, "SELECT entry FROM chains WHERE id = ? AND wire = ? ORDER BY seq", m.ID, c.wire)
 	if err != nil {
 		return false, err
 	}
@@ -412,7 +467,7 @@ func (c chains) RegisterMove(ctx context.Context, m store.MoveRegistration) (boo
 		return false, err
 	}
 	for i, e := range m.Entries {
-		if _, err = tx.ExecContext(ctx, "INSERT INTO chains (id, seq, entry) VALUES (?, ?, ?)", m.ID, i, e); err != nil {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO chains (id, seq, entry, wire) VALUES (?, ?, ?, ?)", m.ID, i, e, c.wire); err != nil {
 			return false, err
 		}
 	}
@@ -512,7 +567,7 @@ func (c chains) Create(ctx context.Context, id string, genesis []byte, handle st
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, "INSERT INTO chains (id, seq, entry) VALUES (?, 0, ?)", id, genesis); err != nil {
+	if _, err := tx.ExecContext(ctx, "INSERT INTO chains (id, seq, entry, wire) VALUES (?, 0, ?, ?)", id, genesis, c.wire); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -525,7 +580,7 @@ func (c chains) Fork(ctx context.Context, id string, from, headSeq uint64, entri
 	}
 	defer tx.Rollback()
 	var head sql.NullInt64
-	if err := tx.QueryRowContext(ctx, "SELECT MAX(seq) FROM chains WHERE id = ?", id).Scan(&head); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT MAX(seq) FROM chains WHERE id = ? AND wire = ?", id, c.wire).Scan(&head); err != nil {
 		return err
 	}
 	if !head.Valid {
@@ -538,7 +593,7 @@ func (c chains) Fork(ctx context.Context, id string, from, headSeq uint64, entri
 		return err
 	}
 	for i, e := range entries {
-		if _, err := tx.ExecContext(ctx, "INSERT INTO chains (id, seq, entry) VALUES (?, ?, ?)", id, from+uint64(i), e); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO chains (id, seq, entry, wire) VALUES (?, ?, ?, ?)", id, from+uint64(i), e, c.wire); err != nil {
 			return err
 		}
 	}
@@ -552,7 +607,7 @@ func (c chains) Append(ctx context.Context, id string, prevSeq uint64, entry []b
 	}
 	defer tx.Rollback()
 	var head sql.NullInt64
-	if err := tx.QueryRowContext(ctx, "SELECT MAX(seq) FROM chains WHERE id = ?", id).Scan(&head); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT MAX(seq) FROM chains WHERE id = ? AND wire = ?", id, c.wire).Scan(&head); err != nil {
 		return err
 	}
 	if !head.Valid {
@@ -561,7 +616,7 @@ func (c chains) Append(ctx context.Context, id string, prevSeq uint64, entry []b
 	if uint64(head.Int64) != prevSeq {
 		return store.ErrConflict
 	}
-	if _, err := tx.ExecContext(ctx, "INSERT INTO chains (id, seq, entry) VALUES (?, ?, ?)", id, prevSeq+1, entry); err != nil {
+	if _, err := tx.ExecContext(ctx, "INSERT INTO chains (id, seq, entry, wire) VALUES (?, ?, ?, ?)", id, prevSeq+1, entry, c.wire); err != nil {
 		if isConstraint(err) {
 			return store.ErrConflict
 		}
@@ -571,7 +626,7 @@ func (c chains) Append(ctx context.Context, id string, prevSeq uint64, entry []b
 }
 
 func (c chains) Entries(ctx context.Context, id string, after int64) ([][]byte, error) {
-	rows, err := c.rdb.QueryContext(ctx, "SELECT entry FROM chains WHERE id = ? AND seq > ? ORDER BY seq", id, after)
+	rows, err := c.rdb.QueryContext(ctx, "SELECT entry FROM chains WHERE id = ? AND wire = ? AND seq > ? ORDER BY seq", id, c.wire, after)
 	if err != nil {
 		return nil, err
 	}
@@ -614,7 +669,11 @@ func (c chains) ReleaseHandle(ctx context.Context, handle string) (string, error
 
 // ---- sessions ----
 
-type sessions struct{ db, rdb *sql.DB }
+// sessions: a token works only on the API of the wire version it was made on.
+type sessions struct {
+	db, rdb *sql.DB
+	wire    int
+}
 
 func nonceKey(id string, device, nonce []byte) string {
 	return id + "|" + string(wire.HexBytes(device)) + "|" + string(wire.HexBytes(nonce))
@@ -657,7 +716,7 @@ func (x sessions) TakeNonce(ctx context.Context, id string, device, nonce []byte
 }
 
 func (x sessions) CreateToken(ctx context.Context, tokenHash []byte, id string, device []byte, name string, expires int64) error {
-	_, err := x.db.ExecContext(ctx, "INSERT INTO tokens (hash, id, device, name, expires) VALUES (?, ?, ?, ?, ?)", tokenHash, id, device, name, expires)
+	_, err := x.db.ExecContext(ctx, "INSERT INTO tokens (hash, id, device, name, expires, wire) VALUES (?, ?, ?, ?, ?, ?)", tokenHash, id, device, name, expires, x.wire)
 	return err
 }
 
@@ -674,7 +733,7 @@ func (x sessions) LookupToken(ctx context.Context, tokenHash []byte, now int64) 
 	var id string
 	var dev []byte
 	var expires int64
-	err := x.rdb.QueryRowContext(ctx, "SELECT id, device, expires FROM tokens WHERE hash = ? AND expires >= ?", tokenHash, now).Scan(&id, &dev, &expires)
+	err := x.rdb.QueryRowContext(ctx, "SELECT id, device, expires FROM tokens WHERE hash = ? AND wire = ? AND expires >= ?", tokenHash, x.wire, now).Scan(&id, &dev, &expires)
 	if err != nil {
 		return "", nil, notFound(err)
 	}
@@ -700,7 +759,7 @@ type keyPackages struct{ db *sql.DB }
 
 const maxKeyPackages = 200
 
-func (k keyPackages) Upload(ctx context.Context, id string, device []byte, packages [][]byte, lastResort []byte) (int, error) {
+func (k keyPackages) Upload(ctx context.Context, id string, device []byte, packages []store.KeyPackage, lastResort *store.KeyPackage) (int, error) {
 	tx, err := k.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
@@ -712,13 +771,13 @@ func (k keyPackages) Upload(ctx context.Context, id string, device []byte, packa
 		return n, store.ErrOverQuota
 	}
 	for _, p := range packages {
-		if _, err := tx.ExecContext(ctx, "INSERT INTO kps (id, device, data, last_resort) VALUES (?, ?, ?, 0)", id, device, p); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO kps (id, device, data, last_resort, binding) VALUES (?, ?, ?, 0, ?)", id, device, p.Data, p.Binding); err != nil {
 			return n, err
 		}
 	}
 	if lastResort != nil {
 		tx.ExecContext(ctx, "DELETE FROM kps WHERE id = ? AND device = ? AND last_resort = 1", id, device)
-		if _, err := tx.ExecContext(ctx, "INSERT INTO kps (id, device, data, last_resort) VALUES (?, ?, ?, 1)", id, device, lastResort); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO kps (id, device, data, last_resort, binding) VALUES (?, ?, ?, 1, ?)", id, device, lastResort.Data, lastResort.Binding); err != nil {
 			return n, err
 		}
 	}
@@ -745,15 +804,15 @@ func (k keyPackages) Claim(ctx context.Context, id string, devices [][]byte) ([]
 	var out []store.KeyPackage
 	for _, d := range devices {
 		var n int64
-		var data []byte
-		err := tx.QueryRowContext(ctx, "SELECT n, data FROM kps WHERE id = ? AND device = ? AND last_resort = 0 ORDER BY n LIMIT 1", id, d).Scan(&n, &data)
+		var data, binding []byte
+		err := tx.QueryRowContext(ctx, "SELECT n, data, binding FROM kps WHERE id = ? AND device = ? AND last_resort = 0 ORDER BY n LIMIT 1", id, d).Scan(&n, &data, &binding)
 		if err == nil {
 			tx.ExecContext(ctx, "DELETE FROM kps WHERE n = ?", n)
-			out = append(out, store.KeyPackage{Device: d, Data: data})
+			out = append(out, store.KeyPackage{Device: d, Data: data, Binding: binding})
 			continue
 		}
-		if err := tx.QueryRowContext(ctx, "SELECT data FROM kps WHERE id = ? AND device = ? AND last_resort = 1", id, d).Scan(&data); err == nil {
-			out = append(out, store.KeyPackage{Device: d, Data: data, LastResort: true})
+		if err := tx.QueryRowContext(ctx, "SELECT data, binding FROM kps WHERE id = ? AND device = ? AND last_resort = 1", id, d).Scan(&data, &binding); err == nil {
+			out = append(out, store.KeyPackage{Device: d, Data: data, Binding: binding, LastResort: true})
 		}
 	}
 	return out, tx.Commit()
@@ -1075,21 +1134,26 @@ func (h hub) PruneCommits(ctx context.Context, before int64) error {
 
 // ---- remote chains ----
 
-type remote struct{ db, rdb *sql.DB }
+// remote caches other servers' identities, each under its wire version, and a view sees
+// only its own version's.
+type remote struct {
+	db, rdb *sql.DB
+	wire    int
+}
 
 func (r remote) Put(ctx context.Context, id, home string, entries [][]byte) error {
 	b, err := wire.Marshal(entries)
 	if err != nil {
 		return err
 	}
-	_, err = r.db.ExecContext(ctx, "INSERT OR REPLACE INTO remote (id, home, entries) VALUES (?, ?, ?)", id, home, b)
+	_, err = r.db.ExecContext(ctx, "INSERT OR REPLACE INTO remote (id, home, entries, wire) VALUES (?, ?, ?, ?)", id, home, b, r.wire)
 	return err
 }
 
 func (r remote) Get(ctx context.Context, id string) (string, [][]byte, error) {
 	var home string
 	var b []byte
-	if err := r.rdb.QueryRowContext(ctx, "SELECT home, entries FROM remote WHERE id = ?", id).Scan(&home, &b); err != nil {
+	if err := r.rdb.QueryRowContext(ctx, "SELECT home, entries FROM remote WHERE id = ? AND wire = ?", id, r.wire).Scan(&home, &b); err != nil {
 		return "", nil, notFound(err)
 	}
 	var stored []wire.Bytes
@@ -1105,7 +1169,7 @@ func (r remote) Get(ctx context.Context, id string) (string, [][]byte, error) {
 
 func (r remote) HasContactOn(ctx context.Context, home string) (bool, error) {
 	var one int
-	err := r.db.QueryRowContext(ctx, "SELECT 1 FROM remote r JOIN contacts c ON c.other = r.id WHERE r.home = ? AND c.state = 'contact' LIMIT 1", home).Scan(&one)
+	err := r.db.QueryRowContext(ctx, "SELECT 1 FROM remote r JOIN contacts c ON c.other = r.id WHERE r.home = ? AND r.wire = ? AND c.state = 'contact' LIMIT 1", home, r.wire).Scan(&one)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -1114,23 +1178,28 @@ func (r remote) HasContactOn(ctx context.Context, home string) (bool, error) {
 
 // ---- outbox ----
 
-type outbox struct{ db, rdb *sql.DB }
+// outbox: each request is sent with its wire version's signature, to that version's API,
+// so a view queues and sends only its own version's.
+type outbox struct {
+	db, rdb *sql.DB
+	wire    int
+}
 
 func (o outbox) Enqueue(ctx context.Context, dest, path string, body []byte, now int64) error {
-	_, err := o.db.ExecContext(ctx, "INSERT INTO outbox (dest, path, body, next, created) VALUES (?, ?, ?, ?, ?)", dest, path, body, now, now)
+	_, err := o.db.ExecContext(ctx, "INSERT INTO outbox (dest, path, body, next, created, wire) VALUES (?, ?, ?, ?, ?, ?)", dest, path, body, now, now, o.wire)
 	return err
 }
 
 func (o outbox) Due(ctx context.Context, now int64, limit int) ([]store.OutboxItem, error) {
-	return o.due(ctx, "SELECT n, dest, path, body, attempts, created FROM outbox WHERE next <= ? ORDER BY n LIMIT ?", now, limit)
+	return o.due(ctx, "SELECT n, dest, path, body, attempts, created FROM outbox WHERE wire = ? AND next <= ? ORDER BY n LIMIT ?", o.wire, now, limit)
 }
 
 func (o outbox) DueTo(ctx context.Context, dest string, now int64, limit int) ([]store.OutboxItem, error) {
-	return o.due(ctx, "SELECT n, dest, path, body, attempts, created FROM outbox WHERE dest = ? AND next <= ? ORDER BY n LIMIT ?", dest, now, limit)
+	return o.due(ctx, "SELECT n, dest, path, body, attempts, created FROM outbox WHERE wire = ? AND dest = ? AND next <= ? ORDER BY n LIMIT ?", o.wire, dest, now, limit)
 }
 
 func (o outbox) Dests(ctx context.Context, now int64) ([]string, error) {
-	rows, err := o.rdb.QueryContext(ctx, "SELECT DISTINCT dest FROM outbox WHERE next <= ?", now)
+	rows, err := o.rdb.QueryContext(ctx, "SELECT DISTINCT dest FROM outbox WHERE wire = ? AND next <= ?", o.wire, now)
 	if err != nil {
 		return nil, err
 	}

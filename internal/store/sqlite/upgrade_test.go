@@ -298,8 +298,8 @@ func TestMigrateV6ToV7(t *testing.T) {
 	}
 	defer st.Close()
 	var uv int
-	if err := st.db.QueryRow("PRAGMA user_version").Scan(&uv); err != nil || uv != 7 {
-		t.Fatalf("user_version %d (%v), want 7", uv, err)
+	if err := st.db.QueryRow("PRAGMA user_version").Scan(&uv); err != nil || uv != SchemaVersion {
+		t.Fatalf("user_version %d (%v), want %d", uv, err, SchemaVersion)
 	}
 	ctx := context.Background()
 	if _, isNew, err := st.Inbox().Deliver(ctx, "kat", []byte{1}, store.Item{TS: before, Delivery: []byte("{}")}); err != nil || isNew {
@@ -313,5 +313,165 @@ func TestMigrateV6ToV7(t *testing.T) {
 	}
 	if b, err := st.Sent().Get(ctx, "kat", []byte{2}); err != nil || string(b) != "r" {
 		t.Fatalf("sent after upgrade: %q %v", b, err)
+	}
+}
+
+// The version 7 schema, verbatim, for the upgrade to wire version 2's columns.
+const schemaV7 = `
+CREATE TABLE IF NOT EXISTS move_registrations (id TEXT NOT NULL, operation BLOB NOT NULL, PRIMARY KEY (id, operation));
+CREATE TABLE IF NOT EXISTS move_reservations (id TEXT NOT NULL, entry BLOB NOT NULL, handle TEXT NOT NULL, exp INTEGER NOT NULL, hold INTEGER NOT NULL, PRIMARY KEY (id, entry));
+CREATE INDEX IF NOT EXISTS move_reservations_handle ON move_reservations (handle);
+CREATE TABLE IF NOT EXISTS chains   (id TEXT NOT NULL, seq INTEGER NOT NULL, entry BLOB NOT NULL, PRIMARY KEY (id, seq));
+CREATE TABLE IF NOT EXISTS handles  (handle TEXT PRIMARY KEY, id TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS nonces   (k TEXT PRIMARY KEY, expires INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS nonces_expires ON nonces (expires);
+CREATE TABLE IF NOT EXISTS tokens   (hash BLOB PRIMARY KEY, id TEXT NOT NULL, device BLOB NOT NULL, name TEXT NOT NULL, expires INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS kps      (n INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL, device BLOB NOT NULL, data BLOB NOT NULL, last_resort INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS contacts (owner TEXT NOT NULL, other TEXT NOT NULL, state TEXT NOT NULL, since INTEGER NOT NULL, request BLOB, PRIMARY KEY (owner, other));
+CREATE TABLE IF NOT EXISTS invites  (owner TEXT NOT NULL, hash BLOB NOT NULL, public INTEGER NOT NULL, uses INTEGER NOT NULL, expires INTEGER NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (owner, hash));
+CREATE TABLE IF NOT EXISTS groups_allowed (owner TEXT NOT NULL, grp BLOB NOT NULL, PRIMARY KEY (owner, grp));
+CREATE TABLE IF NOT EXISTS inbox    (cursor INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT NOT NULL, ts INTEGER NOT NULL, delivery BLOB, notice BLOB);
+CREATE INDEX IF NOT EXISTS inbox_owner ON inbox (owner, cursor);
+CREATE TABLE IF NOT EXISTS acks     (owner TEXT NOT NULL, device BLOB NOT NULL, upto INTEGER NOT NULL, PRIMARY KEY (owner, device));
+CREATE TABLE IF NOT EXISTS seen     (owner TEXT NOT NULL, did BLOB NOT NULL, ts INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (owner, did));
+CREATE TABLE IF NOT EXISTS sent     (sender TEXT NOT NULL, did BLOB NOT NULL, result BLOB NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (sender, did));
+CREATE TABLE IF NOT EXISTS hub      (grp BLOB PRIMARY KEY, epoch INTEGER NOT NULL, key BLOB NOT NULL, awaiting INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS commits  (grp BLOB NOT NULL, epoch INTEGER NOT NULL, data BLOB NOT NULL, receipt BLOB NOT NULL, ts INTEGER NOT NULL DEFAULT 0, request BLOB, PRIMARY KEY (grp, epoch));
+CREATE TABLE IF NOT EXISTS remote   (id TEXT PRIMARY KEY, home TEXT NOT NULL, entries BLOB NOT NULL);
+CREATE TABLE IF NOT EXISTS outbox   (n INTEGER PRIMARY KEY AUTOINCREMENT, dest TEXT NOT NULL, path TEXT NOT NULL, body BLOB NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next INTEGER NOT NULL, created INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS profiles (id TEXT PRIMARY KEY, v INTEGER NOT NULL, signed BLOB NOT NULL);
+CREATE TABLE IF NOT EXISTS media    (id BLOB PRIMARY KEY, owner TEXT NOT NULL, size INTEGER NOT NULL, sha256 BLOB NOT NULL, mime TEXT NOT NULL, public INTEGER NOT NULL, created INTEGER NOT NULL, removed INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS account_keys (id TEXT NOT NULL, via TEXT NOT NULL, wrapped BLOB NOT NULL, stored INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (id, via));
+CREATE TABLE IF NOT EXISTS account_data (id TEXT PRIMARY KEY, version INTEGER NOT NULL, ct BLOB NOT NULL);
+CREATE TABLE IF NOT EXISTS backups  (id TEXT NOT NULL, seq INTEGER NOT NULL, ct BLOB NOT NULL, snapshot INTEGER NOT NULL, PRIMARY KEY (id, seq));
+CREATE TABLE IF NOT EXISTS reports  (n INTEGER PRIMARY KEY AUTOINCREMENT, received INTEGER NOT NULL, origin TEXT NOT NULL, reporter TEXT NOT NULL, reported TEXT NOT NULL, body BLOB NOT NULL);
+`
+
+// Version 7 to 8: everything stored before is wire version 1, and the version 2 view sees
+// none of it; key packages stored before have no binding.
+func TestMigrateV7ToV8(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rerouted.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		schemaV7,
+		"INSERT INTO chains (id, seq, entry) VALUES ('kat', 0, x'01'), ('kat', 1, x'02')",
+		"INSERT INTO handles (handle, id) VALUES ('kat.test', 'kat')",
+		"INSERT INTO tokens (hash, id, device, name, expires) VALUES (x'aa', 'kat', x'01', 'laptop', 9999999999)",
+		"INSERT INTO remote (id, home, entries) VALUES ('ravi', 'b.test', '[\"AQ\"]')",
+		"INSERT INTO outbox (dest, path, body, next, created) VALUES ('b.test', 'deliver', x'7b7d', 0, 0)",
+		"INSERT INTO kps (id, device, data, last_resort) VALUES ('kat', x'01', x'0102', 0)",
+		"PRAGMA user_version = 7",
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+	st, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	var uv int
+	if err := st.db.QueryRow("PRAGMA user_version").Scan(&uv); err != nil || uv != SchemaVersion || SchemaVersion != 8 {
+		t.Fatalf("user_version %d (%v), want 8", uv, err)
+	}
+	ctx := context.Background()
+	v1, v2 := store.Store(st), st.ForWire(2)
+	if e, err := v1.Chains().Entries(ctx, "kat", -1); err != nil || len(e) != 2 {
+		t.Fatalf("version 1 chain after upgrade: %d %v", len(e), err)
+	}
+	if _, err := v2.Chains().Entries(ctx, "kat", -1); err != store.ErrNotFound {
+		t.Fatalf("version 2 view sees a version 1 chain: %v", err)
+	}
+	if id, _, err := v1.Sessions().LookupToken(ctx, []byte{0xaa}, 1000); err != nil || id != "kat" {
+		t.Fatalf("version 1 token after upgrade: %q %v", id, err)
+	}
+	if _, _, err := v2.Sessions().LookupToken(ctx, []byte{0xaa}, 1000); err == nil {
+		t.Fatal("a version 1 token works on the version 2 view")
+	}
+	if home, _, err := v1.Remote().Get(ctx, "ravi"); err != nil || home != "b.test" {
+		t.Fatalf("cached chain after upgrade: %q %v", home, err)
+	}
+	if _, _, err := v2.Remote().Get(ctx, "ravi"); err != store.ErrNotFound {
+		t.Fatalf("version 2 view sees a version 1 cached chain: %v", err)
+	}
+	if due, err := v1.Outbox().Due(ctx, 10, 10); err != nil || len(due) != 1 {
+		t.Fatalf("outbox after upgrade: %d %v", len(due), err)
+	}
+	if due, err := v2.Outbox().Due(ctx, 10, 10); err != nil || len(due) != 0 {
+		t.Fatalf("version 2 outbox sees version 1's: %d %v", len(due), err)
+	}
+	if kps, err := v1.KeyPackages().Claim(ctx, "kat", [][]byte{{1}}); err != nil || len(kps) != 1 || kps[0].Binding != nil {
+		t.Fatalf("key package after upgrade: %+v %v", kps, err)
+	}
+	// Opening again is a no-op.
+	st.Close()
+	st2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st2.Close()
+}
+
+// Each wire version's view keeps its own chains, tokens, cached chains, and outbox, over
+// one handle namespace.
+func TestWireViews(t *testing.T) {
+	st, err := OpenTemp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	v1, v2 := store.Store(st), st.ForWire(2)
+	if err := v2.Chains().Create(ctx, "kat2", []byte("g2"), "kat.test"); err != nil {
+		t.Fatal(err)
+	}
+	if err := v1.Chains().Create(ctx, "kat1", []byte("g1"), "kat.test"); err != store.ErrHandleTaken {
+		t.Fatalf("a handle held in version 2 isn't taken in version 1: %v", err)
+	}
+	if err := v1.Chains().Append(ctx, "kat2", 0, []byte("e")); err != store.ErrNotFound {
+		t.Fatalf("version 1 appended to a version 2 chain: %v", err)
+	}
+	if err := v2.Chains().Append(ctx, "kat2", 0, []byte("e")); err != nil {
+		t.Fatal(err)
+	}
+	if e, err := v2.Chains().Entries(ctx, "kat2", -1); err != nil || len(e) != 2 {
+		t.Fatalf("version 2 chain: %d %v", len(e), err)
+	}
+	if id, err := v1.Chains().ByHandle(ctx, "kat.test"); err != nil || id != "kat2" {
+		t.Fatalf("handles are one namespace: %q %v", id, err)
+	}
+	if err := v2.Sessions().CreateToken(ctx, []byte{1}, "kat2", []byte{2}, "", 9999999999); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := v1.Sessions().LookupToken(ctx, []byte{1}, 1000); err == nil {
+		t.Fatal("a version 2 token works on version 1")
+	}
+	if id, _, err := v2.Sessions().LookupToken(ctx, []byte{1}, 1000); err != nil || id != "kat2" {
+		t.Fatalf("version 2 token: %q %v", id, err)
+	}
+	if err := v2.Outbox().Enqueue(ctx, "b.test", "deliver", []byte("{}"), 5); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := v1.Outbox().Dests(ctx, 10); len(d) != 0 {
+		t.Fatalf("version 1 outbox sees version 2's: %v", d)
+	}
+	if d, _ := v2.Outbox().Dests(ctx, 10); len(d) != 1 {
+		t.Fatalf("version 2 outbox: %v", d)
+	}
+	b := []byte("binding")
+	if _, err := v2.KeyPackages().Upload(ctx, "kat2", []byte{2}, []store.KeyPackage{{Data: []byte("kp"), Binding: b}}, &store.KeyPackage{Data: []byte("lr"), Binding: b}); err != nil {
+		t.Fatal(err)
+	}
+	kps, err := v2.KeyPackages().Claim(ctx, "kat2", [][]byte{{2}})
+	if err != nil || len(kps) != 1 || string(kps[0].Binding) != "binding" || string(kps[0].Data) != "kp" {
+		t.Fatalf("claimed %+v %v", kps, err)
+	}
+	if kps, _ := v2.KeyPackages().Claim(ctx, "kat2", [][]byte{{2}}); len(kps) != 1 || !kps[0].LastResort || string(kps[0].Binding) != "binding" {
+		t.Fatalf("last resort %+v", kps)
 	}
 }

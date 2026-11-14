@@ -12,7 +12,10 @@ import (
 
 // ---- account ----
 
-type account struct{ db *sql.DB }
+type account struct {
+	db   *sql.DB
+	wire int // UpdateKeys reads this wire version's chains
+}
 
 func (a account) Keys(ctx context.Context, id string) ([][]byte, error) {
 	rows, err := a.db.QueryContext(ctx, "SELECT wrapped FROM account_keys WHERE id = ? ORDER BY via", id)
@@ -50,7 +53,7 @@ func (a account) UpdateKeys(ctx context.Context, id string, decide func([][]byte
 		return err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, "SELECT entry FROM chains WHERE id = ? ORDER BY seq", id)
+	rows, err := tx.QueryContext(ctx, "SELECT entry FROM chains WHERE id = ? AND wire = ? ORDER BY seq", id, a.wire)
 	if err != nil {
 		return err
 	}
