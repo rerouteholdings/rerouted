@@ -267,7 +267,28 @@ func (st *State) Apply(s wire.Signed) (*Applied, error) {
 	default:
 		return nil, invalid("signer is neither a current device nor the committed recovery key")
 	}
+	if err := checkMigrateAlone(e, signer); err != nil {
+		return nil, err
+	}
 	return st.applyEntry(s, e, key, signer)
+}
+
+// checkMigrateAlone enforces that an entry with `migrate` carries no other op, except the
+// `set-recovery` a recovery-signed entry has to carry (SPEC §6.8).
+func checkMigrateAlone(e wire.ChainEntry, signer Signer) error {
+	has := false
+	for _, op := range e.Ops {
+		has = has || op.Op == wire.OpMigrate
+	}
+	if !has {
+		return nil
+	}
+	for _, op := range e.Ops {
+		if op.Op != wire.OpMigrate && (op.Op != wire.OpSetRecovery || signer != SignerRecovery) {
+			return invalid("seq %d: an entry with migrate carries no other op, except a recovery-signed entry's set-recovery", e.Seq)
+		}
+	}
+	return nil
 }
 
 // applyV2 is Apply for wire version 2 (SPEC §3.2.2, §6.3): a device names itself in k by

@@ -138,6 +138,10 @@ func TestMigrateClosesTheChain(t *testing.T) {
 		"short hash":   w.next(w.dev, 1, w.head, map[string]any{"op": "migrate", "to": to[:16]}),
 		"two migrates": w.next(w.dev, 1, w.head, migrate, migrate),
 		"extra member": w.next(w.dev, 1, w.head, map[string]any{"op": "migrate", "to": to, "home": "x.example"}),
+		// An entry with migrate carries nothing else (SPEC §6.8), not even a device's
+		// set-handle, or a set-recovery it isn't allowed to sign.
+		"with another op":              w.next(w.dev, 1, w.head, migrate, map[string]any{"op": "set-handle", "handle": "x.chat.example"}),
+		"with a device's set-recovery": w.next(w.dev, 1, w.head, migrate, map[string]any{"op": "set-recovery", "next": w.commit(1)}),
 	} {
 		if _, err := st.Clone().Apply(e); err == nil {
 			t.Fatalf("%s: accepted", name)
@@ -193,6 +197,9 @@ func TestMigrateByRecovery(t *testing.T) {
 	}
 	if _, err := st.Clone().Apply(w.next(w.rec[0], 1, w.head, map[string]any{"op": "migrate", "to": to})); err == nil {
 		t.Fatal("a recovery-signed migrate without set-recovery")
+	}
+	if _, err := st.Clone().Apply(w.next(w.rec[0], 1, w.head, map[string]any{"op": "migrate", "to": to}, map[string]any{"op": "set-recovery", "next": w.commit(1)}, map[string]any{"op": "set-home", "home": "x.example"})); err == nil {
+		t.Fatal("a recovery-signed migrate with a set-home")
 	}
 	a, err := st.Apply(w.next(w.rec[0], 1, w.head, map[string]any{"op": "migrate", "to": to}, map[string]any{"op": "set-recovery", "next": w.commit(1)}))
 	if err != nil || a.Signer != SignerRecovery || !st.Closed() {
