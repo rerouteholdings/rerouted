@@ -485,3 +485,32 @@ func TestMigrateResolveFollows(t *testing.T) {
 		t.Fatalf("version 1 resolve: %d %+v", c, e)
 	}
 }
+
+// A version 2 client checking a migration fetches the version 1 chain through its own
+// homeserver's version 2 API, with its session (SPEC §6.8, Appendix A): `fresh` asks the
+// identity's home, so a chain that ended in migrate after the server cached it, or that it
+// never had, is found; a local one needs no home. An open version 1 chain stays a stranger
+// there, and without a session `fresh` for a remote identity is refused.
+func TestV1ChainFreshOnV2(t *testing.T) {
+	a, b, _, _ := twoServers(t)
+	kat := newUserOn(t, a, "kat", "a.test")
+	sam := newUserOn(t, b, "sam", "b.test")
+	kat2 := kat.migrateTo(a, "a.test")
+	var ch struct {
+		Entries []wire.Raw `json:"entries"`
+	}
+	path := "chain/" + sam.id + "?home=b.test&fresh=1"
+	if c := call2(t, a, "GET", path, kat2.token, nil, nil); c != 404 {
+		t.Fatalf("sam's open version 1 chain on version 2: %d", c)
+	}
+	sam.migrateTo(b, "b.test")
+	if c := call2(t, a, "GET", path, kat2.token, nil, &ch); c != 200 || len(ch.Entries) != 2 {
+		t.Fatalf("sam's closed version 1 chain, fresh from b.test: %d %d", c, len(ch.Entries))
+	}
+	if c := call2(t, a, "GET", "chain/"+kat.id+"?home=a.test&fresh=1", kat2.token, nil, &ch); c != 200 || len(ch.Entries) != 2 {
+		t.Fatalf("kat's own closed version 1 chain, fresh: %d %d", c, len(ch.Entries))
+	}
+	if c := call2(t, a, "GET", path, "", nil, nil); c != 401 {
+		t.Fatalf("fresh without a session: %d", c)
+	}
+}

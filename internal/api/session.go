@@ -309,10 +309,18 @@ func (s *Server) getChain(w http.ResponseWriter, r *http.Request, sess session) 
 	// is still accepted only under §6.5.
 	// It answers with an error, never the cache, when it can't: the client is about to decide
 	// on what it gets, and the cache may be missing a removal.
-	if r.URL.Query().Get("fresh") == "1" && !s.isLocal(r.Context(), id) {
+	// On version 2, the identity may be a version 1 one that migrated, whose closed chain a
+	// version 2 client checks (SPEC §6.8, below): one of ours needs no fetching either.
+	v1Local := s.wv == wire.V2 && s.legacy().isLocal(r.Context(), id)
+	if r.URL.Query().Get("fresh") == "1" && !s.isLocal(r.Context(), id) && !v1Local {
 		from := home
 		if cached, _, err := s.st.Remote().Get(r.Context(), id); err == nil && from == "" {
 			from = cached
+		}
+		if from == "" && s.wv == wire.V2 {
+			if cached, _, err := s.legacy().st.Remote().Get(r.Context(), id); err == nil {
+				from = cached
+			}
 		}
 		// Someone who moved away from here: ask where they went, not us (our copy is the
 		// tombstone, which stops at the move).
@@ -333,8 +341,16 @@ func (s *Server) getChain(w http.ResponseWriter, r *http.Request, sess session) 
 			return
 		}
 		if _, _, err := s.fetchRemote(r.Context(), id, from, true); err != nil {
-			writeError(w, http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "couldn't fetch the chain from its home: "+err.Error())
-			return
+			// Not a version 2 identity there: a version 1 one, fetched by version 1's rules
+			// and served below only if it ends in migrate (SPEC §6.8).
+			if s.wv != wire.V2 {
+				writeError(w, http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "couldn't fetch the chain from its home: "+err.Error())
+				return
+			}
+			if _, _, lerr := s.legacy().fetchRemote(r.Context(), id, from, true); lerr != nil {
+				writeError(w, http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "couldn't fetch the chain from its home: "+err.Error())
+				return
+			}
 		}
 	}
 	var all [][]byte
