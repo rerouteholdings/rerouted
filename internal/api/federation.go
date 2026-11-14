@@ -83,8 +83,18 @@ func validateChain(raw [][]byte) (*chain.State, error) {
 // lookup finds any identity's chain: local, cached from another server, or fetched
 // from homeHint if neither (SPEC §6.5). The returned home is where the chain says it lives.
 func (s *Server) lookup(ctx context.Context, id, homeHint string) (*chain.State, [][]byte, error) {
-	if st, raw, err := s.identity(ctx, id); err == nil {
-		return st, raw, nil
+	tomb, tombRaw, err := s.identity(ctx, id)
+	if err == nil && tomb.Home == s.cfg.Name {
+		return tomb, tombRaw, nil
+	}
+	// A tombstone: the identity moved away (SPEC §6.6), so its chain here stops at the move.
+	// Its new home has the current one, with every entry since: answer from our copy of that,
+	// or fetch it, and fall back to the tombstone only when neither works. Answering our own
+	// clients with the tombstone left them judging a group against history months old.
+	// (Other servers asking us with identity/fetch still get the tombstone, as §6.6 says.)
+	tombstone := err == nil
+	if tombstone && (homeHint == "" || homeHint == s.cfg.Name) {
+		homeHint = tomb.Home
 	}
 	if home, raw, err := s.st.Remote().Get(ctx, id); err == nil && (homeHint == "" || homeHint == home) {
 		if st, err := decodeChain(raw); err == nil {
@@ -92,9 +102,43 @@ func (s *Server) lookup(ctx context.Context, id, homeHint string) (*chain.State,
 		}
 	}
 	if homeHint == "" || homeHint == s.cfg.Name || s.fed == nil {
+		if tombstone {
+			return tomb, tombRaw, nil
+		}
 		return nil, nil, store.ErrNotFound
 	}
-	return s.fetchRemote(ctx, id, homeHint, true)
+	st, raw, err := s.fetchRemote(ctx, id, homeHint, true)
+	if err != nil && tombstone {
+		return tomb, tombRaw, nil
+	}
+	return st, raw, err
+}
+
+// lookupCached is lookup without asking another server, for requests without a session: a
+// local chain, our copy of a remote one (a mover's current one before their tombstone), or
+// the tombstone.
+func (s *Server) lookupCached(ctx context.Context, id string) ([][]byte, error) {
+	tomb, tombRaw, err := s.identity(ctx, id)
+	if err == nil && tomb.Home == s.cfg.Name {
+		return tombRaw, nil
+	}
+	if _, raw, rerr := s.st.Remote().Get(ctx, id); rerr == nil {
+		if _, derr := decodeChain(raw); derr == nil {
+			return raw, nil
+		}
+	}
+	if err == nil {
+		return tombRaw, nil
+	}
+	return nil, store.ErrNotFound
+}
+
+// tombstoneHome is where an identity we keep a tombstone for moved to, or "".
+func (s *Server) tombstoneHome(ctx context.Context, id string) string {
+	if st, _, err := s.identity(ctx, id); err == nil && st.Home != s.cfg.Name {
+		return st.Home
+	}
+	return ""
 }
 
 // fetchRemote asks a server for a chain, follows one move (set-home), and caches it.

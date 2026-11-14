@@ -310,6 +310,13 @@ func (s *Server) getChain(w http.ResponseWriter, r *http.Request, sess session) 
 		if cached, _, err := s.st.Remote().Get(r.Context(), id); err == nil && from == "" {
 			from = cached
 		}
+		// Someone who moved away from here: ask where they went, not us (our copy is the
+		// tombstone, which stops at the move).
+		if from == "" || from == s.cfg.Name {
+			if moved := s.tombstoneHome(r.Context(), id); moved != "" {
+				from = moved
+			}
+		}
 		switch {
 		case sess.id == "":
 			writeError(w, http.StatusUnauthorized, wire.ErrCodeUnauthenticated, "fresh needs a session")
@@ -326,7 +333,13 @@ func (s *Server) getChain(w http.ResponseWriter, r *http.Request, sess session) 
 			return
 		}
 	}
-	_, all, err := s.lookup(r.Context(), id, home)
+	var all [][]byte
+	var err error
+	if sess.id == "" {
+		all, err = s.lookupCached(r.Context(), id)
+	} else {
+		_, all, err = s.lookup(r.Context(), id, home)
+	}
 	if err != nil {
 		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "")
 		return
