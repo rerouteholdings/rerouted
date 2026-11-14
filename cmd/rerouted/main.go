@@ -81,6 +81,23 @@ func main() {
 		"client_v2", cfg.ClientBaseV2(), "s2s_v2", cfg.S2SBaseV2(), "kid_v2", key.V2.KID)
 	go server.RunOutbox(ctx)
 	go server.RunMaintenance(ctx)
+	go server.RunCommunityVoice(ctx)
+	for _, cm := range cfg.Communities {
+		log.Info("community server", "name", cm.Name, "base", cfg.CommunityBase(cm))
+	}
+	// Dev mode: a community name with a host:port of its own gets its own listener.
+	for _, l := range server.CommunityListeners() {
+		cs := &http.Server{Addr: l.Addr, Handler: l.Handler, ReadHeaderTimeout: 10 * time.Second}
+		go func() {
+			<-ctx.Done()
+			cs.Close()
+		}()
+		go func() {
+			if err := cs.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Error("community listener", "name", l.Name, "err", err)
+			}
+		}()
+	}
 	if cfg.Dev {
 		log.Warn("dev mode: S2S to these peers uses plain http", "peers", cfg.Peers)
 	}

@@ -48,10 +48,11 @@ type Server struct {
 	profiles  remoteProfiles
 	fire      *firehose // nil unless REROUTED_PUBLIC_FIREHOSE=on
 	clock     clockNotes
-	wv        int     // the wire version this Server speaks: wire.V1 or wire.V2
-	apiPath   string  // where its APIs live, with "client/" and "s2s/" under it
-	v2        *Server // on the version 1 Server, its version 2 sibling (wireversion.go)
-	v1        *Server // on the version 2 Server, its version 1 sibling, for migrations (migrate.go)
+	wv        int          // the wire version this Server speaks: wire.V1 or wire.V2
+	apiPath   string       // where its APIs live, with "client/" and "s2s/" under it
+	v2        *Server      // on the version 1 Server, its version 2 sibling (wireversion.go)
+	v1        *Server      // on the version 2 Server, its version 1 sibling, for migrations (migrate.go)
+	comm      *communities // on the version 1 Server: the community servers it runs (community.go)
 }
 
 // New makes the server for both wire versions: the version 1 Server, which serves
@@ -76,6 +77,7 @@ func New(cfg *config.Config, key serverkey.Key, log *slog.Logger, st store.Store
 	s.v2.mux, s.v2.inviteKey, s.v2.v1 = s.mux, s.inviteKey, s
 	s.routes()
 	s.v2.apiRoutes()
+	s.initCommunities()
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "no such endpoint")
 	})
@@ -116,16 +118,16 @@ func (s *Server) V2() *Server { return s.v2 }
 // doesn't wait on them.
 func (s *Server) CloseFirehose() { s.fire.closeAll() }
 
-func (s *Server) Handler() http.Handler { return s.cors(s.mux) }
+func (s *Server) Handler() http.Handler { return s.cors(s.dispatch(s.mux)) }
 
 // cors lets browser clients on any origin use the client API and read discovery
 // documents, as Reroute's web build does. It's safe to open to every origin: the
 // client API authenticates with bearer tokens, never cookies, so a page can only act
 // with a token it already holds. The S2S API gets no CORS: browsers never call it.
 func (s *Server) cors(next http.Handler) http.Handler {
-	client, clientV2 := s.cfg.APIPath+"client/", s.cfg.APIPathV2+"client/"
+	client, clientV2, comm := s.cfg.APIPath+"client/", s.cfg.APIPathV2+"client/", s.cfg.APIPathV2+"community/"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, client) || strings.HasPrefix(r.URL.Path, clientV2) || strings.HasPrefix(r.URL.Path, "/.well-known/tieroute/server") || strings.HasPrefix(r.URL.Path, "/.well-known/tieroute/handle") {
+		if strings.HasPrefix(r.URL.Path, client) || strings.HasPrefix(r.URL.Path, clientV2) || strings.HasPrefix(r.URL.Path, comm) || strings.HasPrefix(r.URL.Path, "/.well-known/tieroute/server") || strings.HasPrefix(r.URL.Path, "/.well-known/tieroute/handle") {
 			h := w.Header()
 			h.Set("Access-Control-Allow-Origin", "*")
 			h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type")

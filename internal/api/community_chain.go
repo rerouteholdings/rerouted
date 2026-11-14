@@ -1,0 +1,683 @@
+package api
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
+	"encoding/hex"
+	"errors"
+	"net/http"
+	"slices"
+	"time"
+
+	"github.com/rerouteholdings/rerouted/internal/cchain"
+	"github.com/rerouteholdings/rerouted/internal/chain"
+	"github.com/rerouteholdings/rerouted/internal/fed"
+	"github.com/rerouteholdings/rerouted/internal/store"
+	"github.com/rerouteholdings/rerouted/internal/wire"
+)
+
+// ---- sessions (spec/api/community.md, Sessions) ----
+
+// nonceID keeps this community's sign-in nonces apart from the homeserver's and other
+// communities', in the same table.
+func (c *community) nonceID(id string) string { return "cm|" + c.name + "|" + id }
+
+func (c *community) authChallenge(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID   string     `json:"id"`
+		Key  wire.Bytes `json:"key"`
+		Home string     `json:"home"`
+	}
+	if !readBody(w, r, &req) {
+		return
+	}
+	if !wire.ValidIdentityID(req.ID) || len(req.Key) != 32 || req.Home == "" {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "")
+		return
+	}
+	if !c.hs.limits.allow("cm-challenge|"+c.name+"|"+req.ID, 30, 3600, now(), true) {
+		rateLimited(w, 120)
+		return
+	}
+	ctx := r.Context()
+	// A key it doesn't know means the chain may have changed: ask its home (spec/api/community.md).
+	// Every sign-in refreshes the server's copy from home, which members read with GET
+	// members/{id}/chain. A key it doesn't know means the chain changed: then the fresh copy
+	// is required (spec/api/community.md).
+	cached, cerr := c.identityChain(ctx, req.ID, req.Home, false)
+	ch, err := c.identityChain(ctx, req.ID, req.Home, true)
+	if err != nil && cerr == nil && cached.st.HasDevice(req.Key) && cached.st.Home == req.Home {
+		ch, err = cached, nil
+	}
+	if err != nil {
+		var es *fed.ErrStatus
+		if errors.As(err, &es) && (es.Status == http.StatusNotFound || es.Status == http.StatusGone) || errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "")
+			return
+		}
+		writeError(w, http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "couldn't reach the identity's homeserver")
+		return
+	}
+	if ch.st.Home != req.Home {
+		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "the chain names another homeserver")
+		return
+	}
+	c.revokeRemovedDevices(ctx, req.ID, ch.st)
+	if !ch.st.HasDevice(req.Key) {
+		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "not a current device")
+		return
+	}
+	nonce := make([]byte, 16)
+	rand.Read(nonce)
+	t := now()
+	if err := c.hs.st.Sessions().PutNonce(ctx, c.nonceID(req.ID), req.Key, nonce, t+60); err != nil {
+		c.hs.unavailableRead(w, "storing an auth challenge", err)
+		return
+	}
+	writeBody(w, http.StatusOK, map[string]any{"nonce": wire.Bytes(nonce), "expires": t + 60, "now": t})
+}
+
+func (c *community) authSession(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Auth wire.Raw `json:"auth"`
+	}
+	if !readBody(w, r, &req) {
+		return
+	}
+	sig, ok := c.srv.decodeSignedField(w, req.Auth)
+	if !ok {
+		return
+	}
+	key, err := c.srv.signer(sig, "auth")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "")
+		return
+	}
+	var body struct {
+		ID     string     `json:"id"`
+		Nonce  wire.Bytes `json:"nonce"`
+		Server string     `json:"server"`
+		TS     int64      `json:"ts"`
+		Name   string     `json:"name,omitempty"`
+	}
+	if err := sig.Open(&body); err != nil {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, err.Error())
+		return
+	}
+	if body.Server != c.name {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "signed for a different server")
+		return
+	}
+	if absDiff(body.TS, now()) > chain.MaxSkew {
+		c.hs.writeClockSkew(w, body.TS, chain.MaxSkew)
+		return
+	}
+	ctx := r.Context()
+	ch, err := c.identityChain(ctx, body.ID, "", false)
+	if err != nil || !ch.st.HasDevice(key) {
+		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "")
+		return
+	}
+	if !c.srv.deviceSigned(ch.st, sig, "auth", key) {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "")
+		return
+	}
+	if st := c.snapshot(); st != nil && st.Banned(body.ID, ch.st.Home) {
+		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "banned")
+		return
+	}
+	if err := c.hs.st.Sessions().TakeNonce(ctx, c.nonceID(body.ID), key, body.Nonce, now()); err != nil {
+		writeError(w, http.StatusGone, wire.ErrCodeExpired, "nonce unknown, used, or expired")
+		return
+	}
+	raw := make([]byte, 32)
+	rand.Read(raw)
+	tok := base64.RawURLEncoding.EncodeToString(raw)
+	sum := sha256.Sum256([]byte(tok))
+	exp := time.Now().Add(tokenTTL).Unix()
+	if err := c.st.CreateToken(ctx, c.name, sum[:], body.ID, ch.st.Home, key, exp); err != nil {
+		c.hs.unavailableRead(w, "creating a session", err)
+		return
+	}
+	member, err := c.isMember(ctx, body.ID)
+	if err != nil {
+		c.hs.unavailableRead(w, "checking membership", err)
+		return
+	}
+	writeBody(w, http.StatusOK, map[string]any{"token": tok, "expires": exp, "member": member})
+}
+
+func (c *community) authLogout(w http.ResponseWriter, r *http.Request, sess csess) {
+	if err := c.st.RevokeToken(r.Context(), sess.tokenHash); err != nil {
+		c.hs.unavailableRead(w, "signing out", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// revokeRemovedDevices ends the sessions, streams, and voice visits of an identity's devices
+// that its chain no longer has (spec/api/community.md: as soon as the server sees it).
+func (c *community) revokeRemovedDevices(ctx context.Context, id string, st *chain.State) {
+	devs, err := c.st.SessionDevices(ctx, c.name, id, now())
+	if err != nil {
+		return
+	}
+	for _, d := range devs {
+		if st.HasDevice(d) {
+			continue
+		}
+		c.hs.logged("revoking a removed device's community sessions", c.st.RevokeDevice(ctx, c.name, id, d))
+		c.voice.leaveDevice(id, d)
+		for _, s := range c.streams.of(id) {
+			if bytes.Equal(s.device, d) {
+				s.close(closeNotAllowed, "this device was removed")
+			}
+		}
+	}
+}
+
+// refreshChains re-fetches the chain of every identity with a live session at least once a
+// day (spec/api/community.md), and revokes the devices removed from it.
+func (c *community) refreshChains(ctx context.Context) {
+	ids, err := c.st.SessionIDs(ctx, c.name, now())
+	if err != nil {
+		return
+	}
+	for _, id := range ids {
+		if t, ok := c.fetched.Load(id); ok && t.(int64) > now()-24*3600 {
+			continue
+		}
+		home := ""
+		if ch, err := c.identityChain(ctx, id, "", false); err == nil {
+			home = ch.st.Home
+		}
+		if ch, err := c.identityChain(ctx, id, home, true); err == nil {
+			c.revokeRemovedDevices(ctx, id, ch.st)
+		}
+	}
+}
+
+// ---- signers' keys (SPEC §16.2.2, "Which device keys count") ----
+
+// appendKeys is cchain.Keys for an entry appended now: by must be the session's identity,
+// and k a current device of it, re-fetching the chain once if it isn't.
+func (c *community) appendKeys(ctx context.Context, sess csess) cchain.Keys {
+	return func(by string, k []byte) (cchain.Signer, error) {
+		if by != sess.id {
+			return cchain.Signer{}, cchain.ErrNotDevice
+		}
+		ch, err := c.identityChain(ctx, by, sess.home, false)
+		if err == nil && !ch.st.HasDevice(k) {
+			ch, err = c.identityChain(ctx, by, sess.home, true)
+		}
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return cchain.Signer{}, cchain.ErrNotDevice
+			}
+			return cchain.Signer{}, err
+		}
+		pub := ch.st.DevicePub(k)
+		if pub == nil {
+			return cchain.Signer{}, cchain.ErrNotDevice
+		}
+		return cchain.Signer{Pub: pub, Home: ch.st.Home}, nil
+	}
+}
+
+// importKeys is cchain.Keys for a whole chain moving in (SPEC §16.2.3 set-home): as a client
+// checks, k is any device an add-device in by's chain added, removed since or not. homes
+// names where to fetch the chains this server doesn't have.
+func (c *community) importKeys(ctx context.Context, homes map[string]string) cchain.Keys {
+	return func(by string, k []byte) (cchain.Signer, error) {
+		ch, err := c.identityChain(ctx, by, homes[by], false)
+		if err != nil && homes[by] != "" {
+			ch, err = c.identityChain(ctx, by, homes[by], true)
+		}
+		if err != nil {
+			return cchain.Signer{}, &cchain.Error{Status: http.StatusBadRequest, Code: wire.ErrCodeInvalidChain, Msg: "no chain for " + by + ": name its homeserver in homes"}
+		}
+		pub := everDevice(ch.raw, k)
+		if pub == nil {
+			return cchain.Signer{}, cchain.ErrNotDevice
+		}
+		return cchain.Signer{Pub: pub, Home: ch.st.Home}, nil
+	}
+}
+
+// everDevice finds the composite key of a device an identity chain ever added.
+func everDevice(raw [][]byte, k []byte) *wire.CompositePublicKey {
+	var st *chain.State
+	for i, b := range raw {
+		sig, err := wire.DecodeSignedFor(wire.V2, b)
+		if err != nil {
+			return nil
+		}
+		if i == 0 {
+			if st, _, err = chain.GenesisFor(wire.V2, sig); err != nil {
+				return nil
+			}
+		} else if _, err := st.Apply(sig); err != nil {
+			return nil
+		}
+		if pub := st.DevicePub(k); pub != nil {
+			return pub
+		}
+	}
+	return nil
+}
+
+// ---- POST create (spec/api/community.md, Creating and moving a community) ----
+
+// groupReg is a group's registration with the hub: at creation, or a hub handoff.
+type groupReg struct {
+	Group    wire.Bytes `json:"group"`
+	Epoch    uint64     `json:"epoch"`
+	EpochKey wire.Bytes `json:"epoch-key"`
+	Info     wire.Bytes `json:"info"`
+	Tree     wire.Bytes `json:"tree"`
+}
+
+// check validates a group registration, writing the error itself, and returns the tree's size.
+func (c *community) checkReg(w http.ResponseWriter, ctx context.Context, g groupReg) (int64, bool) {
+	if len(g.Group) != 32 || !c.srv.epochKeyOK(g.EpochKey) || len(g.Info) == 0 || len(g.Tree) != 32 {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "group, epoch-key, info, and tree are required")
+		return 0, false
+	}
+	size, err := c.st.TreeSize(ctx, c.name, g.Tree)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "upload the tree first (POST tree/upload)")
+		return 0, false
+	}
+	if err != nil {
+		c.hs.unavailableRead(w, "reading a tree", err)
+		return 0, false
+	}
+	return size, true
+}
+
+func (c *community) create(w http.ResponseWriter, r *http.Request, sess csess) {
+	var req struct {
+		Entry wire.Raw          `json:"entry,omitempty"`
+		Chain []wire.Raw        `json:"chain,omitempty"`
+		Group *groupReg         `json:"group,omitempty"`
+		Code  string            `json:"code,omitempty"`
+		Homes map[string]string `json:"homes,omitempty"`
+	}
+	if !readBody(w, r, &req) {
+		return
+	}
+	if (req.Entry == nil) == (len(req.Chain) == 0) || (req.Group != nil && req.Entry == nil) {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, `exactly one of "entry" and "chain"; "group" goes with "entry"`)
+		return
+	}
+	// Who may create is the operator's choice: a creation code, or open (spec/api/community.md).
+	if code := c.hs.cfg.CommunityCode; code != "" && subtle.ConstantTimeCompare([]byte(req.Code), []byte(code)) != 1 {
+		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "creating a community here needs this server's creation code")
+		return
+	}
+	ctx := r.Context()
+	c.appending.Lock()
+	defer c.appending.Unlock()
+	t := now()
+	if req.Entry != nil {
+		c.createNew(w, ctx, sess, req.Entry, req.Group, t)
+		return
+	}
+	c.moveIn(w, ctx, sess, req.Chain, req.Homes, t)
+}
+
+func (c *community) createNew(w http.ResponseWriter, ctx context.Context, sess csess, entry wire.Raw, g *groupReg, t int64) {
+	if have := c.snapshot(); have != nil {
+		// A retry of the create that made it gets the same answer (SPEC §16.1).
+		if enc, err := wire.CanonicalSignedFor(wire.V2, entry); err == nil && len(c.ent) > 0 && bytes.Equal(enc, c.ent[0]) {
+			writeBody(w, http.StatusOK, map[string]any{"id": wire.Bytes(have.ID)})
+			return
+		}
+		writeError(w, http.StatusConflict, wire.ErrCodeAlreadyExists, "this server already hosts a community")
+		return
+	}
+	st, a, err := cchain.Create(entry, c.name, c.appendKeys(ctx, sess), t, cchain.Append)
+	if err != nil {
+		c.cerr(w, err)
+		return
+	}
+	if st.Owner != sess.id {
+		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "the create entry's owner must be you")
+		return
+	}
+	var cg *store.CGroup
+	if g != nil {
+		size, ok := c.checkReg(w, ctx, *g)
+		if !ok {
+			return
+		}
+		if g.Epoch != 0 {
+			writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "a new members group starts at epoch 0")
+			return
+		}
+		cg = &store.CGroup{Name: c.name, Group: g.Group, Epoch: 0, Key: g.EpochKey, Info: g.Info, Tree: g.Tree, TreeSize: size}
+	}
+	err = c.st.Create(ctx, store.Community{Name: c.name, ID: st.ID, Created: t}, [][]byte{a.Enc}, [][]byte{a.Hash},
+		store.CommunityMember{ID: sess.id, Home: sess.home, Since: t}, cg)
+	switch {
+	case errors.Is(err, store.ErrExists), errors.Is(err, store.ErrConflict):
+		writeError(w, http.StatusConflict, wire.ErrCodeAlreadyExists, "")
+		return
+	case err != nil:
+		c.hs.unavailableRead(w, "creating a community", err)
+		return
+	}
+	if cg != nil {
+		c.hs.logged("keeping a members group's tree", c.st.UseTree(ctx, c.name, cg.Tree, cg.Group, 0, t+treeKeep))
+		c.hs.logged("registering the owner's device", c.st.Register(ctx, c.name, cg.Group, sess.id, sess.dev))
+	}
+	c.mu.Lock()
+	c.state, c.ent = st, [][]byte{a.Enc}
+	c.mu.Unlock()
+	c.hs.log.Info("community created", "name", c.name, "id", hex.EncodeToString(st.ID), "owner", sess.id)
+	writeBody(w, http.StatusOK, map[string]any{"id": wire.Bytes(st.ID)})
+}
+
+// treeKeep is how long a tree an epoch used is kept (spec/api/community.md).
+const treeKeep = 30 * 24 * 3600
+
+// moveIn takes a community moving here: its whole chain, ending in a set-home naming this
+// server, checked entry by entry (SPEC §16.2.3, §16.6).
+func (c *community) moveIn(w http.ResponseWriter, ctx context.Context, sess csess, raws []wire.Raw, homes map[string]string, t int64) {
+	keys := c.importKeys(ctx, homes)
+	var st *cchain.State
+	var last *cchain.Applied
+	encs, hashes := make([][]byte, len(raws)), make([][]byte, len(raws))
+	for i, raw := range raws {
+		var a *cchain.Applied
+		var err error
+		if i == 0 {
+			st, a, err = cchain.Create(raw, "", keys, t, cchain.Import)
+		} else {
+			st, a, err = st.Apply(raw, keys, t, cchain.Import)
+		}
+		if err != nil {
+			c.cerr(w, err)
+			return
+		}
+		encs[i], hashes[i], last = a.Enc, a.Hash, a
+	}
+	if have := c.snapshot(); have != nil {
+		if bytes.Equal(have.ID, st.ID) && len(c.ent) == len(encs) && slices.EqualFunc(c.ent, encs, bytes.Equal) {
+			writeBody(w, http.StatusOK, map[string]any{"id": wire.Bytes(have.ID)})
+			return
+		}
+		writeError(w, http.StatusConflict, wire.ErrCodeAlreadyExists, "this server already hosts a community")
+		return
+	}
+	movesHere := false
+	for _, op := range last.Ops {
+		if op.Op == "set-home" && op.Server == c.name {
+			movesHere = true
+		}
+	}
+	if !movesHere || st.Server != c.name {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeInvalidChain, "the chain's newest entry must be a set-home naming this server")
+		return
+	}
+	if st.Owner != sess.id {
+		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "only the owner moves a community")
+		return
+	}
+	err := c.st.Create(ctx, store.Community{Name: c.name, ID: st.ID, Created: t}, encs, hashes, store.CommunityMember{ID: sess.id, Home: sess.home, Since: t}, nil)
+	switch {
+	case errors.Is(err, store.ErrExists):
+		writeError(w, http.StatusConflict, wire.ErrCodeAlreadyExists, "")
+		return
+	case err != nil:
+		c.hs.unavailableRead(w, "moving a community in", err)
+		return
+	}
+	c.mu.Lock()
+	c.state, c.ent = st, encs
+	c.mu.Unlock()
+	c.hs.log.Info("community moved in", "name", c.name, "id", hex.EncodeToString(st.ID), "entries", len(encs))
+	writeBody(w, http.StatusOK, map[string]any{"id": wire.Bytes(st.ID)})
+}
+
+// ---- GET chain, POST chain/append (spec/api/community.md, The community chain) ----
+
+func (c *community) chainRead(w http.ResponseWriter, r *http.Request) {
+	st := c.snapshot()
+	if st == nil {
+		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "this server hosts no community yet")
+		return
+	}
+	// Members, or code access. A community that moved away keeps serving its chain, ending in
+	// the set-home, to its members (spec/api/community.md).
+	if _, ok := c.codeAccess(r); !ok {
+		var allowed bool
+		c.authed(func(w http.ResponseWriter, r *http.Request, sess csess) {
+			ok, err := c.isMember(r.Context(), sess.id)
+			if err != nil {
+				c.hs.unavailableRead(w, "checking membership", err)
+				return
+			}
+			if !ok {
+				writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "neither a member nor valid code access")
+				return
+			}
+			allowed = true
+		}, movedOK)(w, r)
+		if !allowed {
+			return
+		}
+	} else if _, ok := c.authedID(r); !ok {
+		writeError(w, http.StatusUnauthorized, wire.ErrCodeUnauthenticated, "")
+		return
+	}
+	after := int64(-1)
+	if v := r.URL.Query().Get("after"); v != "" {
+		n, ok := queryUint(r, "after", 0)
+		if !ok {
+			writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "after")
+			return
+		}
+		after = int64(n)
+	}
+	c.mu.RLock()
+	ent := c.ent
+	c.mu.RUnlock()
+	items := []wire.Raw{}
+	for i := after + 1; i >= 0 && i < int64(len(ent)); i++ {
+		items = append(items, ent[i])
+	}
+	writeBody(w, http.StatusOK, map[string]any{"entries": items, "head": st.Seq})
+}
+
+// GET members/{id}/chain: the community server's copy of a member's identity chain, as it
+// last fetched it, for members and code access. Members can't otherwise find the chains of
+// signers and joiners on homeservers they don't know. The chain is self-certifying; a client
+// that needs a newer copy asks the home its set-home names, through its own homeserver.
+func (c *community) memberChain(w http.ResponseWriter, r *http.Request, sess csess) {
+	ctx := r.Context()
+	if _, ok := c.codeAccess(r); !ok {
+		ok, err := c.isMember(ctx, sess.id)
+		if err != nil {
+			c.hs.unavailableRead(w, "checking membership", err)
+			return
+		}
+		if !ok {
+			writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "neither a member nor valid code access")
+			return
+		}
+	}
+	id := r.PathValue("id")
+	m, err := c.st.Member(ctx, c.name, id)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "not a member")
+		return
+	}
+	if err != nil {
+		c.hs.unavailableRead(w, "reading a member", err)
+		return
+	}
+	ch, err := c.identityChain(ctx, id, m.Home, false)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "no copy of that chain, and its homeserver couldn't be reached")
+		return
+	}
+	entries := make([]wire.Raw, len(ch.raw))
+	for i, e := range ch.raw {
+		entries[i] = e
+	}
+	writeBody(w, http.StatusOK, map[string]any{"entries": entries, "head": len(ch.raw) - 1})
+}
+
+// authedID is the session's identity, for an endpoint that also takes code access.
+func (c *community) authedID(r *http.Request) (string, bool) {
+	tok, ok := bytesCutBearer(r)
+	if !ok {
+		return "", false
+	}
+	sum := sha256.Sum256([]byte(tok))
+	id, home, _, err := c.st.LookupToken(r.Context(), c.name, sum[:], now())
+	if err != nil {
+		return "", false
+	}
+	if st := c.snapshot(); st != nil && st.Banned(id, home) {
+		return "", false
+	}
+	return id, true
+}
+
+func bytesCutBearer(r *http.Request) (string, bool) {
+	h := r.Header.Get("Authorization")
+	const p = "Bearer "
+	if len(h) <= len(p) || h[:len(p)] != p {
+		return "", false
+	}
+	return h[len(p):], true
+}
+
+func (c *community) chainAppend(w http.ResponseWriter, r *http.Request, sess csess) {
+	var req struct {
+		Entry wire.Raw `json:"entry"`
+	}
+	if !readBody(w, r, &req) {
+		return
+	}
+	if req.Entry == nil {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "entry")
+		return
+	}
+	ctx := r.Context()
+	st := c.snapshot()
+	if st == nil {
+		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "")
+		return
+	}
+	// After a set-home, the server the chain no longer names refuses appends (SPEC §16.2.3).
+	if c.moved(st) {
+		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "this community moved to "+st.Server)
+		return
+	}
+	// Idempotent: the entry that's already the head gets the same answer.
+	if enc, err := wire.CanonicalSignedFor(wire.V2, req.Entry); err == nil {
+		c.mu.RLock()
+		head := c.ent[len(c.ent)-1]
+		c.mu.RUnlock()
+		if bytes.Equal(enc, head) {
+			writeBody(w, http.StatusOK, map[string]any{"seq": st.Seq, "head": wire.Bytes(st.Head)})
+			return
+		}
+	}
+	// Anyone who can sign in could make the chain grow (SPEC §16.2.2).
+	if !c.hs.limits.allow("cm-append|"+c.name+"|"+sess.id, 120, 3600, now(), true) {
+		rateLimited(w, 60)
+		return
+	}
+	c.appending.Lock()
+	defer c.appending.Unlock()
+	st = c.snapshot()
+	next, a, err := st.Apply(req.Entry, c.appendKeys(ctx, sess), now(), cchain.Append)
+	if err != nil {
+		c.cerr(w, err)
+		return
+	}
+	members, err := c.st.Members(ctx, c.name)
+	if err != nil {
+		c.hs.unavailableRead(w, "listing members", err)
+		return
+	}
+	// A ban is a kick too: of the banned identity, and of every member a domain ban covers
+	// but the owner (spec/api/community.md).
+	var removed []string
+	for _, m := range members {
+		if !st.Banned(m.ID, m.Home) && next.Banned(m.ID, m.Home) && m.ID != next.Owner {
+			removed = append(removed, m.ID)
+		}
+	}
+	if err := c.st.Append(ctx, c.name, a.Seq, a.Enc, a.Hash, removed); err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			writeError(w, http.StatusConflict, wire.ErrCodeStaleHead, "")
+			return
+		}
+		c.hs.unavailableRead(w, "appending to a community chain", err)
+		return
+	}
+	c.mu.Lock()
+	c.state, c.ent = next, append(slices.Clip(c.ent), a.Enc)
+	c.mu.Unlock()
+	c.afterAppend(ctx, st, next, a, removed)
+	writeBody(w, http.StatusOK, map[string]any{"seq": a.Seq, "head": wire.Bytes(a.Hash)})
+}
+
+// afterAppend does what the server does after an append (spec/api/community.md): tells every
+// member, applies a ban's kick, stops delivering restricted groups to identities that lost
+// their role in its see list, deletes a removed channel's history, and updates voice.
+func (c *community) afterAppend(ctx context.Context, before, st *cchain.State, a *cchain.Applied, removed []string) {
+	for _, id := range removed {
+		c.removed(ctx, id, "ban")
+	}
+	notice, _ := wire.Marshal(map[string]any{"t": "community-chain", "seq": a.Seq, "head": wire.Bytes(a.Hash)})
+	c.store(ctx, []store.CItem{{TS: now(), Members: true, Notice: notice}})
+	for _, op := range a.Ops {
+		if op.Op == "remove-channel" {
+			c.hs.logged("deleting a removed channel's history", c.st.DeleteSegments(ctx, c.name, op.ID))
+			c.voice.closeChannel(op.ID)
+		}
+	}
+	c.prune(ctx, st)
+	c.voice.regate(st)
+}
+
+// prune stops delivering each restricted channel's group to identities without a role in
+// its see list (spec/api/community.md, after assign-roles, edit-channel, remove-channel).
+func (c *community) prune(ctx context.Context, st *cchain.State) {
+	groups, err := c.st.Groups(ctx, c.name)
+	if err != nil {
+		return
+	}
+	for _, g := range groups {
+		if g.See == "" {
+			continue
+		}
+		regs, err := c.st.Regs(ctx, g.Group)
+		if err != nil {
+			continue
+		}
+		done := map[string]bool{}
+		for _, reg := range regs {
+			if done[reg.ID] || seesList(st, reg.ID, g.See) {
+				continue
+			}
+			done[reg.ID] = true
+			c.hs.logged("unregistering an identity from a restricted group", c.st.UnregisterIdentity(ctx, g.Group, reg.ID))
+		}
+	}
+}
+
+// seesList reports whether id holds a role in a see list (cchain.SeeKey form).
+func seesList(st *cchain.State, id, see string) bool {
+	return st.CanSee(id, &cchain.Channel{See: parseSeeKey(see)})
+}

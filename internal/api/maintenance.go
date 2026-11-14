@@ -74,6 +74,7 @@ func (s *Server) maintain(ctx context.Context) {
 	if _, err := s.st.Sessions().PruneNonces(ctx, now()); err != nil {
 		s.log.Error("pruning nonces", "err", err)
 	}
+	s.maintainCommunities(ctx)
 	s.limits.sweep(now())
 	s.saveLimits()
 }

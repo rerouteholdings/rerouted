@@ -23,9 +23,10 @@ type serverKeyDoc struct {
 }
 
 type apiBase struct {
-	V      int    `json:"v"`
-	Client string `json:"client,omitempty"`
-	S2S    string `json:"s2s"`
+	V         int    `json:"v"`
+	Client    string `json:"client,omitempty"`
+	S2S       string `json:"s2s"`
+	Community string `json:"community,omitempty"` // with role "community" (SPEC §16.1)
 }
 
 type serverDoc struct {
@@ -59,6 +60,11 @@ func (s *Server) serverDoc(w http.ResponseWriter, r *http.Request) {
 		}},
 		Handles:      s.cfg.Handles,
 		Registration: s.cfg.Registration,
+	}
+	// This name can also be a community server (SPEC §16.1), with the same keys.
+	if c := s.comm.byName[s.cfg.Name]; c != nil {
+		doc.Roles = append(doc.Roles, "community")
+		doc.APIs[1].Community = s.cfg.CommunityBase(c.conf)
 	}
 	if s.cfg.Registration == "invite" && s.cfg.RegistrationPublic {
 		doc.Invite = s.cfg.RegistrationCode // open signups are a public invite (SPEC §8.2)

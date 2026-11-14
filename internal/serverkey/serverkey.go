@@ -77,7 +77,13 @@ type fileV2 struct {
 }
 
 func loadOrCreateV2(dataDir string) (CompositeKey, error) {
-	path := filepath.Join(dataDir, "server-key-v2.json")
+	return LoadOrCreateComposite(dataDir, "server-key-v2.json")
+}
+
+// LoadOrCreateComposite reads a composite key from dataDir/file, creating it if it
+// doesn't exist: each community server name has its own (SPEC §16.1).
+func LoadOrCreateComposite(dataDir, file string) (CompositeKey, error) {
+	path := filepath.Join(dataDir, file)
 	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		f := fileV2{MLDSA: make([]byte, 32), Ed25519: make([]byte, ed25519.SeedSize), Created: time.Now().Unix()}

@@ -48,6 +48,35 @@ type Config struct {
 	// before anything changes. Recovery-signed entries still go through. An operator measure
 	// for when clients' move flow is known to be unsafe. Off by default.
 	PauseMoves bool
+
+	// Community servers (SPEC §16). REROUTED_COMMUNITIES lists the server names this process
+	// serves as community servers, each hosting one community: name or name=url, comma-
+	// separated, where url is the origin it's reached at (default https://{name}). A name
+	// equal to REROUTED_NAME is also the homeserver. Requests are told apart by their Host
+	// header; in dev mode, a community whose url has its own host:port gets its own listener.
+	Communities []Community
+	// REROUTED_COMMUNITY_CODE: the creation code POST create needs. Without one, creating a
+	// community needs REROUTED_COMMUNITY_OPEN=on, which lets anyone who signs in create one
+	// on a name that has none yet.
+	CommunityCode string
+	CommunityOpen bool
+	// REROUTED_COMMUNITY_FILE_DAYS (default 30; 0 keeps files until deleted) and
+	// REROUTED_COMMUNITY_FILE_QUOTA (default 10G): each community's files (SPEC §16.4).
+	CommunityFileDays  int
+	CommunityFileQuota int64
+	// REROUTED_COMMUNITY_HISTORY_QUOTA (default 10G): each community's history segments.
+	CommunityHistoryQuota int64
+	// REROUTED_VOICE_UDP_PORT: one UDP port for every voice connection (0, the default:
+	// a random port per connection). REROUTED_VOICE_PUBLIC_IPS: the addresses to advertise
+	// behind 1:1 NAT, comma-separated.
+	VoiceUDPPort   int
+	VoicePublicIPs []string
+}
+
+// Community is one server name this process serves as a community server.
+type Community struct {
+	Name string
+	URL  string // the origin it's reached at, without a trailing slash
 }
 
 // Load reads .env (if present, without overriding variables already set),
@@ -97,6 +126,32 @@ func Load(envFile string) (*Config, error) {
 	if c.BackupQuota, err = bytesSetting("REROUTED_BACKUP_QUOTA", 1<<30); err != nil {
 		return nil, err
 	}
+	for _, p := range strings.Split(os.Getenv("REROUTED_COMMUNITIES"), ",") {
+		if p = strings.TrimSpace(p); p == "" {
+			continue
+		}
+		name, url, _ := strings.Cut(p, "=")
+		c.Communities = append(c.Communities, Community{Name: strings.ToLower(strings.TrimSpace(name)), URL: strings.TrimRight(strings.TrimSpace(url), "/")})
+	}
+	c.CommunityCode = os.Getenv("REROUTED_COMMUNITY_CODE")
+	c.CommunityOpen = get("REROUTED_COMMUNITY_OPEN", "off") == "on"
+	if c.CommunityFileDays, err = strconv.Atoi(get("REROUTED_COMMUNITY_FILE_DAYS", "30")); err != nil || c.CommunityFileDays < 0 {
+		return nil, errors.New("REROUTED_COMMUNITY_FILE_DAYS must be a whole number of days")
+	}
+	if c.CommunityFileQuota, err = bytesSetting("REROUTED_COMMUNITY_FILE_QUOTA", 10<<30); err != nil {
+		return nil, err
+	}
+	if c.CommunityHistoryQuota, err = bytesSetting("REROUTED_COMMUNITY_HISTORY_QUOTA", 10<<30); err != nil {
+		return nil, err
+	}
+	if c.VoiceUDPPort, err = strconv.Atoi(get("REROUTED_VOICE_UDP_PORT", "0")); err != nil || c.VoiceUDPPort < 0 || c.VoiceUDPPort > 65535 {
+		return nil, errors.New("REROUTED_VOICE_UDP_PORT must be a port number")
+	}
+	for _, ip := range strings.Split(os.Getenv("REROUTED_VOICE_PUBLIC_IPS"), ",") {
+		if ip = strings.TrimSpace(ip); ip != "" {
+			c.VoicePublicIPs = append(c.VoicePublicIPs, ip)
+		}
+	}
 	for _, p := range strings.Split(os.Getenv("REROUTED_DEV_PEERS"), ",") {
 		if name, url, ok := strings.Cut(strings.TrimSpace(p), "="); ok {
 			c.Peers[name] = strings.TrimRight(url, "/")
@@ -132,6 +187,28 @@ func (c *Config) validate() error {
 	}
 	if len(c.TurnURLs) > 0 && len(c.TurnSecret) < 16 {
 		return errors.New("REROUTED_TURN_URLS needs REROUTED_TURN_SECRET of at least 16 characters")
+	}
+	seen := map[string]bool{}
+	for i, cm := range c.Communities {
+		switch {
+		case cm.Name == "" || strings.Contains(cm.Name, ":") || strings.Contains(cm.Name, "/"):
+			return fmt.Errorf("REROUTED_COMMUNITIES: %q isn't a bare DNS name (SPEC §5.1)", cm.Name)
+		case seen[cm.Name]:
+			return fmt.Errorf("REROUTED_COMMUNITIES lists %s twice: a name hosts one community (SPEC §16.1)", cm.Name)
+		case cm.URL == "" && cm.Name == c.Name:
+			c.Communities[i].URL = c.PublicURL
+		case cm.URL == "":
+			c.Communities[i].URL = "https://" + cm.Name
+		case !strings.HasPrefix(cm.URL, "https://") && !c.Dev:
+			return fmt.Errorf("REROUTED_COMMUNITIES: %s's url must be https:// outside dev mode", cm.Name)
+		}
+		seen[cm.Name] = true
+	}
+	if len(c.Communities) > 0 && c.CommunityCode == "" && !c.CommunityOpen {
+		return errors.New("REROUTED_COMMUNITIES needs REROUTED_COMMUNITY_CODE, the code creating a community takes, or REROUTED_COMMUNITY_OPEN=on to let anyone create one")
+	}
+	if c.CommunityCode != "" && len(c.CommunityCode) < 10 {
+		return errors.New("REROUTED_COMMUNITY_CODE must be at least 10 characters")
 	}
 	if c.Registration == "invite" && len(c.RegistrationCode) < 10 {
 		return errors.New("REROUTED_REGISTRATION=invite needs REROUTED_REGISTRATION_CODE of at least 10 characters")
@@ -205,6 +282,13 @@ func (c *Config) S2SBase() string { return c.PublicURL + c.APIPath + "s2s/" }
 func (c *Config) ClientBaseV2() string { return c.PublicURL + c.APIPathV2 + "client/" }
 func (c *Config) S2SBaseV2() string    { return c.PublicURL + c.APIPathV2 + "s2s/" }
 
+// CommunityBase is a community's API base URL, published in its server document (SPEC §5.1).
+func (c *Config) CommunityBase(cm Community) string { return cm.URL + c.APIPathV2 + "community/" }
+
+// CommunityS2SBase is the S2S base a community-only name lists, as SPEC §5.1 requires; it
+// answers 501 there.
+func (c *Config) CommunityS2SBase(cm Community) string { return cm.URL + c.APIPathV2 + "s2s/" }
+
 // Defaults fills in the public URL and API path when they're unset.
 func (c *Config) Defaults() {
 	if c.MediaQuota == 0 {
@@ -212,6 +296,12 @@ func (c *Config) Defaults() {
 	}
 	if c.BackupQuota == 0 {
 		c.BackupQuota = 1 << 30
+	}
+	if c.CommunityFileQuota == 0 {
+		c.CommunityFileQuota = 10 << 30
+	}
+	if c.CommunityHistoryQuota == 0 {
+		c.CommunityHistoryQuota = 10 << 30
 	}
 	if c.PublicURL == "" {
 		c.PublicURL = "https://" + c.Name
