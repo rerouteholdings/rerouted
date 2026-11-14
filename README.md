@@ -4,7 +4,7 @@ rerouted is the reference homeserver for [Tieroute](https://rerouteholdings.llc/
 
 A *homeserver* holds its users' identities, and stores their messages until their devices fetch them. rerouted never needs to read a message: clients encrypt everything with Messaging Layer Security (MLS), and rerouted routes by the delivery envelope alone. It's written in Go, without cgo, and keeps its data in one SQLite database and a directory of files.
 
-rerouted is alpha software, maintained by Reroute Holdings LLC. It runs the public alpha homeservers. It speaks Tieroute wire version 1. The current spec, version 2.0, defines wire version 2, with post-quantum signatures, a migration from wire version 1, and community servers, and rerouted doesn't implement it yet.
+rerouted is alpha software, maintained by Reroute Holdings LLC. It runs the public alpha homeservers. It speaks Tieroute wire versions 1 and 2 side by side, each under its own API base. The current spec, version 2.0, defines wire version 2, with post-quantum signatures, a migration from wire version 1, and community servers. rerouted implements version 2's identities, contacts, key packages, and delivery so far, but not its groups, the migration, or community servers.
 
 ## Documentation
 
@@ -19,7 +19,9 @@ The protocol itself is documented in the [Tieroute specification](https://rerout
 
 ## What it implements
 
-rerouted implements every wire version 1 endpoint in the spec's Appendix A, for clients and for other servers. Comments in the code cite the spec section each rule comes from, such as `SPEC §11.6`. Section numbers are those of the current spec; where version 2.0 changed a rule, rerouted follows wire version 1.
+rerouted implements every wire version 1 endpoint in the spec's Appendix A, for clients and for other servers. Comments in the code cite the spec section each rule comes from, such as `SPEC §11.6`. Section numbers are those of the current spec; where version 2.0 changed a rule, the version 1 API follows wire version 1.
+
+The wire version 2 API serves the same endpoints for version 2 identities: composite ML-DSA-65 + Ed25519 signatures (§3.2), chains with composite device keys, the 10-device ceiling, and recovery forks of any age (§6.4), key packages with their `kp-binding` (§3.2.2), and S2S calls signed with a composite server key (§8.3). The two versions keep their identities apart, and neither accepts the other's signatures (§5.1). Handles are one namespace across both.
 
 | Area | Spec | What rerouted does |
 |---|---|---|
@@ -37,7 +39,9 @@ rerouted implements every wire version 1 endpoint in the spec's Appendix A, for 
 
 What isn't built yet:
 
-- Wire version 2 (spec version 2.0): composite signatures, message keys, the 10-device ceiling, the migration from wire version 1, and community servers.
+- Wire version 2's groups and hub (§11.6): on the version 2 API, `groups/create`, `groups/epoch-key`, `GET groups/{group}/commits`, the hub's S2S endpoints, and commits sent through `POST send` answer `501 not-implemented`.
+- The migration from wire version 1 (§6.8), and community servers (§16).
+- The public firehose shows wire version 1's deliveries only.
 - Batching several deliveries into one server-to-server `deliver` call. Each call carries one, which the spec allows.
 - Registration codes with use counts or expiry dates. There's one code, `REROUTED_REGISTRATION_CODE`.
 - Changing handle within the same homeserver. A `set-handle` entry is accepted, but the new handle doesn't resolve, and the old one isn't freed.

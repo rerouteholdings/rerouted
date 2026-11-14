@@ -11,7 +11,8 @@ rerouted checks its settings when it starts, and exits with a message naming the
 | `REROUTED_NAME` | None: required | This server's DNS name, such as `chat.example`. Never an IP address or a URL (SPEC §5.1). |
 | `REROUTED_LISTEN` | `127.0.0.1:8080` | The address and port rerouted listens on, over plain HTTP. Put a reverse proxy in front for TLS. |
 | `REROUTED_PUBLIC_URL` | `https://` + `REROUTED_NAME` | The origin clients and other servers reach the APIs at. It MUST be `https://` outside dev mode. |
-| `REROUTED_API_PATH` | `/.well-known/tieroute/v1/` | Where the APIs live under the public URL. The server document publishes them, so clients and other servers find them there (SPEC §8.1). |
+| `REROUTED_API_PATH` | `/.well-known/tieroute/v1/` | Where the wire version 1 APIs live under the public URL. The server document publishes them, so clients and other servers find them there (SPEC §8.1). |
+| `REROUTED_API_PATH_V2` | `/.well-known/tieroute/v2/` | Where the wire version 2 APIs live, published beside version 1's. It has to differ from `REROUTED_API_PATH`. |
 | `REROUTED_DATA_DIR` | `./data` | Where the database, files, and server key live. |
 | `REROUTED_STORE` | `sqlite` | `sqlite` keeps everything in `REROUTED_DATA_DIR`. `temp` uses a throwaway database that's deleted on shutdown, for demos. |
 
