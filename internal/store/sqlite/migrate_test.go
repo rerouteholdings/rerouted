@@ -3,8 +3,10 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/rerouteholdings/rerouted/internal/store"
 )
@@ -73,5 +75,31 @@ func TestMigrateV2(t *testing.T) {
 	}
 	if err := st.Hub().PruneCommits(ctx, 0); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A commit that loses the race for its epoch, or names a group the hub doesn't know, is
+// refused at once: the check runs inside Accept's transaction, which holds the only
+// writer connection (SPEC §11.6).
+func TestHubAcceptRefusals(t *testing.T) {
+	st, err := OpenTemp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := st.Hub().Register(ctx, store.HubGroup{Group: []byte{1}, EpochKey: []byte{2}}); err != nil {
+		t.Fatal(err)
+	}
+	c := store.Commit{Epoch: 0, Data: []byte{7}}
+	if err := st.Hub().Accept(ctx, []byte{1}, 0, []byte{3}, false, c); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Hub().Accept(ctx, []byte{1}, 0, []byte{4}, false, c); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("a second commit for epoch 0: %v", err)
+	}
+	if err := st.Hub().Accept(ctx, []byte{9}, 0, []byte{4}, false, c); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("an unknown group: %v", err)
 	}
 }

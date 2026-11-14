@@ -1225,8 +1225,14 @@ func (h hub) Accept(ctx context.Context, group []byte, epoch uint64, nextKey []b
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		if _, err := h.Group(ctx, group); errors.Is(err, store.ErrNotFound) {
+		// Asked inside the transaction: it holds the one writer connection, so a query
+		// outside it would wait for the connection forever.
+		var one int
+		switch err := tx.QueryRowContext(ctx, "SELECT 1 FROM hub WHERE grp = ?", group).Scan(&one); {
+		case errors.Is(err, sql.ErrNoRows):
 			return store.ErrNotFound
+		case err != nil:
+			return err
 		}
 		return store.ErrConflict
 	}
