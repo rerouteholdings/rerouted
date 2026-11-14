@@ -44,6 +44,21 @@ Sizes are a number of bytes, or a number with a `K`, `M`, or `G` suffix for KiB,
 
 See [Run a call relay](run-a-call-relay.md).
 
+## Community servers
+
+rerouted can serve any number of server names as community servers (SPEC §16), each hosting one community, beside its homeserver. Each name answers as its own server: its own server document, listing the `community` role, its own composite server key (`community-key-NAME.json` in the data directory), and its own API base. A name equal to `REROUTED_NAME` is also the homeserver, with both roles in one document and the homeserver's keys. Point each name's DNS at the reverse proxy, which passes the `Host` header on: rerouted tells the communities apart by it, and says yes to certificates for them on demand.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `REROUTED_COMMUNITIES` | None | The community server names, comma-separated. Each is `name`, or `name=URL` to be reached at an origin other than `https://name`. In dev mode, a URL with a host and port of its own gets a listener of its own. |
+| `REROUTED_COMMUNITY_CODE` | None | The creation code `POST create` needs, at least 10 characters. Give it to whoever will own each community. |
+| `REROUTED_COMMUNITY_OPEN` | `off` | `on` lets anyone who signs in create the community on a name that hasn't one yet. Required with `REROUTED_COMMUNITIES` if there's no creation code. |
+| `REROUTED_COMMUNITY_FILE_DAYS` | `30` | How many days files in channels are kept. `0` keeps them until their message is deleted. |
+| `REROUTED_COMMUNITY_FILE_QUOTA` | `10G` | Bytes of files each community may store. Uploads past it get `413 over-quota`. |
+| `REROUTED_COMMUNITY_HISTORY_QUOTA` | `10G` | Bytes of history segments each community may store. Uploads past it get `413 over-quota`; stored segments are kept. |
+| `REROUTED_VOICE_UDP_PORT` | `0` | One UDP port that carries every voice connection, to open in a firewall. `0` uses a random port for each connection. |
+| `REROUTED_VOICE_PUBLIC_IPS` | None | The public addresses to advertise for voice behind 1:1 NAT, comma-separated. |
+
 ## Certificates on demand
 
 A reverse proxy that gets certificates on demand, such as Caddy, can ask rerouted at `GET /v0/tls-ask?domain=NAME` whether to issue one. rerouted says yes for its own name, for handles registered on it, and for the names below.
