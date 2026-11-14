@@ -87,7 +87,7 @@ type Doc struct {
 	} `json:"keys"`
 }
 
-// Version is the wire version rerouted speaks (SPEC §19.1).
+// Version is the wire version rerouted speaks (SPEC §20.1).
 const Version = 1
 
 // S2SBase finds a server's S2S API from its document: follow your nose (SPEC §8.1).
@@ -433,7 +433,7 @@ func (f *Fed) ResolveHandle(ctx context.Context, handle string) (HandleDoc, erro
 		}
 		return d, nil
 	}
-	// No document: the DNS record. Plain DNS is accepted without DNSSEC, a risk SPEC §18.1 lists.
+	// No document: the DNS record. Plain DNS is accepted without DNSSEC, a risk SPEC §19.1 lists.
 	d, dnsErr := f.resolveTXT(ctx, handle)
 	if dnsErr != nil {
 		return HandleDoc{}, fmt.Errorf("no handle document (%v), and no DNS record (%v)", err, dnsErr)

@@ -88,7 +88,7 @@ func (s Signed) VerifySelf(t string) (ed25519.PublicKey, error) {
 	return ed25519.PublicKey(k), s.Verify(t, k)
 }
 
-// OpenClosed is Open for the closed schemas of SPEC §19.2: a member v doesn't
+// OpenClosed is Open for the closed schemas of SPEC §20.2: a member v doesn't
 // declare is an error, not ignored.
 func (s Signed) OpenClosed(v any) error { return UnmarshalClosed([]byte(s.B), v) }
 

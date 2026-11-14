@@ -16,7 +16,7 @@ We'll acknowledge the report within a week, keep you updated as we fix it, and c
 
 ## What counts
 
-Anything that breaks a promise in the Tieroute spec's security considerations (SPEC §17) or a server-side claim the conformance suite checks, such as:
+Anything that breaks a promise in the Tieroute spec's security considerations (SPEC §18) or a server-side claim the conformance suite checks, such as:
 
 - reading or changing anything a server mustn't see or change
 - acting as an identity, device, or server without its keys

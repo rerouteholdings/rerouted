@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// SPEC §16.3: reports are kept, can be forwarded to the reported identity's server, and
+// SPEC §17.3: reports are kept, can be forwarded to the reported identity's server, and
 // can't be sent in someone else's name.
 func TestReports(t *testing.T) {
 	a, b, _, sb := twoServers(t)

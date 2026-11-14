@@ -63,7 +63,7 @@ func HexBytes(b []byte) []byte {
 	return out
 }
 
-// Check rejects members that don't belong to the op (SPEC §19.2: chain ops are closed).
+// Check rejects members that don't belong to the op (SPEC §20.2: chain ops are closed).
 func (o Op) Check() error {
 	extra := false
 	switch o.Op {

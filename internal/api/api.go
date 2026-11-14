@@ -113,7 +113,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 
 // clientEndpoints lists every client endpoint rerouted routes (SPEC Appendix A).
 // Those without a handler answer 501 not-implemented, which the core server tier allows
-// for some (SPEC §19.3) and the rest are still to come.
+// for some (SPEC §20.3) and the rest are still to come.
 var clientEndpoints = []string{
 	"POST register",
 	"POST auth/challenge",

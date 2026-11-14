@@ -426,7 +426,7 @@ type Backups interface {
 	Usage(ctx context.Context, id string) (int64, error)
 }
 
-// Report is a report kept for this server's admins (SPEC §16.3).
+// Report is a report kept for this server's admins (SPEC §17.3).
 type Report struct {
 	Received int64
 	Origin   string // the server it came from; this server's own name for local users

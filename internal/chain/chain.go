@@ -19,7 +19,7 @@ import (
 var ErrInvalid = errors.New("invalid chain")
 
 // ErrUnknownOp is an op this version doesn't know. It also matches ErrInvalid.
-// Callers map it to "unknown-kind" (SPEC §19.2).
+// Callers map it to "unknown-kind" (SPEC §20.2).
 var ErrUnknownOp = errors.New("unknown op")
 
 func invalid(format string, a ...any) error {
@@ -60,7 +60,7 @@ type Applied struct {
 }
 
 // openEntry decodes a chain entry as a closed schema: unknown members, in the entry or
-// in any op, are rejected, so every implementation computes the same state (SPEC §19.2).
+// in any op, are rejected, so every implementation computes the same state (SPEC §20.2).
 func openEntry(s wire.Signed) (wire.ChainEntry, error) {
 	var e wire.ChainEntry
 	if err := s.OpenClosed(&e); err != nil {

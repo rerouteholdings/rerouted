@@ -94,7 +94,7 @@ func Unmarshal(data []byte, v any) error {
 	return d.Decode(v)
 }
 
-// UnmarshalClosed is Unmarshal for closed schemas (SPEC §19.2): members that v's
+// UnmarshalClosed is Unmarshal for closed schemas (SPEC §20.2): members that v's
 // struct doesn't declare are rejected instead of ignored.
 func UnmarshalClosed(data []byte, v any) error {
 	if err := CheckIJSON(data); err != nil {

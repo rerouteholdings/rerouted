@@ -8,7 +8,7 @@ import (
 	"github.com/rerouteholdings/rerouted/internal/wire"
 )
 
-// ---- reports (SPEC §16.3) ----
+// ---- reports (SPEC §17.3) ----
 
 type reportBody struct {
 	Reporter string     `json:"reporter"`

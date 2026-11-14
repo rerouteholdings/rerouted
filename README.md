@@ -4,7 +4,7 @@ rerouted is the reference homeserver for [Tieroute](https://rerouteholdings.llc/
 
 A *homeserver* holds its users' identities, and stores their messages until their devices fetch them. rerouted never needs to read a message: clients encrypt everything with Messaging Layer Security (MLS), and rerouted routes by the delivery envelope alone. It's written in Go, without cgo, and keeps its data in one SQLite database and a directory of files.
 
-rerouted is alpha software, maintained by Reroute Holdings LLC. It runs the public alpha homeservers, and the wire format can still change before Tieroute v1 is final.
+rerouted is alpha software, maintained by Reroute Holdings LLC. It runs the public alpha homeservers. It speaks Tieroute wire version 1. The current spec, version 2.0, defines wire version 2, with post-quantum signatures, a migration from wire version 1, and community servers, and rerouted doesn't implement it yet.
 
 ## Documentation
 
@@ -19,7 +19,7 @@ The protocol itself is documented in the [Tieroute specification](https://rerout
 
 ## What it implements
 
-rerouted implements every endpoint in the spec's Appendix A, for clients and for other servers. Comments in the code cite the spec section each rule comes from, such as `SPEC §11.6`.
+rerouted implements every wire version 1 endpoint in the spec's Appendix A, for clients and for other servers. Comments in the code cite the spec section each rule comes from, such as `SPEC §11.6`. Section numbers are those of the current spec; where version 2.0 changed a rule, rerouted follows wire version 1.
 
 | Area | Spec | What rerouted does |
 |---|---|---|
@@ -33,10 +33,11 @@ rerouted implements every endpoint in the spec's Appendix A, for clients and for
 | Presence and profiles | §13 | Presence for mutual contacts only, and signed profiles with checked profile pictures |
 | Files | §14 | Uploads up to 64 MiB under a quota for each identity, fetched through the recipient's own homeserver and deleted after 30 days |
 | Calls | §15.1 | Time-limited credentials for a TURN (Traversal Using Relays around NAT) relay |
-| Reports | §16 | Reports kept for the operator, and optionally forwarded to the reported identity's homeserver |
+| Reports | §17 | Reports kept for the operator, and optionally forwarded to the reported identity's homeserver |
 
 What isn't built yet:
 
+- Wire version 2 (spec version 2.0): composite signatures, message keys, the 10-device ceiling, the migration from wire version 1, and community servers.
 - Batching several deliveries into one server-to-server `deliver` call. Each call carries one, which the spec allows.
 - Registration codes with use counts or expiry dates. There's one code, `REROUTED_REGISTRATION_CODE`.
 - Changing handle within the same homeserver. A `set-handle` entry is accepted, but the new handle doesn't resolve, and the old one isn't freed.
@@ -79,7 +80,7 @@ go vet ./...
 go test -race ./...
 ```
 
-Tests run against real SQLite databases in temporary directories, and the federation tests start two homeservers in one process. The files in `testdata/vectors/` are copies of the spec's test vectors.
+Tests run against real SQLite databases in temporary directories, and the federation tests start two homeservers in one process. The files in `testdata/vectors/` are copies of the spec's test vectors, which are for wire version 1.
 
 | Path | What's there |
 |---|---|
