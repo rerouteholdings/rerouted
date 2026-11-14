@@ -1,6 +1,6 @@
 # How rerouted stores moves and recovery wraps
 
-Two parts of the spec change several records at once: an identity moving between homeservers (SPEC §6.6), and the wrapped account keys that recovery codes open (SPEC §6.3). This page explains how rerouted keeps each one consistent, for implementers comparing notes and for anyone changing that code. It describes rerouted, not the protocol: other servers may do it differently.
+Two parts of the spec change several records at once: an identity moving between homeservers (SPEC §6.6), and the wrapped account keys that recovery codes open (SPEC §6.3). This page explains how rerouted keeps each one consistent, for implementers comparing approaches and for anyone changing that code. It describes rerouted, not the protocol: other servers may do it differently.
 
 ## Moves
 

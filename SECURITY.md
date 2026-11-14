@@ -12,7 +12,7 @@ Include what you can:
 - the steps or a test that shows it
 - the rerouted commit or version you tried
 
-We'll acknowledge the report within a week, keep you told as we fix it, and credit you in the release notes unless you'd rather not be named.
+We'll acknowledge the report within a week, keep you updated as we fix it, and credit you in the release notes unless you'd rather not be named.
 
 ## What counts
 

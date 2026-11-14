@@ -29,7 +29,7 @@ rerouted upgrades the database to the current schema when it starts. It refuses 
 
 Keep `server-key.json` safe. If you lose it, rerouted makes a new key, and other servers pick it up from the server document, but every invite code your users made stops working. Codes are keyed with a secret derived from the server key (SPEC §9.1).
 
-> Caution: **Never restore an old database over a running server.** Groups whose hub is this server stop accepting changes, because the restored hub holds old epoch keys, and their members have to re-create them (SPEC §11.6). Inboxes and chains go back in time too. Restore a backup only to replace a server that's gone for good.
+> Caution: **Never restore an old database over a running server.** Groups whose hub is this server stop accepting changes, because the restored hub holds old epoch keys, and their members have to re-create them (SPEC §11.6). Inboxes and chains go back to an older state too. Restore a backup only to replace a server that's gone permanently.
 
 ## Control who signs up
 

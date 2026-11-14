@@ -22,8 +22,8 @@ data: {"n":1,"ts":"2026-11-09T14:25:00Z","for":"kat.example.com","from":"ravi.ex
 
 - `n`: a sequence number, starting at 1 each time the server starts.
 - `ts`: when the item was stored, in UTC.
-- `for`: the recipient's handle, or their identifier (`tr:…`) if they have no handle that checks out.
-- `from`: the sender's handle, or their identifier if it doesn't check out. It's left out if the delivery has no sender.
+- `for`: the recipient's handle, or their identifier (`tr:…`) if they have no handle that resolves both ways.
+- `from`: the sender's handle, or their identifier if their handle doesn't resolve both ways. It's left out if the delivery has no sender.
 - `delivery`: the delivery as stored, censored. `data` is replaced by its size in bytes (`data_bytes`), so no ciphertext, link bundle, or chain entries leave the server. `group` and `receipt` are left out, so a group's messages can't be linked together. `id` is replaced by a 16-character hash, keyed with a secret that changes each time the server starts: the copies of one delivery share a hash, but it can't be matched to the real ID. Everything else is as `GET inbox` returns it.
 
 ## Handles
@@ -32,4 +32,4 @@ A handle is shown only if it resolves both ways (SPEC §5.3). A handle registere
 
 ## Connections
 
-A new connection first gets the last 50 events, which are kept only in memory, and then live ones. A `: ping` comment comes every 25 seconds, so proxies keep the connection open. The server allows 200 connections at once, and answers `503 unavailable` beyond that. A connection that falls 64 events behind is closed, so a slow reader never holds up delivery.
+A new connection first gets the last 50 events, which are kept only in memory, and then live ones. A `: ping` comment comes every 25 seconds, so proxies keep the connection open. The server allows 200 connections at once, and answers `503 unavailable` beyond that. A connection that falls 64 events behind is closed, so a slow reader never delays delivery.

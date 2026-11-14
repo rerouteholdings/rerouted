@@ -40,7 +40,7 @@ The example is set up for calls and nothing else:
 
 1. Allow UDP and TCP port 3478, for TURN.
 2. Allow UDP ports 49160 to 49399, for relayed media.
-3. If the relay runs on the homeserver's own host, stop relayed traffic from reaching that host's other services. With ufw, where `HOST_IP` is the host's public address:
+3. If the relay runs on the homeserver's own host, stop relayed traffic from reaching that host's other services. With `ufw`, where `HOST_IP` is the host's public address:
 
    ```sh
    sudo ufw deny out proto udp from HOST_IP port 49160:49399 to HOST_IP port 1:49159

@@ -23,10 +23,10 @@ Tests run against real SQLite databases in temporary directories, and federation
 
 ## Code
 
-- Run `gofmt`. CI checks it, along with `go vet`, staticcheck, and govulncheck.
-- Cite the spec where behaviour comes from it, by section: `// SPEC §11.6`.
+- Run `gofmt`. CI checks it, along with `go vet`, `staticcheck`, and `govulncheck`.
+- Cite the spec where behavior comes from it, by section: `// SPEC §11.6`.
 - Comments say why, not what. Keep them to what a reader needs to change the code safely.
-- Every behaviour change comes with a test. A protocol rule gets a test that breaks it and checks the server refuses.
+- Every behavior change comes with a test. A protocol rule gets a test that breaks it and checks the server refuses.
 - Keep dependencies few. Anything new needs a reason.
 
 ## Pull requests
