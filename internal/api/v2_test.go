@@ -413,8 +413,8 @@ func TestV2Isolation(t *testing.T) {
 	}
 }
 
-// Every client endpoint is routed under the version 2 base too, and implemented: none
-// answers 501, but GET turn on a server with no call relay.
+// Every client and S2S endpoint is routed under the version 2 base too, and implemented:
+// none answers 501, but GET turn on a server with no call relay.
 func TestV2EveryEndpointRouted(t *testing.T) {
 	ts := testServer(t)
 	u := newV2User(t, ts, "kat", "chat.test")
@@ -438,7 +438,8 @@ func TestV2EveryEndpointRouted(t *testing.T) {
 			t.Errorf("%s: %d", e, c)
 		}
 	}
-	for _, p := range []string{"commit", "commit/fetch", "group/epoch-key", "group/register"} {
+	for _, p := range []string{"identity/fetch", "identity/push", "keypackages/claim", "contacts/request", "contacts/decline", "deliver",
+		"commit", "commit/fetch", "group/epoch-key", "group/register", "presence", "profile/fetch", "media/fetch", "report"} {
 		resp, err := http.Post(ts.URL+"/.well-known/tieroute/v2/s2s/"+p, wire.MediaType, strings.NewReader("{}"))
 		if err != nil {
 			t.Fatal(err)
