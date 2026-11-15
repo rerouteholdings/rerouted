@@ -123,12 +123,16 @@ func Canonical(data []byte) ([]byte, error) {
 var (
 	ErrDuplicateName = errors.New("wire: duplicate member name")
 	ErrNotInteger    = errors.New("wire: numbers must be integers within ±(2^53 − 1)")
+	ErrSurrogate     = errors.New("wire: a lone surrogate isn't I-JSON")
 )
 
 // CheckIJSON verifies data is exactly one I-JSON value (RFC 7493) with integer numbers.
 func CheckIJSON(data []byte) error {
 	if !utf8.Valid(data) {
 		return errors.New("wire: invalid UTF-8")
+	}
+	if err := checkSurrogates(data); err != nil {
+		return err
 	}
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.UseNumber()
@@ -183,6 +187,45 @@ func CheckIJSON(data []byte) error {
 	}
 	if values != 1 {
 		return errors.New("wire: expected exactly one JSON value")
+	}
+	return nil
+}
+
+// checkSurrogates refuses a \u escape of a surrogate that isn't half of a pair: I-JSON has
+// none (RFC 7493 §2.1), and encoding/json would turn it into U+FFFD, so another reader of
+// the same bytes would see a different string. Raw UTF-8 can't encode one: utf8.Valid
+// refuses it.
+func checkSurrogates(data []byte) error {
+	hex4 := func(i int) (rune, bool) {
+		if i+6 > len(data) || data[i] != '\\' || data[i+1] != 'u' {
+			return 0, false
+		}
+		r, err := strconv.ParseUint(string(data[i+2:i+6]), 16, 16)
+		return rune(r), err == nil
+	}
+	in := false
+	for i := 0; i < len(data); i++ {
+		switch c := data[i]; {
+		case c == '"':
+			in = !in
+		case in && c == '\\':
+			r, ok := hex4(i)
+			if !ok {
+				i++ // \" or another one-character escape
+				continue
+			}
+			switch {
+			case r >= 0xD800 && r <= 0xDBFF:
+				if lo, ok := hex4(i + 6); !ok || lo < 0xDC00 || lo > 0xDFFF {
+					return ErrSurrogate
+				}
+				i += 11
+			case r >= 0xDC00 && r <= 0xDFFF:
+				return ErrSurrogate
+			default:
+				i += 5
+			}
+		}
 	}
 	return nil
 }

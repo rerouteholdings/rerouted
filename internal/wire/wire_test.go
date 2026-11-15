@@ -185,3 +185,18 @@ func TestVectorEd25519(t *testing.T) {
 		}
 	}
 }
+
+// A lone surrogate isn't I-JSON (RFC 7493 §2.1), and encoding/json would read it as U+FFFD,
+// so a body with one means something else to other readers. A pair is a character.
+func TestLoneSurrogate(t *testing.T) {
+	for _, s := range []string{`"\ud800"`, `"\uDBFF"`, `"\udc00"`, `"x\ud800y"`, `"\ud800A"`, `"\ud800\ud800"`, `{"\ud800":1}`, `["\\", "\udfff"]`} {
+		if err := CheckIJSON([]byte(s)); !errors.Is(err, ErrSurrogate) {
+			t.Errorf("%s: %v, want ErrSurrogate", s, err)
+		}
+	}
+	for _, s := range []string{`"😀"`, `"😀"`, `"\\ud800"`, `"\\\\"`, `"é"`, `"�"`, `"\"😀"`, "\"￾\""} {
+		if err := CheckIJSON([]byte(s)); err != nil {
+			t.Errorf("%s: %v", s, err)
+		}
+	}
+}
