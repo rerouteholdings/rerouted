@@ -23,6 +23,7 @@ import (
 
 	"github.com/rerouteholdings/rerouted/internal/api"
 	"github.com/rerouteholdings/rerouted/internal/config"
+	"github.com/rerouteholdings/rerouted/internal/keyd"
 	"github.com/rerouteholdings/rerouted/internal/serverkey"
 	"github.com/rerouteholdings/rerouted/internal/store/sqlite"
 )
@@ -42,12 +43,6 @@ func main() {
 		log.Error("config", "err", err)
 		os.Exit(2)
 	}
-	key, err := serverkey.LoadOrCreate(cfg.DataDir)
-	if err != nil {
-		log.Error("server key", "err", err)
-		os.Exit(1)
-	}
-
 	var st *sqlite.Store
 	if cfg.Store == "temp" {
 		st, err = sqlite.OpenTemp()
@@ -71,6 +66,22 @@ func main() {
 	defer st.Close()
 	if flag.NArg() > 0 {
 		os.Exit(admin(st, flag.Args()))
+	}
+	// The keys come after the operator commands, which don't sign: run from a shell, without
+	// the unit's REROUTED_KEYD, they'd otherwise make new keys in the data directory.
+	var key serverkey.Key
+	if cfg.Keyd != "" {
+		key, err = keyd.Load(cfg.Keyd, cfg.Name)
+		if _, serr := os.Stat(filepath.Join(cfg.DataDir, serverkey.FileV1)); err == nil && serr == nil {
+			log.Warn("the data directory still has server keys, but rerouted-keyd's are used: move them to rerouted-keyd (deploy/README.md)", "dir", cfg.DataDir)
+		}
+	} else {
+		key, err = serverkey.LoadOrCreate(cfg.DataDir)
+	}
+	if err != nil {
+		log.Error("server key", "err", err)
+		st.Close()
+		os.Exit(1)
 	}
 	server := api.New(cfg, key, log, st)
 	srv := &http.Server{

@@ -54,7 +54,7 @@ func (s *Server) serverDoc(w http.ResponseWriter, r *http.Request) {
 			EXP: s.key.Created.Add(serverkey.Lifetime).Unix(),
 		}, {
 			KID: s.key.V2.KID,
-			Pub: wire.Bytes(s.key.V2.Priv.Public().Bytes()),
+			Pub: wire.Bytes(s.key.V2.Public().Bytes()),
 			NBF: s.key.V2.Created.Unix(),
 			EXP: s.key.V2.Created.Add(serverkey.Lifetime).Unix(),
 		}},

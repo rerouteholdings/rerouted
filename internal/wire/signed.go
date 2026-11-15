@@ -27,6 +27,9 @@ func sigInput(t, b string) ([]byte, error) {
 	return Marshal([]any{SigContext, t, b})
 }
 
+// SigInput is JCS(["tieroute/v1", t, b]), the bytes a wire version 1 signature covers.
+func SigInput(t, b string) ([]byte, error) { return sigInput(t, b) }
+
 // Sign builds a Signed envelope over body, signed by priv, with the public key in K.
 func Sign(t string, body any, priv ed25519.PrivateKey) (Signed, error) {
 	b, err := Marshal(body)

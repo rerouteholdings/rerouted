@@ -94,7 +94,7 @@ func (s *Server) initCommunities() {
 		if cm.Name == s.cfg.Name {
 			c.key, c.srv = s.key.V2, s.v2
 		} else {
-			key, err := serverkey.LoadOrCreateComposite(s.cfg.DataDir, "community-key-"+cm.Name+".json")
+			key, err := s.communityKey(cm.Name)
 			if err != nil {
 				s.log.Error("community key", "name", cm.Name, "err", err)
 				continue
@@ -205,7 +205,20 @@ func (s *Server) CommunityListeners() []CommunityListener {
 
 // communityDoc is the community part of a server document's version 2 entry.
 func (c *community) keyDoc() serverKeyDoc {
-	return serverKeyDoc{KID: c.key.KID, Pub: wire.Bytes(c.key.Priv.Public().Bytes()), NBF: c.key.Created.Unix(), EXP: c.key.Created.Add(serverkey.Lifetime).Unix()}
+	return serverKeyDoc{KID: c.key.KID, Pub: wire.Bytes(c.key.Public().Bytes()), NBF: c.key.Created.Unix(), EXP: c.key.Created.Add(serverkey.Lifetime).Unix()}
+}
+
+// communityKey is the server key of a community server name other than the homeserver's:
+// rerouted-keyd's, if it holds the keys, or the data directory's, created if needed.
+func (s *Server) communityKey(name string) (serverkey.CompositeKey, error) {
+	if s.key.Communities == nil {
+		return serverkey.LoadOrCreateComposite(s.cfg.DataDir, serverkey.CommunityFile(name))
+	}
+	k, ok := s.key.Communities[name]
+	if !ok {
+		return serverkey.CompositeKey{}, errors.New("rerouted-keyd has no key for it: restart rerouted-keyd after adding a community")
+	}
+	return k, nil
 }
 
 // serverDoc is the server document of a name that's only a community server (SPEC §5.1).

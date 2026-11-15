@@ -14,7 +14,6 @@ import (
 
 	"github.com/rerouteholdings/rerouted/internal/config"
 	"github.com/rerouteholdings/rerouted/internal/fed"
-	"github.com/rerouteholdings/rerouted/internal/serverkey"
 	"github.com/rerouteholdings/rerouted/internal/store"
 	"github.com/rerouteholdings/rerouted/internal/wire"
 )
@@ -29,11 +28,8 @@ func twoServersWithStore(t *testing.T, makeStore func() store.Store) (a, b *http
 	a, b = httptest.NewUnstartedServer(nil), httptest.NewUnstartedServer(nil)
 	peers := map[string]string{"a.test": "http://" + a.Listener.Addr().String(), "b.test": "http://" + b.Listener.Addr().String()}
 	mk := func(ts *httptest.Server, name string) *Server {
-		key, err := serverkey.LoadOrCreate(t.TempDir())
-		if err != nil {
-			t.Fatal(err)
-		}
 		cfg := &config.Config{Name: name, PublicURL: peers[name], Handles: name, Registration: "invite", RegistrationCode: testRegCode, Dev: true, Peers: peers}
+		key := testKey(t, t.TempDir(), cfg)
 		st := makeStore()
 		t.Cleanup(func() { st.Close() })
 		s := New(cfg, key, slog.New(slog.NewTextHandler(io.Discard, nil)), st)

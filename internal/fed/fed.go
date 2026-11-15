@@ -334,12 +334,9 @@ func (f *Fed) VerifyServerSigned(ctx context.Context, server string, sig wire.Si
 // key ID (SPEC §4.3): S2S requests, commit receipts, and move reservations.
 func (f *Fed) SignKID(t string, body any) (wire.Signed, error) {
 	if f.version() == wire.V2 {
-		if f.Key.V2.Priv == nil {
-			return wire.Signed{}, errors.New("fed: no wire version 2 server key")
-		}
-		return wire.SignCompositeKID(t, body, f.Key.V2.Priv, f.Key.V2.KID)
+		return f.Key.V2.SignKID(t, body)
 	}
-	return wire.SignKID(t, body, f.Key.Priv, f.Key.KID)
+	return f.Key.SignKID(t, body)
 }
 
 // s2sRequest is the signed body of every S2S call (SPEC §8.3).

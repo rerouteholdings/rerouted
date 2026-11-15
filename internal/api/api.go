@@ -8,8 +8,6 @@ package api
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	"io"
 
 	"log/slog"
@@ -63,9 +61,7 @@ type Server struct {
 func New(cfg *config.Config, key serverkey.Key, log *slog.Logger, st store.Store) *Server {
 	cfg.Defaults()
 	s := newServer(cfg, key, log, st, wire.V1, &limiter{m: map[string][]int64{}})
-	ik := hmac.New(sha256.New, key.Priv.Seed())
-	ik.Write([]byte("tieroute invite codes"))
-	s.inviteKey = ik.Sum(nil)
+	s.inviteKey = key.InviteKey
 	if p := s.limitsPath(); p != "" {
 		if err := s.limits.load(p); err != nil {
 			log.Warn("rate limits from the last run couldn't be read; starting fresh", "err", err)

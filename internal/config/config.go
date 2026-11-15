@@ -54,6 +54,10 @@ type Config struct {
 	// connections to loopback, link-local, private, and other non-global addresses are
 	// refused otherwise, so a server name can't be pointed at this host's internal services.
 	FedAllow []netip.Prefix
+	// REROUTED_KEYD: the unix socket of rerouted-keyd, which holds the server keys and
+	// signs for this process (internal/keyd). Empty: the keys are read from the data
+	// directory, as files, created there if missing.
+	Keyd string
 
 	// Community servers (SPEC §16). REROUTED_COMMUNITIES lists the server names this process
 	// serves as community servers, each hosting one community: name or name=url, comma-
@@ -107,6 +111,7 @@ func Load(envFile string) (*Config, error) {
 		RegistrationPublic: get("REROUTED_REGISTRATION_PUBLIC", "off") == "on",
 		PublicFirehose:     get("REROUTED_PUBLIC_FIREHOSE", "off") == "on",
 		PauseMoves:         get("REROUTED_PAUSE_MOVES", "off") == "on",
+		Keyd:               os.Getenv("REROUTED_KEYD"),
 	}
 	c.Defaults()
 	for _, u := range strings.Split(os.Getenv("REROUTED_TLS_ASK_ALSO"), ",") {

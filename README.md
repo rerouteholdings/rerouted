@@ -114,6 +114,7 @@ Tests run against real SQLite databases in temporary directories, and the federa
 | Path | What's there |
 |---|---|
 | `cmd/rerouted/` | The server and its admin commands |
+| `cmd/rerouted-keyd/` | An optional process that holds the server keys and signs for rerouted |
 | `cmd/linetest/` | A scripted client that drives two homeservers over HTTP, for end-to-end tests |
 | `internal/api/` | HTTP routes and handlers, one file for each area of the API |
 | `internal/chain/` | Identity chains: validation, the fork rule, alerts, and clock checks |
@@ -122,6 +123,7 @@ Tests run against real SQLite databases in temporary directories, and the federa
 | `internal/wire/` | JSON encoding, signed envelopes, identifiers, chain entries, and error codes |
 | `internal/ws/` | The server side of the WebSocket protocol (RFC 6455), on the standard library |
 | `internal/config/`, `internal/serverkey/` | Settings, and the server's signing key |
+| `internal/keyd/` | rerouted-keyd: what it signs, its socket protocol, and its encrypted key bundle |
 | `deploy/` | Example systemd, Caddy, and coturn configurations, and AppArmor and SELinux policies |
 | `docs/` | Guides and reference for operators |
 
