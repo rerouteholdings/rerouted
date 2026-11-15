@@ -414,6 +414,11 @@ func (s *Server) sendContactRequest(ctx context.Context, sess session, body cont
 	case err == nil && c.State == store.StatePendingIn:
 		// They already asked us: that makes it mutual (client-stage1.md).
 		err = s.st.Contacts().Put(ctx, sess.id, store.Contact{ID: body.To, State: store.StateContact, Since: now()})
+	case err == nil && c.State == store.StateContact:
+		// Already a contact, as one carried over from wire version 1 is (SPEC §6.8): asking
+		// again doesn't make it a pending request. The request still goes, so their
+		// client hears that this one lost the contact.
+		err = nil
 	case err == nil || errors.Is(err, store.ErrNotFound):
 		// Keep the request, so a decline can be matched to it (SPEC §9.3).
 		err = s.st.Contacts().Put(ctx, sess.id, store.Contact{ID: body.To, State: store.StatePendingOut, Since: now(), Request: reqRaw})
@@ -459,7 +464,10 @@ func (s *Server) receiveContactRequest(ctx context.Context, body contactRequestB
 		}
 	} else {
 		if s.isLocal(ctx, from) {
-			err = put(from, store.Contact{ID: to, State: store.StatePendingOut, Since: now(), Request: reqRaw})
+			// A contact asking again stays a contact (sendContactRequest).
+			if c, gerr := s.st.Contacts().Get(ctx, from, to); gerr != nil || c.State != store.StateContact {
+				err = put(from, store.Contact{ID: to, State: store.StatePendingOut, Since: now(), Request: reqRaw})
+			}
 		}
 		if err == nil {
 			err = put(to, store.Contact{ID: from, State: store.StatePendingIn, Since: now(), Request: reqRaw})
@@ -482,6 +490,12 @@ func (s *Server) contactAccept(w http.ResponseWriter, r *http.Request, sess sess
 	c, err := s.st.Contacts().Get(r.Context(), sess.id, req.ID)
 	if err != nil {
 		s.notFound(w, err, none)
+		return
+	}
+	if c.State == store.StateContact {
+		// Already a contact: a request from someone this identity lists, such as a contact
+		// carried over from wire version 1 asking again (SPEC §6.8), is accepted already.
+		writeBody(w, http.StatusOK, map[string]any{})
 		return
 	}
 	if c.State != store.StatePendingIn {

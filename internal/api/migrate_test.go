@@ -452,6 +452,64 @@ func federatedContacts(t *testing.T, katFirst bool) {
 	t.Fatal("kat2 never got sam2's message")
 }
 
+// A contact carried over from wire version 1 who sends a contact request again, as one
+// whose app hadn't noticed the other migrated did (SPEC §6.8, §9.3): the requester's own
+// entry stays a contact instead of turning into a pending request, the recipient gets the
+// notice, and accepting it answers 200, not 404 not-found, since it's accepted already.
+func TestMigratedContactAsksAgain(t *testing.T) {
+	a, b, _, _ := twoServers(t)
+	kat := newUserOn(t, a, "kat", "a.test")
+	sam := newUserOn(t, b, "sam", "b.test")
+	befriend(t, kat, sam)
+	kat2 := kat.migrateTo(a, "a.test")
+	for range 100 {
+		if notices(sam.inbox(), "chain-update") != nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	sam2 := sam.migrateTo(b, "b.test")
+	for range 100 {
+		if contactsOf2(kat2)[sam2.id] == store.StateContact {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if got := contactsOf2(kat2); got[sam2.id] != store.StateContact {
+		t.Fatalf("kat2's contacts before the request: %v", got)
+	}
+	// Sam's app resolves Kat first, as any request does, so b.test has her chain.
+	if c := call2(t, b, "GET", "chain/"+kat2.id+"?home=a.test", sam2.token, nil, nil); c != 200 {
+		t.Fatalf("sam2 fetches kat2's chain: %d", c)
+	}
+	if c := sam2.request(kat2, kat2.invite()); c != 202 {
+		t.Fatalf("sam2's request: %d", c)
+	}
+	if got := contactsOf2(sam2); got[kat2.id] != store.StateContact {
+		t.Fatalf("sam2's entry for kat2 after asking again: %v, want it still a contact", got)
+	}
+	var got []map[string]json.RawMessage
+	for range 100 {
+		if got = notices(kat2.inbox(), "contact-request"); got != nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if got == nil {
+		t.Fatal("kat2 never got sam2's request")
+	}
+	if list := contactsOf2(kat2); list[sam2.id] != store.StateContact {
+		t.Fatalf("kat2's contacts after the request: %v", list)
+	}
+	var e wire.Error
+	if c := call2(t, a, "POST", "contacts/accept", kat2.token, map[string]any{"id": sam2.id}, &e); c != 200 {
+		t.Fatalf("kat2 accepts a request from a contact: %d %+v, want 200", c, e)
+	}
+	if c := call2(t, a, "POST", "contacts/accept", kat2.token, map[string]any{"id": wire.IdentityIDFromHash(randBytes(32))}, &e); c != 404 {
+		t.Fatalf("accepting someone who never asked: %d, want 404", c)
+	}
+}
+
 // A handle whose record still names the version 1 identity, as one on the user's own
 // domain does until they update it, resolves to the version 2 identity for version 2
 // clients (SPEC §5.3 step 3), and not at all for version 1 ones.
