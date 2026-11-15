@@ -422,7 +422,21 @@ func TestCommunityMove(t *testing.T) {
 	if c, _ := ravi.appendOps(m.ch, map[string]any{"op": "set-home", "server": "new.test"}); c != 403 {
 		t.Fatalf("set-home by a member: %d", c)
 	}
-	kat.mustAppend(m.ch, map[string]any{"op": "set-home", "server": "new.test"})
+	for i := 1; i <= 2; i++ {
+		if res := ravi.say(m, 1, "before the move"); res.Seq != uint64(i) {
+			t.Fatalf("message %d before the move: %+v", i, res)
+		}
+	}
+	// The set-home's answer gives each text channel's last number, for the new server.
+	var moved struct {
+		Seq  uint64       `json:"seq"`
+		Head wire.Bytes   `json:"head"`
+		Seqs []channelSeq `json:"seqs"`
+	}
+	if c := e.call("POST", "chain/append", kat.tok, map[string]any{"entry": kat.sign(kat.next(m.ch, map[string]any{"op": "set-home", "server": "new.test"}))}, &moved); c != 200 || len(moved.Seqs) != 1 || moved.Seqs[0] != (channelSeq{1, 2}) {
+		t.Fatalf("set-home: %d %+v", c, moved)
+	}
+	m.ch.seq, m.ch.head = moved.Seq, moved.Head
 	var chain struct {
 		Entries []wire.Raw `json:"entries"`
 	}
@@ -467,7 +481,10 @@ func TestCommunityMove(t *testing.T) {
 	var res struct {
 		ID wire.Bytes `json:"id"`
 	}
-	if c := e.call("POST", "create", kn.tok, map[string]any{"chain": chain.Entries, "code": testCreateCode, "members": list(kn, ravi.id)}, &res); c != 200 || !bytes.Equal(res.ID, m.ch.id) {
+	if c, _ := e.errOf("POST", "create", kn.tok, map[string]any{"chain": chain.Entries, "code": testCreateCode, "members": list(kn, ravi.id), "seqs": []channelSeq{{9, 4}}}); c != 400 {
+		t.Fatalf("seqs for a channel the chain doesn't have: %d", c)
+	}
+	if c := e.call("POST", "create", kn.tok, map[string]any{"chain": chain.Entries, "code": testCreateCode, "members": list(kn, ravi.id), "seqs": moved.Seqs}, &res); c != 200 || !bytes.Equal(res.ID, m.ch.id) {
 		t.Fatalf("move-in: %d", c)
 	}
 	var pv struct {
@@ -497,6 +514,11 @@ func TestCommunityMove(t *testing.T) {
 	}
 	if c := e.call("GET", "chain", rn.tok, nil, nil); c != 200 {
 		t.Fatalf("ravi as a member after registering: %d", c)
+	}
+	// Numbering goes on from the old server's.
+	m.group = handed
+	if res := rn.say(m, 1, "after the move"); res.Seq != 3 {
+		t.Fatalf("the first message after the move: %+v", res)
 	}
 	// Appends continue on the new server, after the set-home.
 	kn.mustAppend(m.ch, map[string]any{"op": "set-name", "name": "Moved"})

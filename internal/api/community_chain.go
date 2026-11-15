@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -307,12 +308,13 @@ func (c *community) create(w http.ResponseWriter, r *http.Request, sess csess) {
 		Code    string            `json:"code,omitempty"`
 		Homes   map[string]string `json:"homes,omitempty"`
 		Members wire.Raw          `json:"members,omitempty"`
+		Seqs    []channelSeq      `json:"seqs,omitempty"`
 	}
 	if !readBody(w, r, &req) {
 		return
 	}
-	if (req.Entry == nil) == (len(req.Chain) == 0) || (req.Group != nil && req.Entry == nil) || (req.Members == nil) == (req.Entry == nil) {
-		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, `exactly one of "entry" and "chain"; "group" goes with "entry", and "members" with "chain"`)
+	if (req.Entry == nil) == (len(req.Chain) == 0) || (req.Group != nil && req.Entry == nil) || (req.Members == nil) == (req.Entry == nil) || (req.Seqs != nil && req.Entry != nil) {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, `exactly one of "entry" and "chain"; "group" goes with "entry", and "members" and "seqs" with "chain"`)
 		return
 	}
 	// Who may create is the operator's choice: a creation code, or open (spec/api/community.md).
@@ -328,7 +330,25 @@ func (c *community) create(w http.ResponseWriter, r *http.Request, sess csess) {
 		c.createNew(w, ctx, sess, req.Entry, req.Group, t)
 		return
 	}
-	c.moveIn(w, ctx, sess, req.Chain, req.Homes, req.Members, t)
+	c.moveIn(w, ctx, sess, req.Chain, req.Homes, req.Members, req.Seqs, t)
+}
+
+// channelSeq is a text channel's last sequence number, which a community server moved away
+// from gives the owner with the set-home's append, and the owner gives the new one with the
+// move-in, so numbering goes on (SPEC §16.5, §16.6).
+type channelSeq struct {
+	Channel uint64 `json:"channel"`
+	Seq     uint64 `json:"seq"`
+}
+
+// channelSeqs is the response's form of every channel's last sequence number.
+func channelSeqs(heads map[uint64]uint64) []channelSeq {
+	out := make([]channelSeq, 0, len(heads))
+	for ch, seq := range heads {
+		out = append(out, channelSeq{ch, seq})
+	}
+	slices.SortFunc(out, func(a, b channelSeq) int { return cmp.Compare(a.Channel, b.Channel) })
+	return out
 }
 
 func (c *community) createNew(w http.ResponseWriter, ctx context.Context, sess csess, entry wire.Raw, g *groupReg, t int64) {
@@ -388,7 +408,7 @@ const treeKeep = 30 * 24 * 3600
 
 // moveIn takes a community moving here: its whole chain, ending in a set-home naming this
 // server, checked entry by entry (SPEC §16.2.3, §16.6).
-func (c *community) moveIn(w http.ResponseWriter, ctx context.Context, sess csess, raws []wire.Raw, homes map[string]string, membersRaw wire.Raw, t int64) {
+func (c *community) moveIn(w http.ResponseWriter, ctx context.Context, sess csess, raws []wire.Raw, homes map[string]string, membersRaw wire.Raw, seqList []channelSeq, t int64) {
 	keys := c.importKeys(ctx, homes)
 	var st *cchain.State
 	var last *cchain.Applied
@@ -433,7 +453,17 @@ func (c *community) moveIn(w http.ResponseWriter, ctx context.Context, sess cses
 	if !ok {
 		return
 	}
-	err := c.st.Create(ctx, store.Community{Name: c.name, ID: st.ID, Created: t, Listed: listed}, encs, hashes, store.CommunityMember{ID: sess.id, Home: sess.home, Since: t}, nil)
+	// Where each text channel's numbering goes on from: channels of the chain, each once.
+	seqs := make(map[uint64]uint64, len(seqList))
+	for _, cs := range seqList {
+		ch, ok := st.Channels[cs.Channel]
+		if _, dup := seqs[cs.Channel]; !ok || dup || ch.Kind != "text" {
+			writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "seqs: text channels of the chain, each once")
+			return
+		}
+		seqs[cs.Channel] = cs.Seq
+	}
+	err := c.st.Create(ctx, store.Community{Name: c.name, ID: st.ID, Created: t, Listed: listed, Seqs: seqs}, encs, hashes, store.CommunityMember{ID: sess.id, Home: sess.home, Since: t}, nil)
 	switch {
 	case errors.Is(err, store.ErrExists):
 		writeError(w, http.StatusConflict, wire.ErrCodeAlreadyExists, "")
@@ -637,7 +667,7 @@ func (c *community) chainAppend(w http.ResponseWriter, r *http.Request, sess cse
 		head := c.ent[len(c.ent)-1]
 		c.mu.RUnlock()
 		if bytes.Equal(enc, head) {
-			writeBody(w, http.StatusOK, map[string]any{"seq": st.Seq, "head": wire.Bytes(st.Head)})
+			c.appended(w, ctx, st)
 			return
 		}
 	}
@@ -679,7 +709,28 @@ func (c *community) chainAppend(w http.ResponseWriter, r *http.Request, sess cse
 	c.state, c.ent = next, append(slices.Clip(c.ent), a.Enc)
 	c.mu.Unlock()
 	c.afterAppend(ctx, st, next, a, removed)
-	writeBody(w, http.StatusOK, map[string]any{"seq": a.Seq, "head": wire.Bytes(a.Hash)})
+	c.appended(w, ctx, next)
+}
+
+// appended answers an append with the new head; after a set-home, with every text channel's
+// last sequence number too, for the owner to give the new community server (SPEC §16.6).
+// Sends are refused from the set-home on, so the numbers are final.
+func (c *community) appended(w http.ResponseWriter, ctx context.Context, st *cchain.State) {
+	res := map[string]any{"seq": st.Seq, "head": wire.Bytes(st.Head)}
+	if c.moved(st) {
+		heads, err := c.st.ChannelHeads(ctx, c.name)
+		if err != nil {
+			c.hs.unavailableRead(w, "reading channel sequence numbers", err)
+			return
+		}
+		for ch := range heads {
+			if c, ok := st.Channels[ch]; !ok || c.Kind != "text" {
+				delete(heads, ch)
+			}
+		}
+		res["seqs"] = channelSeqs(heads)
+	}
+	writeBody(w, http.StatusOK, res)
 }
 
 // afterAppend does what the server does after an append (spec/api/community.md): tells every

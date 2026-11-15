@@ -91,6 +91,11 @@ func (c communities) Create(ctx context.Context, cm store.Community, entries, ha
 			return err
 		}
 	}
+	for ch, last := range cm.Seqs {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO cm_channels (name, channel, last) VALUES (?, ?, ?)", cm.Name, ch, last); err != nil {
+			return err
+		}
+	}
 	for i, e := range entries {
 		if _, err := tx.ExecContext(ctx, "INSERT INTO cm_chain (name, seq, entry, hash) VALUES (?, ?, ?, ?)", cm.Name, i, e, hashes[i]); err != nil {
 			return err
@@ -800,6 +805,23 @@ func (c communities) ChannelHead(ctx context.Context, name string, channel uint6
 		return 0, nil
 	}
 	return last, err
+}
+
+func (c communities) ChannelHeads(ctx context.Context, name string) (map[uint64]uint64, error) {
+	rows, err := c.db.QueryContext(ctx, "SELECT channel, last FROM cm_channels WHERE name = ?", name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[uint64]uint64{}
+	for rows.Next() {
+		var ch, last uint64
+		if err := rows.Scan(&ch, &last); err != nil {
+			return nil, err
+		}
+		out[ch] = last
+	}
+	return out, rows.Err()
 }
 
 func (c communities) DeleteItem(ctx context.Context, name string, channel, seq, by uint64, now int64) error {

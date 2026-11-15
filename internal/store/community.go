@@ -19,6 +19,9 @@ type Community struct {
 	// Listed, for a move-in: the identities the owner's signed member list names, the only
 	// ones who may join by registering for the members group (SPEC §16.6). Create only.
 	Listed []string
+	// Seqs, for a move-in: each text channel's last sequence number on the community server
+	// it moved from, so numbering goes on from there (SPEC §16.5, §16.6). Create only.
+	Seqs map[uint64]uint64
 }
 
 // CommunityMember is one identity the community server counts as a member, for
@@ -236,6 +239,8 @@ type Communities interface {
 	ChannelItems(ctx context.Context, name string, channel, from uint64, limit int) ([]CItem, error)
 	ChannelItem(ctx context.Context, name string, channel, seq uint64) (*CItem, error)
 	ChannelHead(ctx context.Context, name string, channel uint64) (uint64, error)
+	// ChannelHeads is every channel's last sequence number.
+	ChannelHeads(ctx context.Context, name string) (map[uint64]uint64, error)
 	// DeleteItem drops a channel message's ciphertext, keeping its number, and records
 	// when, for history segments (SPEC §16.7).
 	DeleteItem(ctx context.Context, name string, channel, seq, by uint64, now int64) error
