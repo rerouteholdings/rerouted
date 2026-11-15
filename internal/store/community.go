@@ -160,7 +160,7 @@ type CKeyPackage struct {
 type Communities interface {
 	// Create stores a new community under name: its first chain entries and, with
 	// c.Group, its members group (g), and makes owner its first member. ErrExists if
-	// the name already hosts a community.
+	// the name already hosts a community, or is held for another one (Hold).
 	Create(ctx context.Context, c Community, entries, hashes [][]byte, owner CommunityMember, g *CGroup) error
 	Get(ctx context.Context, name string) (*Community, error)
 	// Entries returns the chain's entries with seq > after, in order.
@@ -181,6 +181,12 @@ type Communities interface {
 	// FormerMember finds an identity whose membership ended (a leave, kick, or ban), with
 	// its homeserver then, so members can still fetch its chain (SPEC §16.1). ErrNotFound.
 	FormerMember(ctx context.Context, name, id string) (*CommunityMember, error)
+
+	// Hold keeps name free for a community moving in, until `until` (a move reservation,
+	// SPEC §16.6): Create refuses any other community until then, and the community's own
+	// Create ends the hold. ErrExists if the name hosts a community, or another community's
+	// hold lasts past now. A new hold for the same community replaces the old one.
+	Hold(ctx context.Context, name string, community []byte, until, now int64) error
 
 	// Sessions.
 	CreateToken(ctx context.Context, name string, hash []byte, id, home string, dev []byte, expires int64) error

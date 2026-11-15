@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -20,6 +21,7 @@ import (
 const communitySchema = `
 CREATE TABLE IF NOT EXISTS cm_communities (name TEXT PRIMARY KEY, id BLOB NOT NULL, grp BLOB, created INTEGER NOT NULL, pruned INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cm_chain    (name TEXT NOT NULL, seq INTEGER NOT NULL, entry BLOB NOT NULL, hash BLOB NOT NULL, PRIMARY KEY (name, seq));
+CREATE TABLE IF NOT EXISTS cm_holds    (name TEXT PRIMARY KEY, community BLOB NOT NULL, until INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS cm_former   (name TEXT NOT NULL, id TEXT NOT NULL, home TEXT NOT NULL, PRIMARY KEY (name, id));
 CREATE TABLE IF NOT EXISTS cm_listed   (name TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY (name, id));
 CREATE TABLE IF NOT EXISTS cm_members  (name TEXT NOT NULL, id TEXT NOT NULL, home TEXT NOT NULL, since INTEGER NOT NULL, PRIMARY KEY (name, id));
@@ -75,6 +77,21 @@ func (c communities) Create(ctx context.Context, cm store.Community, entries, ha
 	}
 	if n > 0 {
 		return store.ErrExists
+	}
+	// A move reservation holds the name for its community (SPEC §16.6): anything else is
+	// refused while the hold lasts, and the community's own move-in ends it.
+	var held []byte
+	var until int64
+	switch err := tx.QueryRowContext(ctx, "SELECT community, until FROM cm_holds WHERE name = ?", cm.Name).Scan(&held, &until); {
+	case err == nil:
+		if until > cm.Created && !bytes.Equal(held, cm.ID) {
+			return store.ErrExists
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM cm_holds WHERE name = ?", cm.Name); err != nil {
+			return err
+		}
+	case !errors.Is(err, sql.ErrNoRows):
+		return err
 	}
 	if g != nil {
 		if known, err := groupKnown(ctx, tx, g.Group); err != nil {
@@ -217,6 +234,36 @@ func (c communities) FormerMember(ctx context.Context, name, id string) (*store.
 		return nil, notFound(err)
 	}
 	return &m, nil
+}
+
+func (c communities) Hold(ctx context.Context, name string, community []byte, until, now int64) error {
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var n int
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM cm_communities WHERE name = ?", name).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return store.ErrExists
+	}
+	var held []byte
+	var was int64
+	switch err := tx.QueryRowContext(ctx, "SELECT community, until FROM cm_holds WHERE name = ?", name).Scan(&held, &was); {
+	case err == nil:
+		if was > now && !bytes.Equal(held, community) {
+			return store.ErrExists
+		}
+	case !errors.Is(err, sql.ErrNoRows):
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO cm_holds (name, community, until) VALUES (?, ?, ?)
+		ON CONFLICT (name) DO UPDATE SET community = excluded.community, until = excluded.until`, name, community, until); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (c communities) Members(ctx context.Context, name string) ([]store.CommunityMember, error) {

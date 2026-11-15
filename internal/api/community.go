@@ -56,7 +56,10 @@ type community struct {
 	loadErr error
 
 	appending sync.Mutex // one chain append at a time
-	sending   keyLocks   // one send per sender and delivery ID
+	// seqGate: a set-home's append holds it, and sends other than commits share it, so no
+	// message is numbered after the seqs the set-home answers with (SPEC §16.6).
+	seqGate   sync.RWMutex
+	sending   keyLocks // one send per sender and delivery ID
 	streams   streams
 	approvals approvals
 	voice     *voiceRooms

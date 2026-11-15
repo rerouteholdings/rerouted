@@ -309,12 +309,17 @@ func (c *community) create(w http.ResponseWriter, r *http.Request, sess csess) {
 		Homes   map[string]string `json:"homes,omitempty"`
 		Members wire.Raw          `json:"members,omitempty"`
 		Seqs    []channelSeq      `json:"seqs,omitempty"`
+		Check   bool              `json:"check,omitempty"`
 	}
 	if !readBody(w, r, &req) {
 		return
 	}
-	if (req.Entry == nil) == (len(req.Chain) == 0) || (req.Group != nil && req.Entry == nil) || (req.Members == nil) == (req.Entry == nil) || (req.Seqs != nil && req.Entry != nil) {
-		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, `exactly one of "entry" and "chain"; "group" goes with "entry", and "members" and "seqs" with "chain"`)
+	if (req.Entry == nil) == (len(req.Chain) == 0) || (req.Group != nil && req.Entry == nil) || (req.Members == nil) == (req.Entry == nil) || (req.Seqs != nil && req.Entry != nil) || (req.Check && req.Entry != nil) {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, `exactly one of "entry" and "chain"; "group" goes with "entry", and "members", "seqs", and "check" with "chain"`)
+		return
+	}
+	if req.Check && req.Seqs != nil {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, `"seqs" come with the move-in, once the old server has the set-home, not with "check"`)
 		return
 	}
 	// Who may create is the operator's choice: a creation code, or open (spec/api/community.md).
@@ -330,7 +335,7 @@ func (c *community) create(w http.ResponseWriter, r *http.Request, sess csess) {
 		c.createNew(w, ctx, sess, req.Entry, req.Group, t)
 		return
 	}
-	c.moveIn(w, ctx, sess, req.Chain, req.Homes, req.Members, req.Seqs, t)
+	c.moveIn(w, ctx, sess, req.Chain, req.Homes, req.Members, req.Seqs, req.Check, t)
 }
 
 // channelSeq is a text channel's last sequence number, which a community server moved away
@@ -407,8 +412,11 @@ func (c *community) createNew(w http.ResponseWriter, ctx context.Context, sess c
 const treeKeep = 30 * 24 * 3600
 
 // moveIn takes a community moving here: its whole chain, ending in a set-home naming this
-// server, checked entry by entry (SPEC §16.2.3, §16.6).
-func (c *community) moveIn(w http.ResponseWriter, ctx context.Context, sess csess, raws []wire.Raw, homes map[string]string, membersRaw wire.Raw, seqList []channelSeq, t int64) {
+// server, checked entry by entry (SPEC §16.2.3, §16.6). With check, the set-home isn't on
+// the old server yet: everything is checked as for the move-in, and instead of storing the
+// community, the server holds its name for it and signs a reservation, which the old
+// server needs before it records the set-home (SPEC §16.6).
+func (c *community) moveIn(w http.ResponseWriter, ctx context.Context, sess csess, raws []wire.Raw, homes map[string]string, membersRaw wire.Raw, seqList []channelSeq, check bool, t int64) {
 	keys := c.importKeys(ctx, homes)
 	var st *cchain.State
 	var last *cchain.Applied
@@ -428,7 +436,7 @@ func (c *community) moveIn(w http.ResponseWriter, ctx context.Context, sess cses
 		encs[i], hashes[i], last = a.Enc, a.Hash, a
 	}
 	if have := c.snapshot(); have != nil {
-		if bytes.Equal(have.ID, st.ID) && len(c.ent) == len(encs) && slices.EqualFunc(c.ent, encs, bytes.Equal) {
+		if !check && bytes.Equal(have.ID, st.ID) && len(c.ent) == len(encs) && slices.EqualFunc(c.ent, encs, bytes.Equal) {
 			writeBody(w, http.StatusOK, map[string]any{"id": wire.Bytes(have.ID)})
 			return
 		}
@@ -463,6 +471,10 @@ func (c *community) moveIn(w http.ResponseWriter, ctx context.Context, sess cses
 		}
 		seqs[cs.Channel] = cs.Seq
 	}
+	if check {
+		c.reserve(w, ctx, st, last.Hash, t)
+		return
+	}
 	err := c.st.Create(ctx, store.Community{Name: c.name, ID: st.ID, Created: t, Listed: listed, Seqs: seqs}, encs, hashes, store.CommunityMember{ID: sess.id, Home: sess.home, Since: t}, nil)
 	switch {
 	case errors.Is(err, store.ErrExists):
@@ -477,6 +489,71 @@ func (c *community) moveIn(w http.ResponseWriter, ctx context.Context, sess cses
 	c.mu.Unlock()
 	c.hs.log.Info("community moved in", "name", c.name, "id", hex.EncodeToString(st.ID), "entries", len(encs))
 	writeBody(w, http.StatusOK, map[string]any{"id": wire.Bytes(st.ID)})
+}
+
+// communityReservation is the body of a community-move-reservation (SPEC §16.6).
+type communityReservation struct {
+	Community wire.Bytes `json:"community"`
+	Server    string     `json:"server"`
+	Entry     wire.Bytes `json:"entry"`
+	Exp       int64      `json:"exp"`
+}
+
+// reserve holds this server's name for a community moving in, and answers with a reservation
+// for its set-home entry, signed with this server's key (SPEC §16.6).
+// It lasts 10 minutes, and the name is held 30 days after, as for an identity's move
+// (reservationTTL, reservationHold).
+func (c *community) reserve(w http.ResponseWriter, ctx context.Context, st *cchain.State, entry []byte, t int64) {
+	exp := t + reservationTTL
+	switch err := c.st.Hold(ctx, c.name, st.ID, exp+reservationHold, t); {
+	case errors.Is(err, store.ErrExists):
+		writeError(w, http.StatusConflict, wire.ErrCodeAlreadyExists, "this server hosts a community, or is held for another one moving in")
+		return
+	case err != nil:
+		c.hs.unavailableRead(w, "holding a name for a move", err)
+		return
+	}
+	signed, err := c.srv.fed.SignKID(typeCommunityReservation, communityReservation{Community: st.ID, Server: c.name, Entry: entry, Exp: exp})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, wire.ErrCodeUnavailable, "")
+		return
+	}
+	enc, _ := signed.Encode()
+	c.hs.log.Info("community move reserved", "name", c.name, "id", hex.EncodeToString(st.ID))
+	writeBody(w, http.StatusOK, map[string]any{"id": wire.Bytes(st.ID), "reservation": wire.Raw(enc)})
+}
+
+const typeCommunityReservation = "community-move-reservation"
+
+// checkMoveReservation checks the reservation a set-home naming dest needs, for the entry
+// with hash `entry` (SPEC §16.6), with §6.6's answers. It returns an HTTP status, error code,
+// and message, or code "" if it's valid.
+func (c *community) checkMoveReservation(ctx context.Context, raw wire.Raw, id []byte, dest string, entry []byte) (int, string, string) {
+	if raw == nil {
+		return http.StatusForbidden, wire.ErrCodeNotAllowed, "a set-home needs a reservation from " + dest + ": ask it first (POST create with check)"
+	}
+	sig, err := wire.DecodeSignedV2(raw)
+	if err != nil {
+		return http.StatusBadRequest, wire.ErrCodeBadRequest, "reservation: " + err.Error()
+	}
+	_, ok := sig.KeyID()
+	var body communityReservation
+	if sig.T != typeCommunityReservation || !ok || sig.OpenClosed(&body) != nil {
+		return http.StatusForbidden, wire.ErrCodeNotAllowed, "that isn't a community move reservation"
+	}
+	if !bytes.Equal(body.Community, id) || body.Server != dest || !bytes.Equal(body.Entry, entry) {
+		return http.StatusForbidden, wire.ErrCodeNotAllowed, "the reservation is for another community, server, or entry"
+	}
+	if body.Exp < now() {
+		return http.StatusForbidden, wire.ErrCodeNotAllowed, "the reservation has expired: ask " + dest + " again"
+	}
+	if _, err := c.srv.fed.ServerDoc(ctx, dest); err != nil {
+		return http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "couldn't reach " + dest + " to check its reservation"
+	}
+	if c.srv.fed.VerifyServerSigned(ctx, dest, sig, typeCommunityReservation, now()) != nil {
+		return http.StatusBadRequest, wire.ErrCodeBadSignature, "the reservation isn't signed by " + dest
+	}
+	return 0, "", ""
 }
 
 // maxListed is the most identities a member list can name: the member cap (SPEC §16.1).
@@ -670,7 +747,8 @@ func bytesCutBearer(r *http.Request) (string, bool) {
 
 func (c *community) chainAppend(w http.ResponseWriter, r *http.Request, sess csess) {
 	var req struct {
-		Entry wire.Raw `json:"entry"`
+		Entry       wire.Raw `json:"entry"`
+		Reservation wire.Raw `json:"reservation,omitempty"`
 	}
 	if !readBody(w, r, &req) {
 		return
@@ -685,12 +763,8 @@ func (c *community) chainAppend(w http.ResponseWriter, r *http.Request, sess cse
 		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "")
 		return
 	}
-	// After a set-home, the server the chain no longer names refuses appends (SPEC §16.2.3).
-	if c.moved(st) {
-		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "this community moved to "+st.Server)
-		return
-	}
-	// Idempotent: the entry that's already the head gets the same answer.
+	// Idempotent: the entry that's already the head gets the same answer, the set-home's
+	// seqs included, for an owner whose first answer was lost.
 	if enc, err := wire.CanonicalSignedFor(wire.V2, req.Entry); err == nil {
 		c.mu.RLock()
 		head := c.ent[len(c.ent)-1]
@@ -700,6 +774,11 @@ func (c *community) chainAppend(w http.ResponseWriter, r *http.Request, sess cse
 			return
 		}
 	}
+	// After a set-home, the server the chain no longer names refuses appends (SPEC §16.2.3).
+	if c.moved(st) {
+		writeError(w, http.StatusConflict, wire.ErrCodeWrongHome, "this community moved to "+st.Server)
+		return
+	}
 	// Anyone who can sign in could make the chain grow (SPEC §16.2.2).
 	if !c.hs.limits.allow("cm-append|"+c.name+"|"+sess.id, 120, 3600, now(), true) {
 		rateLimited(w, 60)
@@ -708,10 +787,24 @@ func (c *community) chainAppend(w http.ResponseWriter, r *http.Request, sess cse
 	c.appending.Lock()
 	defer c.appending.Unlock()
 	st = c.snapshot()
+	if c.moved(st) {
+		writeError(w, http.StatusConflict, wire.ErrCodeWrongHome, "this community moved to "+st.Server)
+		return
+	}
 	next, a, err := st.Apply(req.Entry, c.appendKeys(ctx, sess), now(), cchain.Append)
 	if err != nil {
 		c.cerr(w, err)
 		return
+	}
+	// A set-home naming another server needs that server's reservation (SPEC §16.6), and
+	// from the moment it's stored, this server numbers no more messages (seqGate).
+	if c.moved(next) {
+		if status, code, msg := c.checkMoveReservation(ctx, req.Reservation, st.ID, next.Server, a.Hash); code != "" {
+			writeError(w, status, code, msg)
+			return
+		}
+		c.seqGate.Lock()
+		defer c.seqGate.Unlock()
 	}
 	members, err := c.st.Members(ctx, c.name)
 	if err != nil {

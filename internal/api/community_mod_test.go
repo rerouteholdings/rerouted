@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -409,8 +410,10 @@ func TestCommunityReports(t *testing.T) {
 	}
 }
 
-// Moving a community (SPEC §16.2.3 set-home, §16.6): the new server takes the whole chain;
-// the old one answers 410 to all but the chain, and refuses appends.
+// Moving a community (SPEC §16.2.3 set-home, §16.6): the owner asks the new server for a
+// reservation, without which the old one records no set-home; the new server takes the whole
+// chain; the old one refuses messages and appends with wrong-home, and answers 410 to all
+// but the chain and commits.
 func TestCommunityMove(t *testing.T) {
 	e := newCommunityEnv(t, func(c *config.Config) {
 		c.Communities = append(c.Communities, config.Community{Name: "new.test", URL: "https://new.test"})
@@ -427,29 +430,96 @@ func TestCommunityMove(t *testing.T) {
 			t.Fatalf("message %d before the move: %+v", i, res)
 		}
 	}
-	// The set-home's answer gives each text channel's last number, for the new server.
-	var moved struct {
-		Seq  uint64       `json:"seq"`
-		Head wire.Bytes   `json:"head"`
-		Seqs []channelSeq `json:"seqs"`
-	}
-	if c := e.call("POST", "chain/append", kat.tok, map[string]any{"entry": kat.sign(kat.next(m.ch, map[string]any{"op": "set-home", "server": "new.test"}))}, &moved); c != 200 || len(moved.Seqs) != 1 || moved.Seqs[0] != (channelSeq{1, 2}) {
-		t.Fatalf("set-home: %d %+v", c, moved)
-	}
-	m.ch.seq, m.ch.head = moved.Seq, moved.Head
 	var chain struct {
 		Entries []wire.Raw `json:"entries"`
 	}
 	if c := e.call("GET", "chain", kat.tok, nil, &chain); c != 200 {
 		t.Fatalf("the old server's chain: %d", c)
 	}
+	setHome := kat.sign(kat.next(m.ch, map[string]any{"op": "set-home", "server": "new.test"}))
+	chain.Entries = append(chain.Entries, setHome)
+	// Without a reservation from new.test, the old server records nothing, and the community
+	// goes on there (SPEC §16.6).
+	if c, code := e.errOf("POST", "chain/append", kat.tok, map[string]any{"entry": setHome}); c != 403 || code != wire.ErrCodeNotAllowed {
+		t.Fatalf("set-home without a reservation: %d %s", c, code)
+	}
+	if res := ravi.say(m, 1, "still here"); res.Seq != 3 {
+		t.Fatalf("a message after a refused set-home: %+v", res)
+	}
+	// The owner asks new.test first: everything a move-in checks, then a reservation.
+	e.host = "new.test"
+	kn, rn := e.signIn(kat.v2User), e.signIn(ravi.v2User)
+	lee := e.signIn(newV2User(t, e.ts, "lee", "chat.test"))
+	list := func(by *cmUser, ids ...string) wire.Raw {
+		return signed2(t, "community-members", map[string]any{"community": m.ch.id, "members": ids, "ts": time.Now().Unix()}, by.dev)
+	}
+	check := func(tok string, body map[string]any) (int, string, wire.Raw) {
+		var res struct {
+			Reservation wire.Raw `json:"reservation"`
+			wire.Error
+		}
+		body["check"] = true
+		c := e.call("POST", "create", tok, body, &res)
+		return c, res.Code, res.Reservation
+	}
+	if c, code, _ := check(kn.tok, map[string]any{"chain": chain.Entries, "code": "not-the-code", "members": list(kn, ravi.id)}); c != 403 || code != wire.ErrCodeNotAllowed {
+		t.Fatalf("a check without the creation code: %d %s", c, code)
+	}
+	if c, _, _ := check(rn.tok, map[string]any{"chain": chain.Entries, "code": testCreateCode, "members": list(rn, ravi.id)}); c != 403 {
+		t.Fatalf("a check by a member: %d", c)
+	}
+	if c, _, _ := check(kn.tok, map[string]any{"chain": chain.Entries, "code": testCreateCode, "members": list(kn, ravi.id), "seqs": []channelSeq{{1, 3}}}); c != 400 {
+		t.Fatalf("a check with seqs: %d", c)
+	}
+	c, _, resv := check(kn.tok, map[string]any{"chain": chain.Entries, "code": testCreateCode, "members": list(kn, ravi.id)})
+	if c != 200 || resv == nil {
+		t.Fatalf("the check: %d", c)
+	}
+	// It stored no community, and holds the name for this one: another can't be created.
+	if c, _ := e.errOf("GET", "preview", "", nil); c != 404 {
+		t.Fatalf("preview after a check: %d", c)
+	}
+	other := lee.sign(map[string]any{"seq": 0, "ts": time.Now().Unix(), "by": lee.id, "ops": []any{createOp("new.test", true, false)}})
+	reg := map[string]any{"group": randB(32), "epoch": 0, "epoch-key": newComposite(t).Public().Bytes(), "info": []byte("i"), "tree": lee.uploadTree("held")}
+	if c, code := e.errOf("POST", "create", lee.tok, map[string]any{"entry": other, "group": reg, "code": testCreateCode}); c != 409 || code != wire.ErrCodeAlreadyExists {
+		t.Fatalf("a create on a name held for a move: %d %s", c, code)
+	}
+	// Back on the old server: a reservation that isn't new.test's, or is for another entry,
+	// records nothing.
+	e.host = ""
+	forged := signed2(t, "community-move-reservation", map[string]any{"community": m.ch.id, "server": "new.test", "entry": randB(32), "exp": time.Now().Unix() + 600}, kat.dev)
+	if c, code := e.errOf("POST", "chain/append", kat.tok, map[string]any{"entry": setHome, "reservation": forged}); c != 403 || code != wire.ErrCodeNotAllowed {
+		t.Fatalf("a reservation signed with a device key: %d %s", c, code)
+	}
+	otherHome := kat.sign(map[string]any{"community": m.ch.id, "seq": m.ch.seq + 1, "prev": m.ch.head, "ts": time.Now().Unix() + 1, "by": kat.id, "ops": []any{map[string]any{"op": "set-home", "server": "new.test"}}})
+	if c, code := e.errOf("POST", "chain/append", kat.tok, map[string]any{"entry": otherHome, "reservation": resv}); c != 403 || code != wire.ErrCodeNotAllowed {
+		t.Fatalf("a reservation for another entry: %d %s", c, code)
+	}
+	// The set-home with its reservation: the answer gives each text channel's last number,
+	// for the new server.
+	var moved struct {
+		Seq  uint64       `json:"seq"`
+		Head wire.Bytes   `json:"head"`
+		Seqs []channelSeq `json:"seqs"`
+	}
+	if c := e.call("POST", "chain/append", kat.tok, map[string]any{"entry": setHome, "reservation": resv}, &moved); c != 200 || len(moved.Seqs) != 1 || moved.Seqs[0] != (channelSeq{1, 3}) {
+		t.Fatalf("set-home: %d %+v", c, moved)
+	}
+	// A retry after a lost answer gets the same answer.
+	var again struct {
+		Seqs []channelSeq `json:"seqs"`
+	}
+	if c := e.call("POST", "chain/append", kat.tok, map[string]any{"entry": setHome, "reservation": resv}, &again); c != 200 || len(again.Seqs) != 1 || again.Seqs[0] != moved.Seqs[0] {
+		t.Fatalf("set-home again: %d %+v", c, again)
+	}
+	m.ch.seq, m.ch.head = moved.Seq, moved.Head
 	if c, code := e.errOf("GET", "preview", "", nil); c != 410 || code != wire.ErrCodeExpired {
 		t.Fatalf("old preview: %d %s", c, code)
 	}
-	if c, _ := kat.appendOps(m.ch, map[string]any{"op": "set-name", "name": "x"}); c != 403 {
-		t.Fatalf("append after set-home: %d", c)
+	if c, code := kat.appendOps(m.ch, map[string]any{"op": "set-name", "name": "x"}); c != 409 || code != wire.ErrCodeWrongHome {
+		t.Fatalf("append after set-home: %d %s", c, code)
 	}
-	if res := ravi.say(m, 1, "x"); res.Error != wire.ErrCodeExpired {
+	if res := ravi.say(m, 1, "x"); res.Error != wire.ErrCodeWrongHome {
 		t.Fatalf("message after the move: %+v", res)
 	}
 	if c, _ := e.errOf("GET", "history/list?channel=1", kat.tok, nil); c != 410 {
@@ -461,11 +531,6 @@ func TestCommunityMove(t *testing.T) {
 	}
 	// The new server takes the chain from the owner.
 	e.host = "new.test"
-	kn, rn := e.signIn(kat.v2User), e.signIn(ravi.v2User)
-	lee := e.signIn(newV2User(t, e.ts, "lee", "chat.test"))
-	list := func(by *cmUser, ids ...string) wire.Raw {
-		return signed2(t, "community-members", map[string]any{"community": m.ch.id, "members": ids, "ts": time.Now().Unix()}, by.dev)
-	}
 	if c, _ := e.errOf("POST", "create", rn.tok, map[string]any{"chain": chain.Entries, "code": testCreateCode, "members": list(rn, ravi.id)}); c != 403 {
 		t.Fatalf("a move-in by a member: %d", c)
 	}
@@ -517,7 +582,7 @@ func TestCommunityMove(t *testing.T) {
 	}
 	// Numbering goes on from the old server's.
 	m.group = handed
-	if res := rn.say(m, 1, "after the move"); res.Seq != 3 {
+	if res := rn.say(m, 1, "after the move"); res.Seq != 4 {
 		t.Fatalf("the first message after the move: %+v", res)
 	}
 	// Appends continue on the new server, after the set-home.
@@ -555,5 +620,78 @@ func TestCommunityFormerMemberChains(t *testing.T) {
 	// Still for members only: the kicked identity can't read them.
 	if c, _ := e.errOf("GET", "members/"+ravi.id+"/chain", lee.tok, nil); c != 403 {
 		t.Fatalf("a kicked identity read a chain: %d", c)
+	}
+}
+
+// The old server numbers no message after the set-home (SPEC §16.6): messages sent while the
+// set-home is appended are either numbered within the seqs it answers with, or refused.
+func TestCommunityMoveStopsSequencing(t *testing.T) {
+	e := newCommunityEnv(t, func(c *config.Config) {
+		c.Communities = append(c.Communities, config.Community{Name: "new.test", URL: "https://new.test"})
+	})
+	ravi := e.user("ravi")
+	kat, m := joined(t, e, ravi)
+	kat.mustAppend(m.ch, textChannel(1, []uint64{0}, []uint64{0}, 0))
+	var chain struct {
+		Entries []wire.Raw `json:"entries"`
+	}
+	if c := e.call("GET", "chain", kat.tok, nil, &chain); c != 200 {
+		t.Fatalf("chain: %d", c)
+	}
+	setHome := kat.sign(kat.next(m.ch, map[string]any{"op": "set-home", "server": "new.test"}))
+	e.host = "new.test"
+	kn := e.signIn(kat.v2User)
+	members := signed2(t, "community-members", map[string]any{"community": m.ch.id, "members": []string{kat.id, ravi.id}, "ts": time.Now().Unix()}, kat.dev)
+	var res struct {
+		Reservation wire.Raw `json:"reservation"`
+	}
+	if c := e.call("POST", "create", kn.tok, map[string]any{"chain": append(chain.Entries, setHome), "code": testCreateCode, "members": members, "check": true}, &res); c != 200 {
+		t.Fatalf("check: %d", c)
+	}
+	e.host = ""
+	var mu sync.Mutex
+	var numbered []uint64
+	refused := 0
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				r := ravi.say(m, 1, "racing the move")
+				mu.Lock()
+				switch {
+				case r.Status == "sent":
+					numbered = append(numbered, r.Seq)
+				case r.Error == wire.ErrCodeWrongHome:
+					refused++
+				}
+				mu.Unlock()
+			}
+		}()
+	}
+	time.Sleep(50 * time.Millisecond)
+	var moved struct {
+		Seqs []channelSeq `json:"seqs"`
+	}
+	if c := e.call("POST", "chain/append", kat.tok, map[string]any{"entry": setHome, "reservation": res.Reservation}, &moved); c != 200 || len(moved.Seqs) != 1 {
+		t.Fatalf("set-home: %d %+v", c, moved)
+	}
+	time.Sleep(50 * time.Millisecond)
+	close(stop)
+	wg.Wait()
+	if len(numbered) == 0 || refused == 0 {
+		t.Fatalf("the race didn't happen: %d numbered, %d refused", len(numbered), refused)
+	}
+	for _, n := range numbered {
+		if n > moved.Seqs[0].Seq {
+			t.Fatalf("message %d numbered after the set-home's last, %d", n, moved.Seqs[0].Seq)
+		}
 	}
 }

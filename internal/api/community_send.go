@@ -263,6 +263,11 @@ func (c *community) sendOne(ctx context.Context, sess csess, o cOutgoing) cResul
 		// through POST join (SPEC §10.1).
 		return cReject(o.ID, wire.ErrCodeBadRequest)
 	}
+	if o.MLS != "commit" {
+		// Not after the set-home: a set-home's append waits for sends under way (SPEC §16.6).
+		c.seqGate.RLock()
+		defer c.seqGate.RUnlock()
+	}
 	st := c.snapshot()
 	g, err := c.st.Group(ctx, o.Group)
 	if errors.Is(err, store.ErrNotFound) || (err == nil && g.Name != c.name) {
@@ -273,7 +278,7 @@ func (c *community) sendOne(ctx context.Context, sess csess, o cOutgoing) cResul
 	}
 	// A community that moved away keeps sequencing commits for its hub handoff, and nothing else.
 	if c.moved(st) && o.MLS != "commit" {
-		return cReject(o.ID, wire.ErrCodeExpired)
+		return cReject(o.ID, wire.ErrCodeWrongHome)
 	}
 	if !c.mayReceive(st, g, sess.id) {
 		return cReject(o.ID, wire.ErrCodeNotAllowed)
