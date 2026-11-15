@@ -198,12 +198,18 @@ func (c *Conn) readFrame() (fin bool, opcode int, payload []byte, err error) {
 			return
 		}
 		n = int64(binary.BigEndian.Uint64(b[:]))
+		// The most significant bit must be 0 (RFC 6455 §5.2): as an int64, n would be
+		// negative, and pass the checks below as a small frame.
+		if n < 0 {
+			c.closeWith(CloseProtocol, "bad length")
+			return false, 0, nil, ErrClosed
+		}
 	}
 	if opcode >= opClose && (n > maxControlLength || !fin) {
 		c.closeWith(CloseProtocol, "bad control frame")
 		return false, 0, nil, ErrClosed
 	}
-	if n > c.MaxSize || n < 0 {
+	if n > c.MaxSize {
 		c.closeWith(CloseTooBig, "frame too large")
 		return false, 0, nil, ErrClosed
 	}
