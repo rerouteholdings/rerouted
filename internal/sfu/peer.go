@@ -478,10 +478,16 @@ func (p *peer) remoteAnswer(desc webrtc.SessionDescription) error {
 	p.neg.Lock()
 	defer p.neg.Unlock()
 	pc := p.pc.Load()
+	if p.left() {
+		return ErrNotIn
+	}
 	if !p.pending {
 		return ErrBadSDP
 	}
 	if err := pc.SetRemoteDescription(desc); err != nil {
+		if p.left() {
+			return ErrNotIn // it left while its answer was on its way
+		}
 		p.room.sfu.cfg.Log.Debug("sfu: a device's answer", "err", err)
 		return ErrBadSDP
 	}
@@ -501,16 +507,25 @@ func (p *peer) remoteOffer(desc webrtc.SessionDescription) (string, error) {
 	p.neg.Lock()
 	defer p.neg.Unlock()
 	pc := p.pc.Load()
+	if p.left() {
+		return "", ErrNotIn
+	}
 	if p.pending || pc.SignalingState() != webrtc.SignalingStateStable {
 		return "", ErrGlare
 	}
 	if err := pc.SetRemoteDescription(desc); err != nil {
+		if p.left() {
+			return "", ErrNotIn
+		}
 		p.room.sfu.cfg.Log.Debug("sfu: a device's offer", "err", err)
 		return "", ErrBadSDP
 	}
 	answer, err := pc.CreateAnswer(nil)
 	if err == nil {
 		err = pc.SetLocalDescription(answer)
+	}
+	if err != nil && p.left() {
+		return "", ErrNotIn
 	}
 	if err != nil {
 		// The offer is set and can't be rolled back: the connection can't go on.
@@ -523,6 +538,21 @@ func (p *peer) remoteOffer(desc webrtc.SessionDescription) (string, error) {
 		time.AfterFunc(glareDelay, p.negotiate)
 	}
 	return sdpText(pc.LocalDescription()), nil
+}
+
+// left reports whether the device has left: close ran, and its connection is closing.
+// Session descriptions that fail on the closed connection then answer ErrNotIn, as they
+// would a moment later, and not ErrBadSDP.
+func (p *peer) left() bool {
+	if p.done == nil {
+		return false
+	}
+	select {
+	case <-p.done:
+		return true
+	default:
+		return false
+	}
 }
 
 // close ends the connection.

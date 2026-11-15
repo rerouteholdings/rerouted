@@ -18,6 +18,7 @@ import (
 	"github.com/rerouteholdings/rerouted/internal/fed"
 	"github.com/rerouteholdings/rerouted/internal/serverkey"
 	"github.com/rerouteholdings/rerouted/internal/sfu"
+	"github.com/rerouteholdings/rerouted/internal/sfuipc"
 	"github.com/rerouteholdings/rerouted/internal/store"
 	"github.com/rerouteholdings/rerouted/internal/wire"
 )
@@ -69,7 +70,7 @@ type community struct {
 // communities is every community name this process serves.
 type communities struct {
 	byName map[string]*community
-	sfu    *sfu.SFU
+	sfu    sfu.Voice // nil if it didn't start
 }
 
 // initCommunities makes the community servers configured, on the version 1 Server s.
@@ -84,9 +85,20 @@ func (s *Server) initCommunities() {
 			c.voice.gone(key)
 		}
 	}
-	v, err := sfu.New(sfu.Config{UDPPort: s.cfg.VoiceUDPPort, PublicIPs: s.cfg.VoicePublicIPs, Loopback: s.cfg.Dev, OnGone: gone, Log: s.log.With("sfu", true)})
-	if err != nil {
+	sc := sfu.Config{UDPPort: s.cfg.VoiceUDPPort, PublicIPs: s.cfg.VoicePublicIPs, Loopback: s.cfg.Dev, OnGone: gone, Log: s.log.With("sfu", true)}
+	var v sfu.Voice
+	if s.cfg.SFU != "" {
+		// In rerouted-sfu, which has the UDP sockets and WebRTC, and nothing else.
+		c, err := sfuipc.Dial(s.cfg.SFU, sc)
+		if err != nil {
+			s.log.Error("voice channels are off: rerouted-sfu didn't answer", "err", err)
+		} else {
+			v = c
+		}
+	} else if l, err := sfu.New(sc); err != nil {
 		s.log.Error("voice channels are off: the SFU didn't start", "err", err)
+	} else {
+		v = sfu.Local(l)
 	}
 	s.comm.sfu = v
 	for _, cm := range s.cfg.Communities {

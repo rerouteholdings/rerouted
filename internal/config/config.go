@@ -58,6 +58,9 @@ type Config struct {
 	// signs for this process (internal/keyd). Empty: the keys are read from the data
 	// directory, as files, created there if missing.
 	Keyd string
+	// REROUTED_SFU: the unix socket of rerouted-sfu, which runs voice channels' SFU in a
+	// process of its own (internal/sfuipc). Empty: the SFU runs in this process.
+	SFU string
 
 	// Community servers (SPEC §16). REROUTED_COMMUNITIES lists the server names this process
 	// serves as community servers, each hosting one community: name or name=url, comma-
@@ -112,6 +115,7 @@ func Load(envFile string) (*Config, error) {
 		PublicFirehose:     get("REROUTED_PUBLIC_FIREHOSE", "off") == "on",
 		PauseMoves:         get("REROUTED_PAUSE_MOVES", "off") == "on",
 		Keyd:               os.Getenv("REROUTED_KEYD"),
+		SFU:                os.Getenv("REROUTED_SFU"),
 	}
 	c.Defaults()
 	for _, u := range strings.Split(os.Getenv("REROUTED_TLS_ASK_ALSO"), ",") {

@@ -98,6 +98,35 @@ type SFU struct {
 	closed bool
 }
 
+// Voice is an SFU: this one, in this process (Local), or one in rerouted-sfu
+// (internal/sfuipc). Its rooms do what Room's methods say.
+type Voice interface {
+	Room(key string) VoiceRoom
+	Close() error
+}
+
+// VoiceRoom is a voice channel's room: Room, or rerouted-sfu's.
+type VoiceRoom interface {
+	Join(m Member, offer string, max int, mayVoice bool, signal Signal) (string, error)
+	NewVisit(key string, visit uint32) error
+	Leave(key string) bool
+	Remote(key, data string) (string, error)
+	ICE(key, data string) error
+	SetVoice(key string, may bool)
+	SetCast(key string, kinds []string, limit int) error
+	State() []Participant
+	Has(key string) bool
+	Len() int
+}
+
+// Local is s as a Voice.
+func Local(s *SFU) Voice { return local{s} }
+
+type local struct{ s *SFU }
+
+func (l local) Room(key string) VoiceRoom { return l.s.Room(key) }
+func (l local) Close() error              { return l.s.Close() }
+
 // Signal sends a frame to a participant's device over its stream: voice-sdp and voice-ice.
 type Signal func(frame map[string]any)
 

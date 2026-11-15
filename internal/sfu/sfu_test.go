@@ -23,18 +23,25 @@ import (
 
 func loopbackOnly(ip net.IP) bool { return ip.IsLoopback() }
 
-func newTestSFU(t *testing.T, cfg Config) *SFU {
+// NewVoice, if set, makes the SFU the tests use instead of New: TestThroughSFUProcess
+// (ipc_test.go) puts rerouted-sfu here.
+var NewVoice func(t *testing.T, cfg Config) Voice
+
+func newTestSFU(t *testing.T, cfg Config) Voice {
 	t.Helper()
 	cfg.Loopback, cfg.IPFilter = true, loopbackOnly
 	if testing.Verbose() {
 		cfg.Log = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	}
+	if NewVoice != nil {
+		return NewVoice(t, cfg)
 	}
 	s, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	return s
+	return Local(s)
 }
 
 // clientAPI is a device's WebRTC stack: the codecs SPEC §15.3 names, loopback only.
@@ -71,7 +78,7 @@ type recv struct {
 type client struct {
 	t      *testing.T
 	name   string
-	room   *Room
+	room   VoiceRoom
 	key    string
 	pc     *webrtc.PeerConnection
 	tracks map[string]*webrtc.TrackLocalStaticRTP // voice, audio, video
@@ -90,7 +97,7 @@ type client struct {
 	remoteVid []uint32 // SSRCs of video tracks received
 }
 
-func newClient(t *testing.T, api *webrtc.API, room *Room, name string, casts bool) *client {
+func newClient(t *testing.T, api *webrtc.API, room VoiceRoom, name string, casts bool) *client {
 	t.Helper()
 	pc, err := api.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
@@ -651,8 +658,12 @@ func TestGoneAndClose(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	if g, _ := gone.Load().(string); g != "c/1|kat" {
-		t.Fatalf("OnGone got %q", g)
+	// OnGone comes after the removal: in rerouted-sfu, as an event of its own.
+	for g, _ := gone.Load().(string); g != "c/1|kat"; g, _ = gone.Load().(string) {
+		if time.Now().After(deadline) {
+			t.Fatalf("OnGone got %q", g)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	s.Close()
 	if room.Len() != 0 {
@@ -677,5 +688,31 @@ func TestPublicIPs(t *testing.T) {
 	}
 	if !strings.Contains(ans, "198.51.100.7") || strings.Contains(ans, "127.0.0.1") {
 		t.Fatalf("host candidates not rewritten: %s", ans)
+	}
+}
+
+// A device's answer or offer that reaches the SFU as it leaves, the connection closing
+// under it, answers ErrNotIn, as it would a moment later: not ErrBadSDP.
+func TestDescriptionAsItLeaves(t *testing.T) {
+	s, err := New(Config{Loopback: true, IPFilter: loopbackOnly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	room := s.Room("c/1")
+	a := newClient(t, clientAPI(t), room, "kat", false)
+	mustJoin(t, a, 1, true)
+	p := room.get("kat")
+	if p == nil {
+		t.Fatal("not in the room")
+	}
+	p.close()
+	desc := webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: "v=0"}
+	if err := p.remoteAnswer(desc); !errors.Is(err, ErrNotIn) {
+		t.Fatalf("an answer: %v", err)
+	}
+	desc.Type = webrtc.SDPTypeOffer
+	if _, err := p.remoteOffer(desc); !errors.Is(err, ErrNotIn) {
+		t.Fatalf("an offer: %v", err)
 	}
 }

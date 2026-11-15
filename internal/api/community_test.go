@@ -44,6 +44,7 @@ func newCommunityEnv(t *testing.T, change func(*config.Config)) *cmEnv {
 	cfg := &config.Config{Name: "chat.test", Handles: "chat.test", Registration: "invite", RegistrationCode: testRegCode, DataDir: dir, Dev: true,
 		Peers: map[string]string{}, Communities: []config.Community{{Name: "chat.test", URL: "https://chat.test"}}, CommunityCode: testCreateCode, CommunityFileDays: 30}
 	change(cfg)
+	testSFU(t, cfg)
 	key := testKey(t, dir, cfg)
 	s := New(cfg, key, slog.New(slog.NewTextHandler(io.Discard, nil)), st)
 	ts := httptest.NewServer(s.Handler())

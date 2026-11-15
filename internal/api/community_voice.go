@@ -22,7 +22,7 @@ import (
 
 type voiceRooms struct {
 	c   *community
-	sfu *sfu.SFU // nil if it didn't start: voice-join answers unavailable
+	sfu sfu.Voice // nil if it didn't start: voice-join answers unavailable
 	mu  sync.Mutex
 	at  map[string]*visitRec // devKey -> the visit the device is on
 	// sent orders voice-state frames: each is built and queued under it, so a stream never
@@ -39,7 +39,7 @@ type visitRec struct {
 	s       *stream
 }
 
-func newVoiceRooms(c *community, s *sfu.SFU) *voiceRooms {
+func newVoiceRooms(c *community, s sfu.Voice) *voiceRooms {
 	return &voiceRooms{c: c, sfu: s, at: map[string]*visitRec{}}
 }
 
@@ -47,7 +47,7 @@ func devKey(id string, dev []byte) string { return id + "|" + hex.EncodeToString
 
 func (v *voiceRooms) roomKey(ch uint64) string { return v.c.name + "|" + strconv.FormatUint(ch, 10) }
 
-func (v *voiceRooms) room(ch uint64) *sfu.Room { return v.sfu.Room(v.roomKey(ch)) }
+func (v *voiceRooms) room(ch uint64) sfu.VoiceRoom { return v.sfu.Room(v.roomKey(ch)) }
 
 // mayVoice: a role in the channel's write list, talk, and no timeout.
 func mayVoice(st *cchain.State, id string, ch *cchain.Channel) bool {
