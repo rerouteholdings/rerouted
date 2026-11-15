@@ -1,0 +1,32 @@
+#!/bin/sh
+# rerouted-keyd-seal: keeps rerouted-keyd's keys in /var/lib/rerouted-keyd/keys.cred,
+# encrypted with systemd-creds, for rerouted-keyd-seal.service. It decrypts the bundle (if
+# there is one), adds the keys left in rerouted's data directory, makes any missing (a new
+# community's), encrypts the result, and deletes the plaintext key files it took in.
+#
+# Run as root. Settings: REROUTED_ENV, KEYD_DIR, REROUTED_DATA, REROUTED_KEYD_BIN.
+set -eu
+env=${REROUTED_ENV:-/etc/rerouted/rerouted.env}
+dir=${KEYD_DIR:-/var/lib/rerouted-keyd}
+data=${REROUTED_DATA:-/var/lib/rerouted}
+bin=${REROUTED_KEYD_BIN:-/usr/local/bin/rerouted-keyd}
+work=${RUNTIME_DIRECTORY:?run from rerouted-keyd-seal.service, or set RUNTIME_DIRECTORY to a directory in memory}
+umask 077
+
+if [ -e "$dir/keys.cred" ]; then
+	systemd-creds decrypt --name=keys "$dir/keys.cred" "$work/old"
+else
+	: >"$work/old"
+fi
+"$bin" -env "$env" -import "$data" -import "$dir" -imported "$work/imported" bundle <"$work/old" >"$work/new"
+if ! cmp -s "$work/old" "$work/new"; then
+	systemd-creds encrypt --name=keys "$work/new" "$dir/keys.cred.new"
+	mv "$dir/keys.cred.new" "$dir/keys.cred"
+	echo "rerouted-keyd-seal: $dir/keys.cred updated"
+fi
+# Every file listed is in keys.cred now.
+while IFS= read -r f; do
+	rm -f -- "$f"
+	echo "rerouted-keyd-seal: $f is in keys.cred now: deleted"
+done <"$work/imported"
+rm -f "$work/old" "$work/new" "$work/imported"

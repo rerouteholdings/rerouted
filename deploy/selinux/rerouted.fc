@@ -3,5 +3,12 @@
 
 /etc/rerouted(/.*)?		gen_context(system_u:object_r:rerouted_conf_t,s0)
 
-# One instance in /var/lib/rerouted, or several in /var/lib/rerouted-NAME (REROUTED_TLS_ASK_ALSO).
+# One instance in /var/lib/rerouted, or several in /var/lib/rerouted-NAME (REROUTED_TLS_ASK_ALSO),
+# with any NAME but keyd.
 /var/lib/rerouted(-[^/]+)?(/.*)?	gen_context(system_u:object_r:rerouted_var_lib_t,s0)
+
+# rerouted-keyd: its binary, its keys, and the socket rerouted reaches it on.
+/usr/local/bin/rerouted-keyd	--	gen_context(system_u:object_r:rerouted_keyd_exec_t,s0)
+/usr/bin/rerouted-keyd	--	gen_context(system_u:object_r:rerouted_keyd_exec_t,s0)
+/var/lib/rerouted-keyd(/.*)?	gen_context(system_u:object_r:rerouted_keyd_var_lib_t,s0)
+/run/rerouted-keyd(/.*)?	gen_context(system_u:object_r:rerouted_keyd_runtime_t,s0)

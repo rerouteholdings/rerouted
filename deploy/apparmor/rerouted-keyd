@@ -1,0 +1,88 @@
+# AppArmor profile for rerouted-keyd, which holds rerouted's server keys (internal/keyd).
+# Install as /etc/apparmor.d/rerouted-keyd, next to the rerouted profile:
+#
+#   sudo install -m 644 deploy/apparmor/rerouted-keyd /etc/apparmor.d/rerouted-keyd
+#   sudo apparmor_parser -r -W /etc/apparmor.d/rerouted-keyd
+#
+# It confines every run of /usr/local/bin/rerouted-keyd: the service, and the bundle
+# command rerouted-keyd-seal runs as root. Paths are deploy/rerouted-keyd*'s.
+
+abi <abi/3.0>,
+
+include <tunables/global>
+
+@{rerouted_conf}=/etc/rerouted
+@{keyd_dir}=/var/lib/rerouted-keyd
+
+# attach_disconnected: paths in the unit's mount namespace, like the credentials systemd
+# passes, can't be named from the host's root without it.
+profile rerouted-keyd /usr/local/bin/rerouted-keyd flags=(enforce, attach_disconnected) {
+  include <abstractions/base>
+
+  # Only for the bundle command, as root, in rerouted-keyd-seal: to read the keys in
+  # rerouted's data directory. The service runs as its own user, with no capabilities.
+  capability dac_override,
+  capability dac_read_search,
+  deny capability setuid,
+  deny capability setgid,
+  deny capability sys_admin,
+  deny capability sys_ptrace,
+  deny capability net_admin,
+  deny capability net_raw,
+
+  # No network: the socket systemd passes, and the journal's.
+  network unix stream,
+  /{run,var/run}/rerouted-keyd/keyd.sock rw,
+  deny network inet,
+  deny network inet6,
+  deny network netlink,
+  deny network packet,
+
+  /usr/local/bin/rerouted-keyd mr,
+  /usr/share/zoneinfo/** r,
+  /etc/localtime r,
+  # -allow-user: the user's ID.
+  /etc/passwd r,
+
+  # The Go runtime.
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  @{PROC}/sys/net/core/somaxconn r,
+  @{PROC}/@{pid}/cgroup r,
+  @{PROC}/@{pid}/mountinfo r,
+  @{PROC}/@{pid}/stat r,
+  /sys/fs/cgroup/{,**/}cpu.max r,
+  /sys/fs/cgroup/{,**/}cpu.cfs_{quota,period}_us r,
+  /sys/devices/system/cpu/online r,
+
+  # rerouted's settings: REROUTED_NAME and REROUTED_COMMUNITIES.
+  @{rerouted_conf}/ r,
+  @{rerouted_conf}/** r,
+
+  # The key bundle, which systemd decrypts for the service.
+  /{run,var/run}/credentials/rerouted-keyd.service/ r,
+  /{run,var/run}/credentials/rerouted-keyd.service/keys r,
+  # Without systemd-creds: the key files in -keys DIR.
+  @{keyd_dir}/ rw,
+  @{keyd_dir}/*.json rw,
+  deny @{keyd_dir}/** mx,
+
+  # The bundle command, in rerouted-keyd-seal: key files left in rerouted's data
+  # directory, and its own files, in memory. The unbundle command, as root, going back to
+  # keys in rerouted's data directory: the key files.
+  /var/lib/rerouted/ rw,
+  /var/lib/rerouted/{server-key,server-key-v2,community-key-*}.json rw,
+  /{run,var/run}/rerouted-keyd-seal/* rw,
+
+  signal (receive) set=(term, int, kill, hup) peer=unconfined,
+  signal (send, receive) peer=rerouted-keyd,
+
+  deny /{usr/,}{s,}bin/** x,
+  deny ptrace,
+  deny mount,
+  deny umount,
+  deny pivot_root,
+  deny @{PROC}/sys/** w,
+  deny /sys/** w,
+
+  include if exists <local/rerouted-keyd>
+}

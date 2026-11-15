@@ -108,6 +108,66 @@ If your DNS provider offers a proxy, such as Cloudflare's, turn it off for these
 
    Check that it took: `ps -eZ | grep rerouted` shows `rerouted_t` under SELinux, and `sudo aa-status` lists `rerouted` under AppArmor.
 
+## Keep the server keys apart
+
+Optionally, move the server keys out of rerouted into rerouted-keyd, a second process that holds them and signs for rerouted. rerouted-keyd has no network and can't write anywhere, and signs only what a server signs with its own key: S2S requests from this server, made now; commit receipts; and move reservations for this server, for 10 minutes. Someone who takes over rerouted can sign only while they're in it, and can't take the keys with them. The keys are kept encrypted with `systemd-creds`, with this machine's credential key, and its TPM if it has one, so a copy of the disk or of a backup doesn't have them. This needs systemd 250 or later.
+
+1. Build `rerouted-keyd` with `rerouted`, then install it and the script that encrypts the keys, and create the user it runs as:
+
+   ```sh
+   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o rerouted-keyd ./cmd/rerouted-keyd
+   ```
+
+   ```sh
+   sudo install -m 755 rerouted-keyd /usr/local/bin/rerouted-keyd
+   sudo install -D -m 755 deploy/rerouted-keyd-seal /usr/local/libexec/rerouted-keyd-seal
+   sudo useradd --system --home-dir /var/lib/rerouted-keyd --shell /usr/sbin/nologin rerouted-keyd
+   ```
+
+2. Install the units, and the drop-in that points rerouted at rerouted-keyd:
+
+   ```sh
+   sudo install -m 644 deploy/rerouted-keyd.socket deploy/rerouted-keyd.service deploy/rerouted-keyd-seal.service /etc/systemd/system/
+   sudo install -D -m 644 deploy/rerouted.service.d/keyd.conf /etc/systemd/system/rerouted.service.d/keyd.conf
+   ```
+
+3. With AppArmor, add rerouted-keyd's profile, and load rerouted's again: it allows the socket. With SELinux, the module from the step before already has both, so build and install it again if it's older.
+
+   ```sh
+   sudo install -m 644 deploy/apparmor/rerouted deploy/apparmor/rerouted-keyd /etc/apparmor.d/
+   sudo apparmor_parser -r -W /etc/apparmor.d/rerouted /etc/apparmor.d/rerouted-keyd
+   ```
+
+   ```sh
+   sudo restorecon -R /usr/local/bin/rerouted-keyd /usr/local/libexec
+   ```
+
+4. Start it, and restart rerouted:
+
+   ```sh
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now rerouted-keyd.socket
+   sudo systemctl restart rerouted
+   ```
+
+   The first time, `rerouted-keyd-seal` moves `server-key.json`, `server-key-v2.json`, and each `community-key-*.json` from `/var/lib/rerouted` into `/var/lib/rerouted-keyd/keys.cred`, encrypted, and deletes them there. The server document lists the same key IDs as before. `journalctl -u rerouted-keyd-seal` says what it moved.
+
+rerouted-keyd restarts with rerouted, and a community added to `REROUTED_COMMUNITIES` gets its key then. Operator commands, such as `reports`, don't need it.
+
+`keys.cred` can only be decrypted on this machine. For a backup that can be restored elsewhere, see [Back up](administer-a-homeserver.md#back-up). To go back to key files in the data directory:
+
+```sh
+sudo systemctl stop rerouted
+sudo systemctl disable --now rerouted-keyd.socket
+sudo systemd-creds decrypt --name=keys /var/lib/rerouted-keyd/keys.cred - | sudo rerouted-keyd unbundle /var/lib/rerouted
+sudo chown rerouted:rerouted /var/lib/rerouted/*-key*.json
+sudo rm /etc/systemd/system/rerouted.service.d/keyd.conf
+sudo systemctl daemon-reload
+sudo systemctl start rerouted
+```
+
+Turn off the socket first, as here: if rerouted-keyd started again, it would move the key files back.
+
 ## Put Caddy in front
 
 1. Copy [`deploy/Caddyfile.example`](../deploy/Caddyfile.example) to `/etc/caddy/Caddyfile`, and replace every `chat.example` with your domain. If Caddy already serves other sites, add its blocks to your Caddyfile instead, and put the `on_demand_tls` option in your global options block.

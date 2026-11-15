@@ -48,6 +48,20 @@ files_tmp_file(rerouted_tmp_t)
 type rerouted_port_t;
 corenet_port(rerouted_port_t)
 
+# rerouted-keyd, which holds the server keys and signs for rerouted (REROUTED_KEYD).
+type rerouted_keyd_t;
+type rerouted_keyd_exec_t;
+init_daemon_domain(rerouted_keyd_t, rerouted_keyd_exec_t)
+init_nnp_daemon_domain(rerouted_keyd_t)
+
+# /var/lib/rerouted-keyd: keys.cred, which systemd decrypts for rerouted-keyd, or key files.
+type rerouted_keyd_var_lib_t;
+files_type(rerouted_keyd_var_lib_t)
+
+# /run/rerouted-keyd: the socket.
+type rerouted_keyd_runtime_t;
+files_pid_file(rerouted_keyd_runtime_t)
+
 ########################################
 #
 # rerouted local policy
@@ -124,3 +138,59 @@ miscfiles_read_localization(rerouted_t)
 # Logs go to stderr, which systemd connects to the journal.
 logging_send_syslog_msg(rerouted_t)
 init_use_fds(rerouted_t)
+
+# REROUTED_KEYD: signatures from rerouted-keyd, over its socket.
+files_search_pids(rerouted_t)
+allow rerouted_t rerouted_keyd_runtime_t:dir search_dir_perms;
+allow rerouted_t rerouted_keyd_runtime_t:sock_file write_sock_file_perms;
+allow rerouted_t rerouted_keyd_t:unix_stream_socket connectto;
+
+########################################
+#
+# rerouted-keyd local policy: no network, nothing to write but its own key files.
+#
+
+allow rerouted_keyd_t self:process { getsched signal sigchld sigkill sigstop signull };
+allow rerouted_keyd_t self:fifo_file rw_fifo_file_perms;
+allow rerouted_keyd_t self:unix_stream_socket { create_stream_socket_perms listen accept };
+allow rerouted_keyd_t rerouted_keyd_exec_t:file { map read execute entrypoint };
+
+# rerouted's settings: REROUTED_NAME and REROUTED_COMMUNITIES.
+read_files_pattern(rerouted_keyd_t, rerouted_conf_t, rerouted_conf_t)
+list_dirs_pattern(rerouted_keyd_t, rerouted_conf_t, rerouted_conf_t)
+files_search_etc(rerouted_keyd_t)
+# -allow-user: the user's ID.
+auth_read_passwd(rerouted_keyd_t)
+
+# keys.cred: systemd decrypts it for rerouted-keyd (LoadCredentialEncrypted), which
+# never reads it itself.
+gen_require(`
+	type init_t, init_var_run_t;
+')
+allow init_t rerouted_keyd_var_lib_t:dir list_dir_perms;
+allow init_t rerouted_keyd_var_lib_t:file read_file_perms;
+# The decrypted keys, in /run/credentials/rerouted-keyd.service, which systemd labels
+# init_var_run_t.
+files_search_pids(rerouted_keyd_t)
+allow rerouted_keyd_t init_var_run_t:dir list_dir_perms;
+allow rerouted_keyd_t init_var_run_t:file read_file_perms;
+
+# Without systemd-creds: key files.
+manage_dirs_pattern(rerouted_keyd_t, rerouted_keyd_var_lib_t, rerouted_keyd_var_lib_t)
+manage_files_pattern(rerouted_keyd_t, rerouted_keyd_var_lib_t, rerouted_keyd_var_lib_t)
+files_search_var_lib(rerouted_keyd_t)
+
+# The Go runtime.
+kernel_read_system_state(rerouted_keyd_t)
+kernel_read_kernel_sysctls(rerouted_keyd_t)
+kernel_read_net_sysctls(rerouted_keyd_t)
+dev_read_sysfs(rerouted_keyd_t)
+fs_getattr_all_fs(rerouted_keyd_t)
+fs_search_cgroup_dirs(rerouted_keyd_t)
+fs_read_cgroup_files(rerouted_keyd_t)
+dev_read_urand(rerouted_keyd_t)
+dev_read_rand(rerouted_keyd_t)
+miscfiles_read_localization(rerouted_keyd_t)
+
+logging_send_syslog_msg(rerouted_keyd_t)
+init_use_fds(rerouted_keyd_t)

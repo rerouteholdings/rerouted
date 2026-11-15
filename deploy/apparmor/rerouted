@@ -14,12 +14,15 @@ abi <abi/3.0>,
 include <tunables/global>
 
 # REROUTED_DATA_DIR: the server keys, the database, and the files. One instance uses
-# /var/lib/rerouted; several on one host (REROUTED_TLS_ASK_ALSO), /var/lib/rerouted-NAME.
+# /var/lib/rerouted; several on one host (REROUTED_TLS_ASK_ALSO), /var/lib/rerouted-NAME,
+# with any NAME but keyd: /var/lib/rerouted-keyd is rerouted-keyd's (rerouted-keyd).
 @{rerouted_data}=/var/lib/rerouted /var/lib/rerouted-*
 # The settings file given with -env.
 @{rerouted_conf}=/etc/rerouted
 
-profile rerouted /usr/local/bin/rerouted flags=(enforce) {
+# attach_disconnected: in the unit's mount namespace, a path like rerouted-keyd's socket
+# can't be named from the host's root without it.
+profile rerouted /usr/local/bin/rerouted flags=(enforce, attach_disconnected) {
   include <abstractions/base>
   # Go's own resolver (the binary is built with CGO_ENABLED=0): no NSS modules, only these.
   /etc/hosts r,
@@ -75,6 +78,12 @@ profile rerouted /usr/local/bin/rerouted flags=(enforce) {
   @{rerouted_data}/ rw,
   @{rerouted_data}/** rwk,
   deny @{rerouted_data}/** mx,
+  # rerouted-keyd's keys, which the pattern above would match, are never rerouted's.
+  deny /var/lib/rerouted-keyd/ rwk,
+  deny /var/lib/rerouted-keyd/** rwkmx,
+
+  # REROUTED_KEYD: rerouted-keyd's socket (deploy/rerouted-keyd.socket).
+  /{run,var/run}/rerouted-keyd/keyd.sock rw,
 
   # REROUTED_STORE=temp: a throwaway database in a new directory under $TMPDIR.
   /tmp/ r,

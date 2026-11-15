@@ -12,7 +12,10 @@ Everything lives in the data directory (`REROUTED_DATA_DIR`):
 | `media/` | Files your users uploaded, end-to-end encrypted, and their profile pictures | Yes |
 | `server-key.json` | The server's signing key for wire version 1 | Yes |
 | `server-key-v2.json` | The server's composite signing key for wire version 2 | Yes |
+| `community-key-NAME.json` | The signing key of each community server name other than `REROUTED_NAME` | Yes |
 | `limits.json` | Rate-limit counts, saved every 10 minutes and on shutdown | No: losing it only resets the counts |
+
+With [rerouted-keyd](run-a-homeserver.md#keep-the-server-keys-apart), the key files aren't there: they're in `/var/lib/rerouted-keyd/keys.cred`, encrypted so that only this machine can decrypt them.
 
 Direct chats, group chats, files, and backups are end-to-end encrypted: you can't read them. Metadata isn't: you can see who your users talk to, their contacts and groups, and their presence. Treat it as sensitive.
 
@@ -26,9 +29,19 @@ rerouted upgrades the database to the current schema when it starts. It refuses 
    sqlite3 /var/lib/rerouted/rerouted-v1.db ".backup /backups/rerouted-v1.db"
    ```
 
-2. Copy `media/`, `server-key.json`, and `server-key-v2.json` to the same place.
+2. Copy `media/`, `server-key.json`, `server-key-v2.json`, and any `community-key-*.json` to the same place.
 
-Keep both key files safe. If you lose one, rerouted makes a new key, and other servers pick it up from the server document, but if you lose `server-key.json`, every invite code your users made stops working. Codes are keyed with a secret derived from that key (SPEC §9.1).
+   With rerouted-keyd, copying `keys.cred` isn't enough: only this machine can decrypt it. Save the keys decrypted instead, to somewhere as safe as the keys deserve:
+
+   ```sh
+   sudo sh -c 'umask 077 && systemd-creds decrypt --name=keys /var/lib/rerouted-keyd/keys.cred /backups/rerouted-keys.json'
+   ```
+
+   The `umask` keeps the file readable by root only.
+
+   To restore them on a new machine with rerouted-keyd, encrypt them there: `sudo systemd-creds encrypt --name=keys /backups/rerouted-keys.json /var/lib/rerouted-keyd/keys.cred`. Without it, write them back as files: `sudo rerouted-keyd unbundle /var/lib/rerouted < /backups/rerouted-keys.json`.
+
+Keep the key files safe. If you lose one, rerouted makes a new key, and other servers pick it up from the server document, but if you lose `server-key.json`, every invite code your users made stops working. Codes are keyed with a secret derived from that key (SPEC §9.1).
 
 > Caution: **Never restore an old database over a running server.** Groups whose hub is this server stop accepting changes, because the restored hub holds old epoch keys, and their members have to re-create them (SPEC §11.6). Inboxes and chains go back to an older state too. Restore a backup only to replace a server that's gone permanently.
 

@@ -1,0 +1,49 @@
+# Keeps rerouted-keyd's keys encrypted: brings /var/lib/rerouted-keyd/keys.cred up to date
+# before rerouted-keyd starts (deploy/rerouted-keyd-seal). It runs as root, to use this
+# machine's credential key (and its TPM, if it has one), and does nothing else.
+[Unit]
+Description=Seal rerouted-keyd's keys with systemd-creds
+Before=rerouted-keyd.service
+
+[Service]
+Type=oneshot
+# This machine's credential key, made the first time if it has none (unsandboxed: it's
+# systemd's own file).
+ExecStartPre=+systemd-creds setup
+ExecStart=/usr/local/libexec/rerouted-keyd-seal
+StateDirectory=rerouted-keyd
+StateDirectoryMode=0700
+# Plaintext keys pass through here only, in memory.
+RuntimeDirectory=rerouted-keyd-seal
+RuntimeDirectoryMode=0700
+UMask=0077
+# To import the keys from rerouted's data directory, and delete them there.
+ReadWritePaths=-/var/lib/rerouted
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH
+
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+KeyringMode=private
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# The TPM, if there is one; no other device.
+DevicePolicy=closed
+DeviceAllow=/dev/tpmrm0 rw
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+PrivateIPC=true
+RestrictNamespaces=true
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true

@@ -1,0 +1,17 @@
+# The socket rerouted asks rerouted-keyd for signatures on. Only rerouted's group may
+# connect, and rerouted-keyd checks that the other end is rerouted's user too.
+# Install with rerouted-keyd.service, rerouted-keyd-seal.service, and
+# rerouted.service.d/keyd.conf (deploy/README.md).
+[Unit]
+Description=rerouted-keyd socket
+
+[Socket]
+ListenStream=/run/rerouted-keyd/keyd.sock
+SocketUser=rerouted-keyd
+SocketGroup=rerouted
+SocketMode=0660
+DirectoryMode=0755
+RemoveOnStop=true
+
+[Install]
+WantedBy=sockets.target

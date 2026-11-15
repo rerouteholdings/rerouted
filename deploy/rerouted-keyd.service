@@ -1,0 +1,63 @@
+# rerouted-keyd holds rerouted's server keys and signs for it, so the keys never enter
+# rerouted's process (internal/keyd). It starts when rerouted first connects to its
+# socket, and restarts with rerouted, to pick up communities added to the settings.
+#
+# Its keys are /var/lib/rerouted-keyd/keys.cred, which rerouted-keyd-seal.service keeps
+# encrypted with systemd-creds, and systemd decrypts for it alone. It never sees the file,
+# runs without a network, and can't write anywhere.
+[Unit]
+Description=rerouted-keyd, rerouted's server key holder
+Requires=rerouted-keyd.socket rerouted-keyd-seal.service
+After=rerouted-keyd.socket rerouted-keyd-seal.service
+PartOf=rerouted.service
+
+[Service]
+Type=exec
+User=rerouted-keyd
+Group=rerouted-keyd
+# To read rerouted's settings (REROUTED_NAME and REROUTED_COMMUNITIES).
+SupplementaryGroups=rerouted
+ExecStart=/usr/local/bin/rerouted-keyd -env /etc/rerouted/rerouted.env -allow-user rerouted
+LoadCredentialEncrypted=keys:/var/lib/rerouted-keyd/keys.cred
+UMask=0077
+Restart=on-failure
+RestartSec=2
+
+# No PrivateUsers=: it would hide which user is at the other end of the socket.
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=true
+KeyringMode=private
+
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+DevicePolicy=closed
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+InaccessiblePaths=-/var/lib/rerouted
+
+PrivateIPC=true
+RemoveIPC=true
+RestrictNamespaces=true
+
+# No network: only the socket systemd passes, and the journal's.
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallErrorNumber=EPERM
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
