@@ -17,3 +17,8 @@
 /usr/local/bin/rerouted-sfu	--	gen_context(system_u:object_r:rerouted_sfu_exec_t,s0)
 /usr/bin/rerouted-sfu	--	gen_context(system_u:object_r:rerouted_sfu_exec_t,s0)
 /run/rerouted-sfu(/.*)?	gen_context(system_u:object_r:rerouted_sfu_runtime_t,s0)
+
+# rerouted-egress: its binary, and the socket rerouted connects out through.
+/usr/local/bin/rerouted-egress	--	gen_context(system_u:object_r:rerouted_egress_exec_t,s0)
+/usr/bin/rerouted-egress	--	gen_context(system_u:object_r:rerouted_egress_exec_t,s0)
+/run/rerouted-egress(/.*)?	gen_context(system_u:object_r:rerouted_egress_runtime_t,s0)

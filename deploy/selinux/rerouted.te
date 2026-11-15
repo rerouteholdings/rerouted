@@ -72,6 +72,16 @@ init_nnp_daemon_domain(rerouted_sfu_t)
 type rerouted_sfu_runtime_t;
 files_pid_file(rerouted_sfu_runtime_t)
 
+# rerouted-egress, which makes rerouted's connections out (REROUTED_EGRESS).
+type rerouted_egress_t;
+type rerouted_egress_exec_t;
+init_daemon_domain(rerouted_egress_t, rerouted_egress_exec_t)
+init_nnp_daemon_domain(rerouted_egress_t)
+
+# /run/rerouted-egress: the socket.
+type rerouted_egress_runtime_t;
+files_pid_file(rerouted_egress_runtime_t)
+
 ########################################
 #
 # rerouted local policy
@@ -159,6 +169,11 @@ allow rerouted_t rerouted_keyd_t:unix_stream_socket connectto;
 allow rerouted_t rerouted_sfu_runtime_t:dir search_dir_perms;
 allow rerouted_t rerouted_sfu_runtime_t:sock_file write_sock_file_perms;
 allow rerouted_t rerouted_sfu_t:unix_stream_socket connectto;
+
+# REROUTED_EGRESS: connections out, through rerouted-egress's socket.
+allow rerouted_t rerouted_egress_runtime_t:dir search_dir_perms;
+allow rerouted_t rerouted_egress_runtime_t:sock_file write_sock_file_perms;
+allow rerouted_t rerouted_egress_t:unix_stream_socket connectto;
 
 ########################################
 #
@@ -248,3 +263,46 @@ miscfiles_read_localization(rerouted_sfu_t)
 
 logging_send_syslog_msg(rerouted_sfu_t)
 init_use_fds(rerouted_sfu_t)
+
+########################################
+#
+# rerouted-egress local policy: TCP out and DNS, rerouted's settings, and its socket.
+#
+
+allow rerouted_egress_t self:process { getsched signal sigchld sigkill sigstop signull };
+allow rerouted_egress_t self:fifo_file rw_fifo_file_perms;
+allow rerouted_egress_t self:unix_stream_socket { create_stream_socket_perms listen accept };
+allow rerouted_egress_t self:tcp_socket create_stream_socket_perms;
+allow rerouted_egress_t self:udp_socket create_socket_perms;
+allow rerouted_egress_t rerouted_egress_exec_t:file { map read execute entrypoint };
+
+# Federation: HTTPS to other servers; REROUTED_TLS_ASK_ALSO: local instances.
+corenet_tcp_connect_http_port(rerouted_egress_t)
+corenet_tcp_connect_http_cache_port(rerouted_egress_t)
+allow rerouted_egress_t rerouted_port_t:tcp_socket name_connect;
+tunable_policy(`rerouted_connect_any',`
+	corenet_tcp_connect_all_ports(rerouted_egress_t)
+')
+sysnet_dns_name_resolve(rerouted_egress_t)
+
+# rerouted's settings: REROUTED_FED_ALLOW and REROUTED_TLS_ASK_ALSO.
+read_files_pattern(rerouted_egress_t, rerouted_conf_t, rerouted_conf_t)
+list_dirs_pattern(rerouted_egress_t, rerouted_conf_t, rerouted_conf_t)
+files_search_etc(rerouted_egress_t)
+# -allow-user: the user's ID.
+auth_read_passwd(rerouted_egress_t)
+
+# The Go runtime.
+kernel_read_system_state(rerouted_egress_t)
+kernel_read_kernel_sysctls(rerouted_egress_t)
+kernel_read_net_sysctls(rerouted_egress_t)
+dev_read_sysfs(rerouted_egress_t)
+fs_getattr_all_fs(rerouted_egress_t)
+fs_search_cgroup_dirs(rerouted_egress_t)
+fs_read_cgroup_files(rerouted_egress_t)
+dev_read_urand(rerouted_egress_t)
+dev_read_rand(rerouted_egress_t)
+miscfiles_read_localization(rerouted_egress_t)
+
+logging_send_syslog_msg(rerouted_egress_t)
+init_use_fds(rerouted_egress_t)

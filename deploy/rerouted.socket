@@ -1,0 +1,12 @@
+# rerouted's listening socket, made by systemd and passed to rerouted, so rerouted needs no
+# network of its own (rerouted.service.d/egress.conf). The address must be REROUTED_LISTEN.
+# Restarting rerouted keeps the socket: connections wait instead of being refused.
+[Unit]
+Description=rerouted socket
+
+[Socket]
+ListenStream=127.0.0.1:8080
+NoDelay=true
+
+[Install]
+WantedBy=sockets.target

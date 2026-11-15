@@ -1,0 +1,61 @@
+# rerouted-egress makes rerouted's connections out (internal/egress): federation's HTTPS,
+# REROUTED_TLS_ASK_ALSO's local instances, and DNS TXT lookups. Where it connects is its
+# own policy, from rerouted's settings: public addresses, REROUTED_FED_ALLOW's networks,
+# and REROUTED_TLS_ASK_ALSO's exact hosts and ports. TLS stays between rerouted and the
+# other server: rerouted-egress only copies bytes. It starts when rerouted first connects,
+# and stops with rerouted.
+[Unit]
+Description=rerouted-egress, rerouted's connections out
+Requires=rerouted-egress.socket
+After=rerouted-egress.socket
+PartOf=rerouted.service
+
+[Service]
+Type=exec
+User=rerouted-egress
+Group=rerouted-egress
+# To read rerouted's settings (REROUTED_FED_ALLOW and REROUTED_TLS_ASK_ALSO).
+SupplementaryGroups=rerouted
+ExecStart=/usr/local/bin/rerouted-egress -env /etc/rerouted/rerouted.env -allow-user rerouted
+UMask=0077
+Restart=on-failure
+RestartSec=2
+
+# No PrivateUsers=: it would hide which user is at the other end of the socket.
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=true
+KeyringMode=private
+
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+DevicePolicy=closed
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+InaccessiblePaths=-/var/lib/rerouted -/var/lib/rerouted-keyd
+
+PrivateIPC=true
+RemoveIPC=true
+RestrictNamespaces=true
+
+# TCP out and DNS, and unix sockets for rerouted's and the journal's. Link-local addresses
+# (cloud metadata) are never another server, whatever REROUTED_FED_ALLOW says.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=link-local
+
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallErrorNumber=EPERM
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true

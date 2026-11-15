@@ -211,6 +211,52 @@ If this server hosts communities, its voice channels' SFU takes UDP from anyone 
 
    `journalctl -u rerouted-sfu` says `SFU started`. rerouted-sfu stops and starts with rerouted, and everyone in a voice channel is disconnected then, as they are when rerouted restarts without it.
 
+## Run rerouted without a network
+
+Optionally, take rerouted's network away. systemd makes its listening socket and passes it in, and rerouted-egress makes its connections out: federation's HTTPS, the instances `REROUTED_TLS_ASK_ALSO` lists, and DNS TXT lookups. rerouted then has unix sockets only. rerouted-egress connects only where its own policy allows, from the settings file: public addresses, the networks in `REROUTED_FED_ALLOW`, and exactly the hosts and ports in `REROUTED_TLS_ASK_ALSO`. Never link-local ones. Someone who takes over rerouted can't reach anything else through it. TLS stays between rerouted and the other server: rerouted-egress only copies bytes.
+
+If this server hosts communities, [run voice channels apart](#run-voice-channels-apart) first: the SFU needs a network.
+
+1. Build `rerouted-egress` with `rerouted`, then install it and create the user it runs as:
+
+   ```sh
+   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o rerouted-egress ./cmd/rerouted-egress
+   ```
+
+   ```sh
+   sudo install -m 755 rerouted-egress /usr/local/bin/rerouted-egress
+   sudo useradd --system --no-create-home --shell /usr/sbin/nologin rerouted-egress
+   ```
+
+2. Install the units and the drop-in. `rerouted.socket` listens on `127.0.0.1:8080`: if `REROUTED_LISTEN` is another address, change `ListenStream=` to match.
+
+   ```sh
+   sudo install -m 644 deploy/rerouted.socket deploy/rerouted-egress.socket deploy/rerouted-egress.service /etc/systemd/system/
+   sudo install -D -m 644 deploy/rerouted.service.d/egress.conf /etc/systemd/system/rerouted.service.d/egress.conf
+   ```
+
+3. With AppArmor, add rerouted-egress's profile, and load rerouted's again. With SELinux, the module already has rerouted-egress's domain: build and install it again if it's older, then label the binary.
+
+   ```sh
+   sudo install -m 644 deploy/apparmor/rerouted deploy/apparmor/rerouted-egress /etc/apparmor.d/
+   sudo apparmor_parser -r -W /etc/apparmor.d/rerouted /etc/apparmor.d/rerouted-egress
+   ```
+
+   ```sh
+   sudo restorecon /usr/local/bin/rerouted-egress
+   ```
+
+4. Start it:
+
+   ```sh
+   sudo systemctl daemon-reload
+   sudo systemctl stop rerouted
+   sudo systemctl enable --now rerouted.socket rerouted-egress.socket
+   sudo systemctl start rerouted
+   ```
+
+   `journalctl -u rerouted` says `listening on the socket systemd passed`. A connection rerouted-egress refuses is in `journalctl -u rerouted-egress`. A restart of rerouted now keeps the socket open: connections wait for it, instead of being refused.
+
 ## Put Caddy in front
 
 1. Copy [`deploy/Caddyfile.example`](../deploy/Caddyfile.example) to `/etc/caddy/Caddyfile`, and replace every `chat.example` with your domain. If Caddy already serves other sites, add its blocks to your Caddyfile instead, and put the `on_demand_tls` option in your global options block.
