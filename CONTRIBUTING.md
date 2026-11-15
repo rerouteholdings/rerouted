@@ -21,6 +21,14 @@ go test -race ./...
 
 Tests run against real SQLite databases in temporary directories, and federation tests start two servers in-process.
 
+Code that reads what arrives from the network has fuzz targets: JSON and signed envelopes (`internal/wire`), WebSocket frames (`internal/ws`), identity and community chain entries (`internal/chain`, `internal/cchain`), and rerouted-keyd's requests (`internal/keyd`). `go test` runs their seeds, and CI fuzzes each for a minute. To fuzz one longer:
+
+```sh
+go test -run '^$' -fuzz '^FuzzRead$' -fuzztime 10m ./internal/ws
+```
+
+A failing input is saved under the package's `testdata/fuzz/`. Commit it with the fix: `go test` then runs it every time.
+
 ## Code
 
 - Run `gofmt`. CI checks it, along with `go vet`, `staticcheck`, and `govulncheck`.

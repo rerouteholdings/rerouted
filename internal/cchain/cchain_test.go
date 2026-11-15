@@ -20,7 +20,7 @@ type ident struct {
 	home string
 }
 
-func newIdent(t *testing.T, home string) *ident {
+func newIdent(t testing.TB, home string) *ident {
 	t.Helper()
 	key, err := wire.GenerateCompositeKey()
 	if err != nil {
@@ -32,7 +32,7 @@ func newIdent(t *testing.T, home string) *ident {
 }
 
 type harness struct {
-	t    *testing.T
+	t    testing.TB
 	st   *State
 	ids  map[string]*ident
 	raws [][]byte
@@ -49,7 +49,7 @@ func (h *harness) keys(by string, k []byte) (Signer, error) {
 
 func (h *harness) add(i *ident) *ident { h.ids[i.id] = i; return i }
 
-func signEntry(t *testing.T, by *ident, body map[string]any) []byte {
+func signEntry(t testing.TB, by *ident, body map[string]any) []byte {
 	t.Helper()
 	sig, err := wire.SignComposite(TypeEntry, body, by.key)
 	if err != nil {
@@ -124,7 +124,7 @@ func createOp(public bool) map[string]any {
 }
 
 // newCommunity makes a community owned by a fresh identity on kat.example.org.
-func newCommunity(t *testing.T) (*harness, *ident) {
+func newCommunity(t testing.TB) (*harness, *ident) {
 	h := &harness{t: t, ids: map[string]*ident{}, now: testNow}
 	owner := h.add(newIdent(t, "kat.example.org"))
 	raw := signEntry(t, owner, map[string]any{"seq": 0, "ts": testNow, "by": owner.id, "ops": []map[string]any{createOp(true)}})
@@ -164,7 +164,7 @@ func voiceChannel(id uint64, max, cast int) map[string]any {
 
 // staffed sets up roles: 1 admin (rank 100, administrate+moderate+invite+talk), 2 mod
 // (rank 50, moderate+talk), 3 member (rank 10, talk+invite), with one identity holding each.
-func staffed(t *testing.T) (h *harness, owner, admin, mod, member *ident) {
+func staffed(t testing.TB) (h *harness, owner, admin, mod, member *ident) {
 	h, owner = newCommunity(t)
 	admin = h.add(newIdent(t, "a.example.org"))
 	mod = h.add(newIdent(t, "b.example.org"))
@@ -177,7 +177,7 @@ func staffed(t *testing.T) (h *harness, owner, admin, mod, member *ident) {
 	return
 }
 
-func newCode(t *testing.T) []byte {
+func newCode(t testing.TB) []byte {
 	k, err := wire.GenerateCompositeKey()
 	if err != nil {
 		t.Fatal(err)
