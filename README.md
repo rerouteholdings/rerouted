@@ -44,7 +44,7 @@ A version 1 identity migrates to version 2 (§6.8) in one request: the version 1
 | Files | §14 | Uploads up to 64 MiB under a quota for each identity, fetched through the recipient's own homeserver and deleted after 30 days |
 | Calls | §15.1 | Time-limited credentials for a TURN (Traversal Using Relays around NAT) relay |
 | Reports | §17 | Reports kept for the operator, and optionally forwarded to the reported identity's homeserver |
-| Community servers | §16 | Every endpoint in the community server API, for any number of server names, each hosting one community: the community chain checked as the server must check it, the hub for the members group and restricted channels' groups with code joins' external commits, channel sequence numbers, history segments, files, reports, and voice channels through an SFU (selective forwarding unit) on Pion WebRTC |
+| Community servers | §16 | Every endpoint in the community server API, for any number of server names, each hosting one community: the community chain checked as the server must check it, the hub for the members group and restricted channels' groups with code joins' external commits, channel sequence numbers, history segments, read positions, files, reports, and voice channels through an SFU (selective forwarding unit) on Pion WebRTC |
 
 What isn't built yet:
 
@@ -71,7 +71,7 @@ Set `REROUTED_COMMUNITIES` to the names to serve (see [Settings](docs/settings.m
 - History over the quota is refused, not trimmed. `replace` works only for a segment with the same start and end, after a delete recorded inside it.
 - An approval's claimed key packages are kept in memory for its 10 minutes, so a retry after a restart claims new ones.
 - Voice: a device is in one voice channel at a time. The cast limit counts devices, and losing the right to speak ends a cast. The server keeps its own offer when offers cross. Who may speak is checked again every 5 seconds, so a timeout's end takes effect.
-- Rate limits: 120 appends an hour per identity, 30 sign-in challenges an hour, 10 failed joins an hour per identity and 100 per origin domain, 5 tree uploads an hour for non-members, 50 key package claims a day per claimant and target, 50 reports a day, and 1,000 pending join requests.
+- Rate limits: 120 appends an hour per identity, 30 sign-in challenges an hour, 10 failed joins an hour per identity and 100 per origin domain, 5 tree uploads an hour for non-members, 50 key package claims a day per claimant and target, 50 reports a day, 1,200 read positions sent and 600 fetches an hour per identity, and 1,000 pending join requests.
 
 ## Try it locally
 
