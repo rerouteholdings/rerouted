@@ -1,0 +1,7 @@
+/usr/local/bin/rerouted	--	gen_context(system_u:object_r:rerouted_exec_t,s0)
+/usr/bin/rerouted	--	gen_context(system_u:object_r:rerouted_exec_t,s0)
+
+/etc/rerouted(/.*)?		gen_context(system_u:object_r:rerouted_conf_t,s0)
+
+# One instance in /var/lib/rerouted, or several in /var/lib/rerouted-NAME (REROUTED_TLS_ASK_ALSO).
+/var/lib/rerouted(-[^/]+)?(/.*)?	gen_context(system_u:object_r:rerouted_var_lib_t,s0)

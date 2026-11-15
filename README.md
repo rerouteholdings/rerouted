@@ -122,7 +122,7 @@ Tests run against real SQLite databases in temporary directories, and the federa
 | `internal/wire/` | JSON encoding, signed envelopes, identifiers, chain entries, and error codes |
 | `internal/ws/` | The server side of the WebSocket protocol (RFC 6455), on the standard library |
 | `internal/config/`, `internal/serverkey/` | Settings, and the server's signing key |
-| `deploy/` | Example systemd, Caddy, and coturn configurations |
+| `deploy/` | Example systemd, Caddy, and coturn configurations, and AppArmor and SELinux policies |
 | `docs/` | Guides and reference for operators |
 
 Before you send a change, read [CONTRIBUTING.md](CONTRIBUTING.md). To report a vulnerability, follow [SECURITY.md](SECURITY.md), and don't open a public issue.

@@ -1,40 +1,72 @@
 # A systemd unit for one rerouted instance. Install as /etc/systemd/system/rerouted.service,
 # with the binary at /usr/local/bin/rerouted and settings in /etc/rerouted/rerouted.env
 # (start from .env.example). Data lives in /var/lib/rerouted.
+#
+# To check what it allows: systemd-analyze security rerouted. With AppArmor or SELinux, add
+# the profile in deploy/apparmor/ or deploy/selinux/ as well.
 [Unit]
 Description=rerouted Tieroute homeserver
 After=network-online.target
 Wants=network-online.target
 
 [Service]
+Type=exec
 User=rerouted
 Group=rerouted
 ExecStart=/usr/local/bin/rerouted -env /etc/rerouted/rerouted.env
 WorkingDirectory=/var/lib/rerouted
 StateDirectory=rerouted
 StateDirectoryMode=0700
+UMask=0077
 Restart=on-failure
 RestartSec=2
 
 # rerouted only needs its own data directory and the network.
+
+# Privileges: none held, none to gain.
 NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateUsers=true
+RestrictSUIDSGID=true
+KeyringMode=private
+
+# Files: everything read-only except the data directory; no home directories, a /tmp of
+# its own, no devices, and only its own processes in /proc.
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 PrivateDevices=true
+DevicePolicy=closed
+ProtectProc=invisible
+ProcSubset=pid
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectKernelLogs=true
 ProtectControlGroups=true
 ProtectClock=true
 ProtectHostname=true
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# IPC and namespaces.
+PrivateIPC=true
+RemoveIPC=true
 RestrictNamespaces=true
+
+# Network: IP, unix sockets for the journal, and netlink, which voice channels need to
+# find this host's addresses. Link-local addresses are never another server, and cloud
+# metadata services listen there.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+IPAddressDeny=169.254.0.0/16 fe80::/10
+
+# System calls: those services use, without the privileged ones. @resources stays: the Go
+# runtime raises its open file limit when it starts.
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallErrorNumber=EPERM
 RestrictRealtime=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
-SystemCallArchitectures=native
-CapabilityBoundingSet=
 
 [Install]
 WantedBy=multi-user.target

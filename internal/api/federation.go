@@ -665,7 +665,7 @@ func (s *Server) tlsAsk(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("local") == "" {
 		for _, base := range s.cfg.TLSAskAlso {
 			req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, base+"/v0/tls-ask?local=1&domain="+url.QueryEscape(domain), nil)
-			if resp, err := s.fed.HTTP.Do(req); err == nil {
+			if resp, err := s.localHTTP.Do(req); err == nil {
 				resp.Body.Close()
 				if resp.StatusCode == http.StatusOK {
 					w.WriteHeader(http.StatusOK)

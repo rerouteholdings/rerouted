@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -48,6 +49,11 @@ type Config struct {
 	// before anything changes. Recovery-signed entries still go through. An operator measure
 	// for when clients' move flow is known to be unsafe. Off by default.
 	PauseMoves bool
+	// REROUTED_FED_ALLOW: networks other servers may be reached at although they aren't on
+	// the public internet, as addresses or CIDR prefixes, comma-separated. Outside dev mode,
+	// connections to loopback, link-local, private, and other non-global addresses are
+	// refused otherwise, so a server name can't be pointed at this host's internal services.
+	FedAllow []netip.Prefix
 
 	// Community servers (SPEC §16). REROUTED_COMMUNITIES lists the server names this process
 	// serves as community servers, each hosting one community: name or name=url, comma-
@@ -146,6 +152,20 @@ func Load(envFile string) (*Config, error) {
 	}
 	if c.VoiceUDPPort, err = strconv.Atoi(get("REROUTED_VOICE_UDP_PORT", "0")); err != nil || c.VoiceUDPPort < 0 || c.VoiceUDPPort > 65535 {
 		return nil, errors.New("REROUTED_VOICE_UDP_PORT must be a port number")
+	}
+	for _, n := range strings.Split(os.Getenv("REROUTED_FED_ALLOW"), ",") {
+		if n = strings.TrimSpace(n); n == "" {
+			continue
+		}
+		p, err := netip.ParsePrefix(n)
+		if err != nil {
+			a, aerr := netip.ParseAddr(n)
+			if aerr != nil {
+				return nil, fmt.Errorf("REROUTED_FED_ALLOW: %q isn't an address or a network like 10.0.0.0/8", n)
+			}
+			p = netip.PrefixFrom(a, a.BitLen())
+		}
+		c.FedAllow = append(c.FedAllow, p.Masked())
 	}
 	for _, ip := range strings.Split(os.Getenv("REROUTED_VOICE_PUBLIC_IPS"), ",") {
 		if ip = strings.TrimSpace(ip); ip != "" {

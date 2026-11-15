@@ -163,6 +163,23 @@ func TestTLSAsk(t *testing.T) {
 	}
 }
 
+// REROUTED_TLS_ASK_ALSO consults the other instances on this host, over loopback, outside
+// dev mode too, where federation refuses loopback addresses.
+func TestTLSAskAlso(t *testing.T) {
+	other := testServerCfg(t, newStore(t), func(c *config.Config) { c.TLSAskAllow = []string{"www.chat.test"} })
+	ts := testServerCfg(t, newStore(t), func(c *config.Config) { c.TLSAskAlso = []string{other.URL} })
+	for domain, want := range map[string]int{"www.chat.test": 200, "random.chat.test": 404} {
+		resp, err := http.Get(ts.URL + "/v0/tls-ask?domain=" + domain)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Errorf("%s: %d, want %d", domain, resp.StatusCode, want)
+		}
+	}
+}
+
 // Browsers may call the client API from any origin (bearer tokens, no cookies), but not S2S.
 func TestCORS(t *testing.T) {
 	ts := testServer(t)

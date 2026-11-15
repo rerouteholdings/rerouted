@@ -1,0 +1,40 @@
+## <summary>rerouted, the Tieroute homeserver.</summary>
+
+########################################
+## <summary>
+##	Run rerouted in its own domain, for its operator commands.
+## </summary>
+## <param name="domain">
+##	<summary>
+##	Domain allowed to transition.
+##	</summary>
+## </param>
+#
+interface(`rerouted_domtrans',`
+	gen_require(`
+		type rerouted_t, rerouted_exec_t;
+	')
+
+	corecmd_search_bin($1)
+	domtrans_pattern($1, rerouted_exec_t, rerouted_t)
+')
+
+########################################
+## <summary>
+##	Read rerouted's data, such as for a backup with sqlite3 .backup.
+## </summary>
+## <param name="domain">
+##	<summary>
+##	Domain allowed access.
+##	</summary>
+## </param>
+#
+interface(`rerouted_read_lib_files',`
+	gen_require(`
+		type rerouted_var_lib_t;
+	')
+
+	files_search_var_lib($1)
+	read_files_pattern($1, rerouted_var_lib_t, rerouted_var_lib_t)
+	list_dirs_pattern($1, rerouted_var_lib_t, rerouted_var_lib_t)
+')

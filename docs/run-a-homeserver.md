@@ -84,6 +84,30 @@ If your DNS provider offers a proxy, such as Cloudflare's, turn it off for these
 
    It prints the server document, a JSON object that starts with `{"apis":`. If it prints nothing, read the log with `journalctl -u rerouted -n 50`. A setting it can't use is named there.
 
+3. Optionally, confine rerouted further with your distribution's mandatory access control. The unit already limits what rerouted can do; a profile adds a second, independent check.
+
+   On Debian and Ubuntu, with AppArmor:
+
+   ```sh
+   sudo install -m 644 deploy/apparmor/rerouted /etc/apparmor.d/rerouted
+   sudo apparmor_parser -r -W /etc/apparmor.d/rerouted
+   sudo systemctl restart rerouted
+   ```
+
+   On Fedora, RHEL, and their relatives, with SELinux:
+
+   ```sh
+   sudo dnf install selinux-policy-devel
+   make -f /usr/share/selinux/devel/Makefile -C deploy/selinux rerouted.pp
+   sudo semodule -i deploy/selinux/rerouted.pp
+   sudo restorecon -R /usr/local/bin/rerouted /etc/rerouted /var/lib/rerouted
+   sudo systemctl restart rerouted
+   ```
+
+   If `REROUTED_LISTEN` uses a port other than 8080, label it first: `sudo semanage port -a -t rerouted_port_t -p tcp PORT`.
+
+   Check that it took: `ps -eZ | grep rerouted` shows `rerouted_t` under SELinux, and `sudo aa-status` lists `rerouted` under AppArmor.
+
 ## Put Caddy in front
 
 1. Copy [`deploy/Caddyfile.example`](../deploy/Caddyfile.example) to `/etc/caddy/Caddyfile`, and replace every `chat.example` with your domain. If Caddy already serves other sites, add its blocks to your Caddyfile instead, and put the `on_demand_tls` option in your global options block.

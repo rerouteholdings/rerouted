@@ -1,0 +1,103 @@
+# AppArmor profile for rerouted. Install as /etc/apparmor.d/rerouted, then load it:
+#
+#   sudo install -m 644 deploy/apparmor/rerouted /etc/apparmor.d/rerouted
+#   sudo apparmor_parser -r -W /etc/apparmor.d/rerouted
+#
+# It confines every run of /usr/local/bin/rerouted: the service, and the operator commands
+# run with sudo -u rerouted. It assumes the paths deploy/rerouted.service and
+# docs/run-a-homeserver.md use. For other ones, override the variables below in
+# /etc/apparmor.d/local/rerouted, or edit them here. For a first run, set
+# flags=(complain) and read the denials with: journalctl -k | grep 'apparmor="ALLOWED"'
+
+abi <abi/3.0>,
+
+include <tunables/global>
+
+# REROUTED_DATA_DIR: the server keys, the database, and the files. One instance uses
+# /var/lib/rerouted; several on one host (REROUTED_TLS_ASK_ALSO), /var/lib/rerouted-NAME.
+@{rerouted_data}=/var/lib/rerouted /var/lib/rerouted-*
+# The settings file given with -env.
+@{rerouted_conf}=/etc/rerouted
+
+profile rerouted /usr/local/bin/rerouted flags=(enforce) {
+  include <abstractions/base>
+  # Go's own resolver (the binary is built with CGO_ENABLED=0): no NSS modules, only these.
+  /etc/hosts r,
+  /etc/host.conf r,
+  /etc/nsswitch.conf r,
+  /etc/resolv.conf r,
+  /{run,var/run}/systemd/resolve/{stub-,}resolv.conf r,
+  /{run,var/run}/NetworkManager/{no-stub-,}resolv.conf r,
+  /{run,var/run}/resolvconf/resolv.conf r,
+  # The CA roots for HTTPS to other servers.
+  include <abstractions/ssl_certs>
+
+  # rerouted needs no capabilities: it listens above port 1024 and never changes user.
+  deny capability,
+
+  # HTTP from the reverse proxy, HTTPS to other servers, DNS, and voice (UDP).
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  # net.Interfaces: the voice SFU finds its addresses through rtnetlink.
+  network netlink raw,
+  # stdout and stderr to the journal are passed in; nothing else uses unix sockets.
+  network unix stream,
+  # No packet or raw IP sockets. (Not "deny network raw": that matches every SOCK_RAW
+  # socket, the netlink one above included, and deny rules aren't logged.)
+  deny network packet,
+  deny network inet raw,
+  deny network inet6 raw,
+
+  # The binary itself, and the timezone database.
+  /usr/local/bin/rerouted mr,
+  /usr/share/zoneinfo/** r,
+  /etc/localtime r,
+
+  # The Go runtime: huge page size, and the CPU limit it sizes GOMAXPROCS from.
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  @{PROC}/sys/net/core/somaxconn r,
+  @{PROC}/@{pid}/cgroup r,
+  @{PROC}/@{pid}/mountinfo r,
+  @{PROC}/@{pid}/stat r,
+  /sys/fs/cgroup/{,**/}cpu.max r,
+  /sys/fs/cgroup/{,**/}cpu.cfs_{quota,period}_us r,
+  /sys/devices/system/cpu/online r,
+
+  # Settings: read only. rerouted never writes them.
+  @{rerouted_conf}/ r,
+  @{rerouted_conf}/** r,
+
+  # Data: server keys (server-key*.json, community-key-*.json), limits.json, the SQLite
+  # database with its -wal, -shm, and -journal files, and the files under media/. SQLite
+  # takes file locks (k). Nothing here is ever executed or memory-mapped executable.
+  @{rerouted_data}/ rw,
+  @{rerouted_data}/** rwk,
+  deny @{rerouted_data}/** mx,
+
+  # REROUTED_STORE=temp: a throwaway database in a new directory under $TMPDIR.
+  /tmp/ r,
+  owner /tmp/rerouted-*/ rw,
+  owner /tmp/rerouted-*/** rwk,
+  owner /var/tmp/rerouted-*/ rw,
+  owner /var/tmp/rerouted-*/** rwk,
+
+  # REROUTED_TEST_CLOCK_FILE is a test build's setting: never in a release build.
+
+  # Signals: systemd stops it with SIGTERM, an operator's terminal with SIGINT.
+  signal (receive) set=(term, int, kill, hup) peer=unconfined,
+  # The Go runtime preempts its own threads with SIGURG.
+  signal (send, receive) peer=rerouted,
+
+  # Nothing to run, and no way to look at other processes.
+  deny /{usr/,}{s,}bin/** x,
+  deny ptrace,
+  deny mount,
+  deny umount,
+  deny pivot_root,
+  deny @{PROC}/sys/kernel/** w,
+  deny /sys/** w,
+
+  include if exists <local/rerouted>
+}

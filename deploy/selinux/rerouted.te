@@ -1,0 +1,126 @@
+policy_module(rerouted, 1.0.0)
+
+########################################
+#
+# Declarations
+#
+# rerouted runs in rerouted_t when systemd starts /usr/local/bin/rerouted. Operator
+# commands run from a shell stay in the caller's domain (sudo -u rerouted rerouted ...):
+# use runcon or systemd-run to give them the same confinement.
+
+## <desc>
+## <p>
+## Allow rerouted to connect to any TCP port, not only HTTPS (443) and the local
+## HTTP ports. Needed for dev mode peers (REROUTED_DEV_PEERS) on other ports, and for
+## REROUTED_TLS_ASK_ALSO instances on ports outside http_port_t and http_cache_port_t.
+## </p>
+## </desc>
+gen_tunable(rerouted_connect_any, false)
+
+## <desc>
+## <p>
+## Allow rerouted to bind any unreserved UDP port: REROUTED_VOICE_UDP_PORT set to a
+## port that has no label of its own. Ephemeral ports (the default, 0) need no boolean.
+## </p>
+## </desc>
+gen_tunable(rerouted_bind_voice_port, true)
+
+type rerouted_t;
+type rerouted_exec_t;
+init_daemon_domain(rerouted_t, rerouted_exec_t)
+# The unit sets NoNewPrivileges=yes, which blocks the transition from init_t unless the
+# policy allows it: without this, rerouted would stay in init_t.
+init_nnp_daemon_domain(rerouted_t)
+
+# /etc/rerouted: the settings file, with secrets in it. Read only.
+type rerouted_conf_t;
+files_config_file(rerouted_conf_t)
+
+# /var/lib/rerouted: server keys, database, files.
+type rerouted_var_lib_t;
+files_type(rerouted_var_lib_t)
+
+# REROUTED_STORE=temp: a throwaway database under /tmp.
+type rerouted_tmp_t;
+files_tmp_file(rerouted_tmp_t)
+
+# REROUTED_LISTEN. 8080, the default, is already http_cache_port_t: see below.
+type rerouted_port_t;
+corenet_port(rerouted_port_t)
+
+########################################
+#
+# rerouted local policy
+#
+
+# No capabilities: it listens above 1024 and never changes user.
+dontaudit rerouted_t self:capability { dac_override dac_read_search };
+allow rerouted_t self:process { getsched signal sigchld sigkill sigstop signull };
+allow rerouted_t self:fifo_file rw_fifo_file_perms;
+allow rerouted_t self:unix_stream_socket create_stream_socket_perms;
+allow rerouted_t self:tcp_socket { create_stream_socket_perms listen accept };
+allow rerouted_t self:udp_socket create_socket_perms;
+# net.Interfaces, which the voice SFU uses to find its addresses.
+allow rerouted_t self:netlink_route_socket r_netlink_socket_perms;
+
+# Settings
+read_files_pattern(rerouted_t, rerouted_conf_t, rerouted_conf_t)
+list_dirs_pattern(rerouted_t, rerouted_conf_t, rerouted_conf_t)
+files_search_etc(rerouted_t)
+
+# Data: keys, database (with -wal and -shm, which SQLite maps and locks), media files.
+manage_dirs_pattern(rerouted_t, rerouted_var_lib_t, rerouted_var_lib_t)
+manage_files_pattern(rerouted_t, rerouted_var_lib_t, rerouted_var_lib_t)
+allow rerouted_t rerouted_var_lib_t:file { map lock };
+files_var_lib_filetrans(rerouted_t, rerouted_var_lib_t, dir)
+files_search_var_lib(rerouted_t)
+
+# Temporary store
+manage_dirs_pattern(rerouted_t, rerouted_tmp_t, rerouted_tmp_t)
+manage_files_pattern(rerouted_t, rerouted_tmp_t, rerouted_tmp_t)
+allow rerouted_t rerouted_tmp_t:file { map lock };
+files_tmp_filetrans(rerouted_t, rerouted_tmp_t, { dir file })
+
+# Its own binary.
+allow rerouted_t rerouted_exec_t:file { map read execute entrypoint };
+
+# The Go runtime: CPU count, cgroup CPU limit (GOMAXPROCS), huge page size, somaxconn.
+kernel_read_system_state(rerouted_t)
+kernel_read_net_sysctls(rerouted_t)
+kernel_read_kernel_sysctls(rerouted_t)
+dev_read_sysfs(rerouted_t)
+fs_getattr_all_fs(rerouted_t)
+fs_search_cgroup_dirs(rerouted_t)
+fs_read_cgroup_files(rerouted_t)
+dev_read_urand(rerouted_t)
+dev_read_rand(rerouted_t)
+
+# Listening: REROUTED_LISTEN, and the dev mode community listeners.
+corenet_tcp_bind_generic_node(rerouted_t)
+corenet_tcp_bind_http_cache_port(rerouted_t)
+allow rerouted_t rerouted_port_t:tcp_socket name_bind;
+
+# Voice: UDP on ephemeral ports, or REROUTED_VOICE_UDP_PORT.
+corenet_udp_bind_generic_node(rerouted_t)
+corenet_udp_bind_all_ephemeral_ports(rerouted_t)
+allow rerouted_t rerouted_port_t:udp_socket name_bind;
+tunable_policy(`rerouted_bind_voice_port',`
+	corenet_udp_bind_all_unreserved_ports(rerouted_t)
+')
+
+# Federation: HTTPS to other servers. TLS ask: other instances on this host.
+corenet_tcp_connect_http_port(rerouted_t)
+corenet_tcp_connect_http_cache_port(rerouted_t)
+allow rerouted_t rerouted_port_t:tcp_socket name_connect;
+tunable_policy(`rerouted_connect_any',`
+	corenet_tcp_connect_all_ports(rerouted_t)
+')
+
+# DNS, CA roots, time zones.
+sysnet_dns_name_resolve(rerouted_t)
+miscfiles_read_generic_certs(rerouted_t)
+miscfiles_read_localization(rerouted_t)
+
+# Logs go to stderr, which systemd connects to the journal.
+logging_send_syslog_msg(rerouted_t)
+init_use_fds(rerouted_t)

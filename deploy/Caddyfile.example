@@ -10,7 +10,11 @@
 }
 
 chat.example {
-	@tieroute path /.well-known/tieroute/* /v0/*
+	# /v0/tls-ask is only for the on_demand_tls check above, which asks rerouted directly.
+	@tieroute {
+		path /.well-known/tieroute/* /v0/*
+		not path /v0/tls-ask
+	}
 	handle @tieroute {
 		reverse_proxy 127.0.0.1:8080
 	}

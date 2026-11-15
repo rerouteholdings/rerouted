@@ -27,10 +27,15 @@ import (
 	"github.com/rerouteholdings/rerouted/internal/store/sqlite"
 )
 
+// idleTimeout is how long a keep-alive connection may wait for its next request. Without
+// one (and without a ReadTimeout), it waits forever, holding a file descriptor.
+const idleTimeout = 2 * time.Minute
+
 func main() {
 	envFile := flag.String("env", ".env", "path to the .env file")
 	flag.Parse()
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	restrictUmask()
 
 	cfg, err := config.Load(*envFile)
 	if err != nil {
@@ -47,7 +52,14 @@ func main() {
 	if cfg.Store == "temp" {
 		st, err = sqlite.OpenTemp()
 	} else {
-		st, err = sqlite.Open(filepath.Join(cfg.DataDir, "rerouted-v1.db"))
+		db := filepath.Join(cfg.DataDir, "rerouted-v1.db")
+		st, err = sqlite.Open(db)
+		// A database from before the umask above may be readable by everyone.
+		for _, f := range []string{db, db + "-wal", db + "-shm"} {
+			if fi, err := os.Stat(f); err == nil && fi.Mode().Perm()&0o077 != 0 {
+				os.Chmod(f, fi.Mode().Perm()&0o700)
+			}
+		}
 	}
 	if err != nil {
 		log.Error("database", "err", err)
@@ -65,6 +77,10 @@ func main() {
 		Addr:              cfg.Listen,
 		Handler:           server.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+		// A keep-alive connection with no request in this long is closed. Streams are
+		// unaffected: a WebSocket leaves the server's hands, and an event stream is one
+		// long response.
+		IdleTimeout: idleTimeout,
 	}
 	srv.RegisterOnShutdown(server.CloseFirehose)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -87,7 +103,7 @@ func main() {
 	}
 	// Dev mode: a community name with a host:port of its own gets its own listener.
 	for _, l := range server.CommunityListeners() {
-		cs := &http.Server{Addr: l.Addr, Handler: l.Handler, ReadHeaderTimeout: 10 * time.Second}
+		cs := &http.Server{Addr: l.Addr, Handler: l.Handler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: idleTimeout}
 		go func() {
 			<-ctx.Done()
 			cs.Close()

@@ -30,11 +30,14 @@ const MaxBody = 1 << 20
 
 // Server holds what the handlers need.
 type Server struct {
-	cfg       *config.Config
-	key       serverkey.Key
-	log       *slog.Logger
-	st        store.Store
-	fed       *fed.Fed
+	cfg *config.Config
+	key serverkey.Key
+	log *slog.Logger
+	st  store.Store
+	fed *fed.Fed
+	// localHTTP asks the other instances on this host (REROUTED_TLS_ASK_ALSO). It isn't fed's
+	// client, which refuses loopback addresses outside dev mode.
+	localHTTP *http.Client
 	out       outboxQueues
 	mux       *http.ServeMux
 	links     linkProofs
@@ -104,7 +107,11 @@ func newServer(cfg *config.Config, key serverkey.Key, log *slog.Logger, st store
 	if v == wire.V2 {
 		s.apiPath = cfg.APIPathV2
 	}
+	s.localHTTP = &http.Client{Timeout: 15 * time.Second}
 	s.fed = fed.New(cfg.Name, key, cfg.Peers)
+	if !cfg.Dev {
+		s.fed.PublicOnly(cfg.FedAllow)
+	}
 	s.fed.V = v
 	s.fed.OnClock = s.peerClock
 	s.fed.UseNonce = st.Sessions().UseNonce
