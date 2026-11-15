@@ -592,9 +592,18 @@ func (c *community) memberChain(w http.ResponseWriter, r *http.Request, sess cse
 		}
 	}
 	id := r.PathValue("id")
+	// Members, former members, and the community chain's signers: a member catching up
+	// late checks joins and entries by people who have since gone (SPEC §16.1). Never an
+	// identity that wasn't a member.
 	m, err := c.st.Member(ctx, c.name, id)
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "not a member")
+		m, err = c.st.FormerMember(ctx, c.name, id)
+	}
+	if errors.Is(err, store.ErrNotFound) && c.signedChain(id) {
+		m, err = &store.CommunityMember{ID: id}, nil
+	}
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "never a member")
 		return
 	}
 	if err != nil {
@@ -611,6 +620,26 @@ func (c *community) memberChain(w http.ResponseWriter, r *http.Request, sess cse
 		entries[i] = e
 	}
 	writeBody(w, http.StatusOK, map[string]any{"entries": entries, "head": len(ch.raw) - 1})
+}
+
+// signedChain reports whether id signed an entry of the community chain.
+func (c *community) signedChain(id string) bool {
+	c.mu.RLock()
+	ent := c.ent
+	c.mu.RUnlock()
+	for _, e := range ent {
+		sig, err := wire.DecodeSignedV2(e)
+		if err != nil {
+			continue
+		}
+		var b struct {
+			By string `json:"by"`
+		}
+		if sig.Open(&b) == nil && b.By == id {
+			return true
+		}
+	}
+	return false
 }
 
 // authedID is the session's identity, for an endpoint that also takes code access.

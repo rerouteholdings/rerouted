@@ -178,6 +178,9 @@ type Communities interface {
 	MemberCount(ctx context.Context, name string) (int, error)
 	// Listed reports whether a move-in's member list names id.
 	Listed(ctx context.Context, name, id string) (bool, error)
+	// FormerMember finds an identity whose membership ended (a leave, kick, or ban), with
+	// its homeserver then, so members can still fetch its chain (SPEC §16.1). ErrNotFound.
+	FormerMember(ctx context.Context, name, id string) (*CommunityMember, error)
 
 	// Sessions.
 	CreateToken(ctx context.Context, name string, hash []byte, id, home string, dev []byte, expires int64) error

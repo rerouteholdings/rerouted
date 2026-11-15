@@ -523,3 +523,37 @@ func TestCommunityMove(t *testing.T) {
 	// Appends continue on the new server, after the set-home.
 	kn.mustAppend(m.ch, map[string]any{"op": "set-name", "name": "Moved"})
 }
+
+// Former members' chains stay available (SPEC §16.1): a member catching up late checks a
+// join by someone since kicked, banned, or gone. Never an identity that wasn't a member.
+func TestCommunityFormerMemberChains(t *testing.T) {
+	e := newCommunityEnv(t, func(*config.Config) {})
+	ravi, lee, mia := e.user("ravi"), e.user("lee"), e.user("mia")
+	kat, m := joined(t, e, ravi, lee, mia)
+	sam := e.user("sam")
+	if c := e.call("POST", "members/kick", kat.tok, map[string]any{"id": lee.id}, nil); c != 204 {
+		t.Fatalf("kick: %d", c)
+	}
+	if c := e.call("POST", "leave", ravi.tok, map[string]any{}, nil); c != 204 {
+		t.Fatalf("leave: %d", c)
+	}
+	kat.mustAppend(m.ch, map[string]any{"op": "ban", "member": mia.id})
+	var mc struct {
+		Entries []wire.Raw `json:"entries"`
+	}
+	for who, u := range map[string]*cmUser{"kicked": lee, "left": ravi, "banned": mia} {
+		if c := e.call("GET", "members/"+u.id+"/chain", kat.tok, nil, &mc); c != 200 || len(mc.Entries) == 0 {
+			t.Fatalf("the chain of a member who %s: %d", who, c)
+		}
+		if st, err := decodeChainFor(wire.V2, [][]byte{mc.Entries[0]}); err != nil || st.ID != u.id {
+			t.Fatalf("the chain of a member who %s doesn't check out: %v", who, err)
+		}
+	}
+	if c, code := e.errOf("GET", "members/"+sam.id+"/chain", kat.tok, nil); c != 404 || code != wire.ErrCodeNotFound {
+		t.Fatalf("the chain of someone never a member: %d %s", c, code)
+	}
+	// Still for members only: the kicked identity can't read them.
+	if c, _ := e.errOf("GET", "members/"+ravi.id+"/chain", lee.tok, nil); c != 403 {
+		t.Fatalf("a kicked identity read a chain: %d", c)
+	}
+}

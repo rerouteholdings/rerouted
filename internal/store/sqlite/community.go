@@ -20,6 +20,7 @@ import (
 const communitySchema = `
 CREATE TABLE IF NOT EXISTS cm_communities (name TEXT PRIMARY KEY, id BLOB NOT NULL, grp BLOB, created INTEGER NOT NULL, pruned INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cm_chain    (name TEXT NOT NULL, seq INTEGER NOT NULL, entry BLOB NOT NULL, hash BLOB NOT NULL, PRIMARY KEY (name, seq));
+CREATE TABLE IF NOT EXISTS cm_former   (name TEXT NOT NULL, id TEXT NOT NULL, home TEXT NOT NULL, PRIMARY KEY (name, id));
 CREATE TABLE IF NOT EXISTS cm_listed   (name TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY (name, id));
 CREATE TABLE IF NOT EXISTS cm_members  (name TEXT NOT NULL, id TEXT NOT NULL, home TEXT NOT NULL, since INTEGER NOT NULL, PRIMARY KEY (name, id));
 CREATE TABLE IF NOT EXISTS cm_tokens   (hash BLOB PRIMARY KEY, name TEXT NOT NULL, id TEXT NOT NULL, home TEXT NOT NULL, device BLOB NOT NULL, expires INTEGER NOT NULL);
@@ -169,6 +170,11 @@ func (c communities) Append(ctx context.Context, name string, seq uint64, entry,
 }
 
 func removeMember(ctx context.Context, tx *sql.Tx, name, id string) error {
+	// A former member's chain stays available to members (SPEC §16.1).
+	if _, err := tx.ExecContext(ctx, `INSERT INTO cm_former (name, id, home) SELECT name, id, home FROM cm_members WHERE name = ? AND id = ?
+		ON CONFLICT (name, id) DO UPDATE SET home = excluded.home`, name, id); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM cm_members WHERE name = ? AND id = ?", name, id); err != nil {
 		return err
 	}
@@ -198,6 +204,15 @@ func (c communities) RemoveMember(ctx context.Context, name, id string) error {
 func (c communities) Member(ctx context.Context, name, id string) (*store.CommunityMember, error) {
 	m := store.CommunityMember{ID: id}
 	err := c.rdb.QueryRowContext(ctx, "SELECT home, since FROM cm_members WHERE name = ? AND id = ?", name, id).Scan(&m.Home, &m.Since)
+	if err != nil {
+		return nil, notFound(err)
+	}
+	return &m, nil
+}
+
+func (c communities) FormerMember(ctx context.Context, name, id string) (*store.CommunityMember, error) {
+	m := store.CommunityMember{ID: id}
+	err := c.rdb.QueryRowContext(ctx, "SELECT home FROM cm_former WHERE name = ? AND id = ?", name, id).Scan(&m.Home)
 	if err != nil {
 		return nil, notFound(err)
 	}
