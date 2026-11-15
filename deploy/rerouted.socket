@@ -1,5 +1,5 @@
 # rerouted's listening socket, made by systemd and passed to rerouted, so rerouted needs no
-# network of its own (rerouted.service.d/egress.conf). The address must be REROUTED_LISTEN.
+# network of its own (rerouted.service.d/30-egress.conf). The address must be REROUTED_LISTEN.
 # Restarting rerouted keeps the socket: connections wait instead of being refused.
 [Unit]
 Description=rerouted socket

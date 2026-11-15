@@ -1,6 +1,6 @@
 # The socket rerouted reaches rerouted-sfu on. Only rerouted's group may connect, and
 # rerouted-sfu checks that the other end is rerouted's user too. Install with
-# rerouted-sfu.service and rerouted.service.d/sfu.conf (deploy/README.md).
+# rerouted-sfu.service and rerouted.service.d/20-sfu.conf (deploy/README.md).
 [Unit]
 Description=rerouted-sfu socket
 

@@ -128,7 +128,7 @@ Optionally, move the server keys out of rerouted into rerouted-keyd, a second pr
 
    ```sh
    sudo install -m 644 deploy/rerouted-keyd.socket deploy/rerouted-keyd.service deploy/rerouted-keyd-seal.service /etc/systemd/system/
-   sudo install -D -m 644 deploy/rerouted.service.d/keyd.conf /etc/systemd/system/rerouted.service.d/keyd.conf
+   sudo install -D -m 644 deploy/rerouted.service.d/10-keyd.conf /etc/systemd/system/rerouted.service.d/10-keyd.conf
    ```
 
 3. With AppArmor, add rerouted-keyd's profile, and load rerouted's again: it allows the socket. With SELinux, the module from the step before already has both, so build and install it again if it's older.
@@ -161,7 +161,7 @@ sudo systemctl stop rerouted
 sudo systemctl disable --now rerouted-keyd.socket
 sudo systemd-creds decrypt --name=keys /var/lib/rerouted-keyd/keys.cred - | sudo rerouted-keyd unbundle /var/lib/rerouted
 sudo chown rerouted:rerouted /var/lib/rerouted/*-key*.json
-sudo rm /etc/systemd/system/rerouted.service.d/keyd.conf
+sudo rm /etc/systemd/system/rerouted.service.d/10-keyd.conf
 sudo systemctl daemon-reload
 sudo systemctl start rerouted
 ```
@@ -187,7 +187,7 @@ If this server hosts communities, its voice channels' SFU takes UDP from anyone 
 
    ```sh
    sudo install -m 644 deploy/rerouted-sfu.socket deploy/rerouted-sfu.service /etc/systemd/system/
-   sudo install -D -m 644 deploy/rerouted.service.d/sfu.conf /etc/systemd/system/rerouted.service.d/sfu.conf
+   sudo install -D -m 644 deploy/rerouted.service.d/20-sfu.conf /etc/systemd/system/rerouted.service.d/20-sfu.conf
    ```
 
 3. With AppArmor, add rerouted-sfu's profile, and load rerouted's again. With SELinux, the module already has rerouted-sfu's domain: build and install it again if it's older, then label the binary.
@@ -232,7 +232,7 @@ If this server hosts communities, [run voice channels apart](#run-voice-channels
 
    ```sh
    sudo install -m 644 deploy/rerouted.socket deploy/rerouted-egress.socket deploy/rerouted-egress.service /etc/systemd/system/
-   sudo install -D -m 644 deploy/rerouted.service.d/egress.conf /etc/systemd/system/rerouted.service.d/egress.conf
+   sudo install -D -m 644 deploy/rerouted.service.d/30-egress.conf /etc/systemd/system/rerouted.service.d/30-egress.conf
    ```
 
 3. With AppArmor, add rerouted-egress's profile, and load rerouted's again. With SELinux, the module already has rerouted-egress's domain: build and install it again if it's older, then label the binary.
