@@ -695,3 +695,85 @@ func TestCommunityMoveStopsSequencing(t *testing.T) {
 		}
 	}
 }
+
+// Read positions (SPEC §16.4, spec/api/community.md): a member's own, per text channel they
+// can see, only moving forward, rate-limited, and dropped with the channel or the member.
+func TestCommunityReadPositions(t *testing.T) {
+	e := newCommunityEnv(t, func(*config.Config) {})
+	ravi := e.user("ravi")
+	kat, m := joined(t, e, ravi)
+	kat.mustAppend(m.ch,
+		map[string]any{"op": "add-role", "id": 1, "rank": 10, "perms": []string{"talk"}, "name": sealed()},
+		textChannel(1, []uint64{0}, []uint64{0}, 0),
+		textChannel(2, []uint64{1}, []uint64{1}, 0),
+		voiceChannel(3, 10, 1))
+	for range 3 {
+		kat.say(m, 1, "m")
+	}
+	read := func(u *cmUser, channel, seq uint64) int {
+		c, _ := e.errOf("POST", "read", u.tok, map[string]any{"channel": channel, "seq": seq})
+		return c
+	}
+	type positions struct {
+		Items []struct {
+			Channel uint64 `json:"channel"`
+			Seq     uint64 `json:"seq"`
+		} `json:"items"`
+	}
+	get := func(u *cmUser) positions {
+		var p positions
+		if c := e.call("GET", "read", u.tok, nil, &p); c != 200 {
+			t.Fatalf("GET read: %d", c)
+		}
+		return p
+	}
+	if c := read(ravi, 1, 2); c != 204 {
+		t.Fatalf("read: %d", c)
+	}
+	if c := read(ravi, 1, 1); c != 204 {
+		t.Fatalf("an older position: %d", c)
+	}
+	for _, bad := range []struct {
+		channel, seq uint64
+		want         int
+	}{{1, 0, 400}, {1, 4, 400}, {2, 1, 403}, {3, 1, 404}, {9, 1, 404}} {
+		if c := read(ravi, bad.channel, bad.seq); c != bad.want {
+			t.Fatalf("channel %d seq %d: %d, want %d", bad.channel, bad.seq, c, bad.want)
+		}
+	}
+	if p := get(ravi); len(p.Items) != 1 || p.Items[0].Channel != 1 || p.Items[0].Seq != 2 {
+		t.Fatalf("ravi's positions: %+v", p)
+	}
+	if p := get(kat); len(p.Items) != 0 {
+		t.Fatalf("kat sees others' positions: %+v", p)
+	}
+	// A position in a channel the member can no longer see isn't listed.
+	if err := e.st.Communities().SetRead(t.Context(), "chat.test", ravi.id, 2, 1); err != nil {
+		t.Fatal(err)
+	}
+	if p := get(ravi); len(p.Items) != 1 {
+		t.Fatalf("a hidden channel's position was listed: %+v", p)
+	}
+	// Rate-limited.
+	limited := false
+	for range readPutsPerHour + 1 {
+		if c := read(kat, 1, 3); c == 429 {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Fatal("read positions aren't rate-limited")
+	}
+	// Removing the channel drops its positions; leaving drops the member's.
+	kat.mustAppend(m.ch, map[string]any{"op": "remove-channel", "id": 1})
+	if r, err := e.st.Communities().Reads(t.Context(), "chat.test", ravi.id); err != nil || len(r) != 1 || r[0].Channel != 2 {
+		t.Fatalf("after remove-channel: %v %+v", err, r)
+	}
+	if c := e.call("POST", "leave", ravi.tok, map[string]any{}, nil); c != 204 {
+		t.Fatalf("leave: %d", c)
+	}
+	if r, err := e.st.Communities().Reads(t.Context(), "chat.test", ravi.id); err != nil || len(r) != 0 {
+		t.Fatalf("after leaving: %v %+v", err, r)
+	}
+}

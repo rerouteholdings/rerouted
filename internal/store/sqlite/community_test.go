@@ -38,7 +38,7 @@ func TestMigrateV10ToV11(t *testing.T) {
 	if id, err := st.Chains().ByHandle(context.Background(), "kat.test"); err != nil || id != "kat" {
 		t.Fatalf("handle after upgrade: %q %v", id, err)
 	}
-	for _, table := range []string{"cm_communities", "cm_chain", "cm_members", "cm_groups", "cm_commits", "cm_inbox", "cm_segments", "cm_media", "cm_reports", "cm_code_uses", "cm_trees", "cm_icons"} {
+	for _, table := range []string{"cm_communities", "cm_chain", "cm_members", "cm_groups", "cm_commits", "cm_inbox", "cm_segments", "cm_media", "cm_reports", "cm_code_uses", "cm_trees", "cm_icons", "cm_reads"} {
 		var n int
 		if err := st.db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&n); err != nil || n != 1 {
 			t.Fatalf("no table %s after the upgrade", table)

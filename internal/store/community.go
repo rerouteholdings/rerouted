@@ -127,6 +127,11 @@ type CSegment struct {
 	TS         int64
 }
 
+// CRead is how far a member has read one text channel (SPEC §16.4, read positions).
+type CRead struct {
+	Channel, Seq uint64
+}
+
 // CMedia is one file uploaded to a community (SPEC §16.4).
 type CMedia struct {
 	ID      []byte
@@ -295,6 +300,13 @@ type Communities interface {
 	// PruneIcons deletes icons uploaded before `before`, except the one hashed keep (nil:
 	// none), the icon the community's current state names.
 	PruneIcons(ctx context.Context, name string, keep []byte, before int64) (int, error)
+
+	// Read positions (SPEC §16.4): one per member and text channel, which only moves
+	// forward. A member's are dropped when they leave or are removed, and a channel's when
+	// it's removed.
+	SetRead(ctx context.Context, name, id string, channel, seq uint64) error
+	Reads(ctx context.Context, name, id string) ([]CRead, error)
+	DeleteChannelReads(ctx context.Context, name string, channel uint64) error
 
 	// Reports.
 	AddReport(ctx context.Context, name string, r CReport) error

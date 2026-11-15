@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS cm_segments (name TEXT NOT NULL, channel INTEGER NOT 
 CREATE TABLE IF NOT EXISTS cm_deletes  (name TEXT NOT NULL, channel INTEGER NOT NULL, seq INTEGER NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (name, channel, seq));
 CREATE TABLE IF NOT EXISTS cm_media    (name TEXT NOT NULL, id BLOB NOT NULL, author TEXT NOT NULL, size INTEGER NOT NULL, sha256 BLOB NOT NULL, created INTEGER NOT NULL, state INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (name, id));
 CREATE TABLE IF NOT EXISTS cm_icons    (name TEXT NOT NULL, hash BLOB NOT NULL, mime TEXT NOT NULL, data BLOB NOT NULL, uploaded INTEGER NOT NULL, PRIMARY KEY (name, hash));
+CREATE TABLE IF NOT EXISTS cm_reads    (name TEXT NOT NULL, id TEXT NOT NULL, channel INTEGER NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY (name, id, channel));
 CREATE TABLE IF NOT EXISTS cm_reports  (n INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, rid BLOB NOT NULL, ts INTEGER NOT NULL, reporter TEXT NOT NULL, body BLOB NOT NULL, at BLOB, UNIQUE (name, rid));
 `
 
@@ -194,6 +195,9 @@ func removeMember(ctx context.Context, tx *sql.Tx, name, id string) error {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM cm_members WHERE name = ? AND id = ?", name, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM cm_reads WHERE name = ? AND id = ?", name, id); err != nil {
 		return err
 	}
 	_, err := tx.ExecContext(ctx, "DELETE FROM cm_regs WHERE id = ? AND grp IN (SELECT grp FROM cm_groups WHERE name = ?)", id, name)
@@ -1264,4 +1268,34 @@ func (c communities) PruneIcons(ctx context.Context, name string, keep []byte, b
 	}
 	n, err := res.RowsAffected()
 	return int(n), err
+}
+
+// ---- read positions (SPEC §16.4) ----
+
+func (c communities) SetRead(ctx context.Context, name, id string, channel, seq uint64) error {
+	_, err := c.db.ExecContext(ctx, `INSERT INTO cm_reads (name, id, channel, seq) VALUES (?, ?, ?, ?)
+		ON CONFLICT (name, id, channel) DO UPDATE SET seq = max(seq, excluded.seq)`, name, id, channel, seq)
+	return err
+}
+
+func (c communities) Reads(ctx context.Context, name, id string) ([]store.CRead, error) {
+	rows, err := c.rdb.QueryContext(ctx, "SELECT channel, seq FROM cm_reads WHERE name = ? AND id = ? ORDER BY channel", name, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []store.CRead
+	for rows.Next() {
+		var r store.CRead
+		if err := rows.Scan(&r.Channel, &r.Seq); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+func (c communities) DeleteChannelReads(ctx context.Context, name string, channel uint64) error {
+	_, err := c.db.ExecContext(ctx, "DELETE FROM cm_reads WHERE name = ? AND channel = ?", name, channel)
+	return err
 }
