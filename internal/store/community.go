@@ -288,6 +288,14 @@ type Communities interface {
 	RemoveMedia(ctx context.Context, name string, id []byte) error
 	ExpireMedia(ctx context.Context, name string, before int64) (int, error)
 
+	// Icons (SPEC §16.2.3): small, so their bytes live in the database.
+	// PutIcon stores an icon under its hash, and on a repeat upload restarts its 24 hours.
+	PutIcon(ctx context.Context, name string, hash []byte, mime string, data []byte, now int64) error
+	Icon(ctx context.Context, name string, hash []byte) (mime string, data []byte, err error) // ErrNotFound
+	// PruneIcons deletes icons uploaded before `before`, except the one hashed keep (nil:
+	// none), the icon the community's current state names.
+	PruneIcons(ctx context.Context, name string, keep []byte, before int64) (int, error)
+
 	// Reports.
 	AddReport(ctx context.Context, name string, r CReport) error
 	Reports(ctx context.Context, name string, after int64, limit int) ([]CReport, error)

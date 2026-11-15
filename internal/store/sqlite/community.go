@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS cm_requests (name TEXT NOT NULL, id TEXT NOT NULL, ho
 CREATE TABLE IF NOT EXISTS cm_segments (name TEXT NOT NULL, channel INTEGER NOT NULL, s_start INTEGER NOT NULL, s_end INTEGER NOT NULL, ct BLOB NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (name, channel, s_start));
 CREATE TABLE IF NOT EXISTS cm_deletes  (name TEXT NOT NULL, channel INTEGER NOT NULL, seq INTEGER NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (name, channel, seq));
 CREATE TABLE IF NOT EXISTS cm_media    (name TEXT NOT NULL, id BLOB NOT NULL, author TEXT NOT NULL, size INTEGER NOT NULL, sha256 BLOB NOT NULL, created INTEGER NOT NULL, state INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (name, id));
+CREATE TABLE IF NOT EXISTS cm_icons    (name TEXT NOT NULL, hash BLOB NOT NULL, mime TEXT NOT NULL, data BLOB NOT NULL, uploaded INTEGER NOT NULL, PRIMARY KEY (name, hash));
 CREATE TABLE IF NOT EXISTS cm_reports  (n INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, rid BLOB NOT NULL, ts INTEGER NOT NULL, reporter TEXT NOT NULL, body BLOB NOT NULL, at BLOB, UNIQUE (name, rid));
 `
 
@@ -1236,4 +1237,31 @@ func (c communities) CloseReport(ctx context.Context, name string, id []byte) er
 		return store.ErrNotFound
 	}
 	return nil
+}
+
+// ---- icons (SPEC §16.2.3) ----
+
+func (c communities) PutIcon(ctx context.Context, name string, hash []byte, mime string, data []byte, now int64) error {
+	_, err := c.db.ExecContext(ctx, `INSERT INTO cm_icons (name, hash, mime, data, uploaded) VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT (name, hash) DO UPDATE SET mime = excluded.mime, uploaded = excluded.uploaded`, name, hash, mime, data, now)
+	return err
+}
+
+func (c communities) Icon(ctx context.Context, name string, hash []byte) (string, []byte, error) {
+	var mime string
+	var data []byte
+	err := c.rdb.QueryRowContext(ctx, "SELECT mime, data FROM cm_icons WHERE name = ? AND hash = ?", name, hash).Scan(&mime, &data)
+	return mime, data, notFound(err)
+}
+
+func (c communities) PruneIcons(ctx context.Context, name string, keep []byte, before int64) (int, error) {
+	if keep == nil {
+		keep = []byte{} // no hash is empty
+	}
+	res, err := c.db.ExecContext(ctx, "DELETE FROM cm_icons WHERE name = ? AND uploaded < ? AND hash != ?", name, before, keep)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	return int(n), err
 }

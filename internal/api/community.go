@@ -226,6 +226,8 @@ func (c *community) routes(mux *http.ServeMux) {
 	base := c.hs.cfg.APIPathV2 + "community/"
 	for path, h := range map[string]http.HandlerFunc{
 		"GET preview":                     c.preview,
+		"GET icon/{hash}":                 c.iconGet,
+		"POST icon/upload":                c.authed(c.perm(cchain.Administrate, c.iconUpload)),
 		"POST auth/challenge":             c.open(c.authChallenge),
 		"POST auth/session":               c.open(c.authSession),
 		"POST auth/logout":                c.authed(c.authLogout, movedOK),
@@ -286,7 +288,7 @@ func (c *community) bodyIn(base string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			switch r.URL.Path {
-			case base + "media/upload", base + "tree/upload":
+			case base + "media/upload", base + "tree/upload", base + "icon/upload":
 			default:
 				if mt := r.Header.Get("Content-Type"); !strings.HasPrefix(mt, wire.MediaType) {
 					writeError(w, http.StatusUnsupportedMediaType, wire.ErrCodeBadContentType, "use "+wire.MediaType)
@@ -474,6 +476,9 @@ func (c *community) preview(w http.ResponseWriter, r *http.Request) {
 	}
 	if st.Desc != "" {
 		res["desc"] = st.Desc
+	}
+	if ic := st.Icon; ic != nil {
+		res["icon"] = map[string]any{"mime": ic.Mime, "hash": wire.Bytes(ic.Hash), "size": ic.Size}
 	}
 	writeBody(w, http.StatusOK, res)
 }

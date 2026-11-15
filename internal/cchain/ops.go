@@ -44,6 +44,7 @@ type pop struct {
 
 	Name, Desc     string // create and set-name: readable
 	hasDesc        bool
+	Icon           *Icon // create and set-name: readable; nil without one
 	name, color    sealedField
 	topic          sealedField
 	See, Write     []uint64
@@ -301,6 +302,38 @@ func (f *fields) sealed(k string, required, nullable bool) sealedField {
 	return sealedField{present: true}
 }
 
+// icon reads an optional community-icon (§16.2.3): closed, a known mime, a 32-byte hash,
+// and a size of 1 to 262144 bytes.
+func (f *fields) icon(k string) *Icon {
+	v, ok := f.get(k, false)
+	if !ok {
+		return nil
+	}
+	sf, err := newFields(v, f.what+"."+k)
+	if err != nil {
+		f.fail(err)
+		return nil
+	}
+	var ic Icon
+	ic.Mime, _ = sf.str("mime", true)
+	ic.Hash, _ = sf.bytesN("hash", 32, true)
+	n, ok := sf.uint("size", true)
+	sf.closed()
+	switch {
+	case sf.err != nil:
+		f.fail(sf.err)
+		return nil
+	case !IconMime(ic.Mime):
+		f.fail(badRequest(f.what + "." + k + ": mime must be image/png, image/jpeg, or image/webp"))
+		return nil
+	case !ok || n < 1 || n > MaxIconSize:
+		f.fail(badRequest(f.what + "." + k + ": size must be 1 to 262144"))
+		return nil
+	}
+	ic.Size = int(n)
+	return &ic
+}
+
 // closed refuses members nobody read.
 func (f *fields) closed() {
 	for k := range f.m {
@@ -331,12 +364,14 @@ func decodeOp(raw json.RawMessage, i int) (pop, *Error) {
 		o.Server, _ = f.serverName("server", true)
 		o.Name, _ = f.str("name", true)
 		o.Desc, o.hasDesc = f.str("desc", false)
+		o.Icon = f.icon("icon")
 		o.Public, _ = f.boolean("public", true)
 		o.Approval, _ = f.boolean("approval", true)
 		o.Everyone, o.dupPerms, _ = f.perms("everyone", true)
 	case "set-name":
 		o.Name, _ = f.str("name", true)
 		o.Desc, o.hasDesc = f.str("desc", false)
+		o.Icon = f.icon("icon")
 	case "set-settings":
 		o.Public, _ = f.boolean("public", true)
 		o.Approval, _ = f.boolean("approval", true)
@@ -607,7 +642,7 @@ func (a *applier) apply(o *pop, server string, mode Mode) (Op, *Error) {
 		case mode == Append && o.Server != server:
 			return out, invalid("create must name this community server")
 		}
-		c.Name, c.Desc, c.Public, c.Approval = o.Name, o.Desc, o.Public, o.Approval
+		c.Name, c.Desc, c.Icon, c.Public, c.Approval = o.Name, o.Desc, o.Icon, o.Public, o.Approval
 		c.Owner, c.Server, c.Everyone = a.by, o.Server, o.Everyone
 		out.Server, out.Public = o.Server, o.Public
 
@@ -618,7 +653,7 @@ func (a *applier) apply(o *pop, server string, mode Mode) (Op, *Error) {
 		if o.hasDesc && !validDesc(o.Desc) {
 			return out, invalid("the description breaks the description rules")
 		}
-		c.Name, c.Desc = o.Name, o.Desc
+		c.Name, c.Desc, c.Icon = o.Name, o.Desc, o.Icon
 
 	case "set-settings":
 		c.Public, c.Approval = o.Public, o.Approval

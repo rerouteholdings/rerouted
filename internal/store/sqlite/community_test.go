@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -37,7 +38,7 @@ func TestMigrateV10ToV11(t *testing.T) {
 	if id, err := st.Chains().ByHandle(context.Background(), "kat.test"); err != nil || id != "kat" {
 		t.Fatalf("handle after upgrade: %q %v", id, err)
 	}
-	for _, table := range []string{"cm_communities", "cm_chain", "cm_members", "cm_groups", "cm_commits", "cm_inbox", "cm_segments", "cm_media", "cm_reports", "cm_code_uses", "cm_trees"} {
+	for _, table := range []string{"cm_communities", "cm_chain", "cm_members", "cm_groups", "cm_commits", "cm_inbox", "cm_segments", "cm_media", "cm_reports", "cm_code_uses", "cm_trees", "cm_icons"} {
 		var n int
 		if err := st.db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&n); err != nil || n != 1 {
 			t.Fatalf("no table %s after the upgrade", table)
@@ -116,5 +117,36 @@ func TestCommunityAcceptJoinLimits(t *testing.T) {
 	}
 	if err := cs.Create(ctx, store.Community{Name: "c.test", ID: []byte("x")}, nil, nil, store.CommunityMember{ID: "x"}, nil); !errors.Is(err, store.ErrExists) {
 		t.Fatalf("a second community on one name: %v", err)
+	}
+}
+
+func TestIcons(t *testing.T) {
+	cs := newCommunityStore(t)
+	ctx := context.Background()
+	a, b := bytes.Repeat([]byte{1}, 32), bytes.Repeat([]byte{2}, 32)
+	if err := cs.PutIcon(ctx, "c.example.org", a, "image/png", []byte("png"), 100); err != nil {
+		t.Fatal(err)
+	}
+	if err := cs.PutIcon(ctx, "c.example.org", b, "image/webp", []byte("webp"), 100); err != nil {
+		t.Fatal(err)
+	}
+	if mt, data, err := cs.Icon(ctx, "c.example.org", a); err != nil || mt != "image/png" || string(data) != "png" {
+		t.Fatalf("%q %q %v", mt, data, err)
+	}
+	if _, _, err := cs.Icon(ctx, "other.example.org", a); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("another community's icon: %v", err)
+	}
+	// Within 24 hours, both stay; after, only the one kept.
+	if n, err := cs.PruneIcons(ctx, "c.example.org", nil, 100); err != nil || n != 0 {
+		t.Fatalf("pruned %d %v", n, err)
+	}
+	if n, err := cs.PruneIcons(ctx, "c.example.org", a, 101); err != nil || n != 1 {
+		t.Fatalf("pruned %d %v", n, err)
+	}
+	if _, _, err := cs.Icon(ctx, "c.example.org", b); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("the unnamed icon stayed: %v", err)
+	}
+	if n, err := cs.PruneIcons(ctx, "c.example.org", nil, 101); err != nil || n != 1 {
+		t.Fatalf("pruned %d %v", n, err)
 	}
 }

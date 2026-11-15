@@ -641,3 +641,38 @@ func TestNames(t *testing.T) {
 		}
 	}
 }
+
+func TestIcon(t *testing.T) {
+	h, owner := newCommunity(t)
+	hash := make([]byte, 32)
+	hash[0] = 7
+	icon := func(mime string, size int) map[string]any {
+		return map[string]any{"mime": mime, "hash": hash, "size": size}
+	}
+	h.ok(owner, map[string]any{"op": "set-name", "name": "Night shift", "desc": "d", "icon": icon("image/webp", 1000)})
+	if h.st.Icon == nil || h.st.Icon.Mime != "image/webp" || h.st.Icon.Size != 1000 || !bytes.Equal(h.st.Icon.Hash, hash) {
+		t.Fatalf("icon %+v", h.st.Icon)
+	}
+	c := h.st.Clone()
+	c.Icon.Hash[0] = 9
+	if h.st.Icon.Hash[0] != 7 {
+		t.Fatal("Clone shares the icon's hash")
+	}
+	h.fail(wire.ErrCodeBadRequest, owner, map[string]any{"op": "set-name", "name": "x", "icon": icon("image/gif", 10)})
+	h.fail(wire.ErrCodeBadRequest, owner, map[string]any{"op": "set-name", "name": "x", "icon": icon("image/png", 0)})
+	h.fail(wire.ErrCodeBadRequest, owner, map[string]any{"op": "set-name", "name": "x", "icon": icon("image/png", MaxIconSize+1)})
+	h.fail(wire.ErrCodeBadRequest, owner, map[string]any{"op": "set-name", "name": "x", "icon": map[string]any{"mime": "image/png", "hash": make([]byte, 31), "size": 5}})
+	extra := icon("image/png", 5)
+	extra["url"] = "https://example.com/i.png"
+	h.fail(wire.ErrCodeBadRequest, owner, map[string]any{"op": "set-name", "name": "x", "icon": extra})
+	h.fail(wire.ErrCodeBadRequest, owner, map[string]any{"op": "set-name", "name": "x", "icon": "abc"})
+	h.ok(owner, map[string]any{"op": "set-name", "name": "x", "icon": icon("image/png", MaxIconSize)})
+	if h.st.Icon == nil || h.st.Icon.Size != MaxIconSize || h.st.Desc != "" {
+		t.Fatalf("icon %+v desc %q", h.st.Icon, h.st.Desc)
+	}
+	// The whole state: a set-name without icon removes it.
+	h.ok(owner, map[string]any{"op": "set-name", "name": "x"})
+	if h.st.Icon != nil {
+		t.Fatal("set-name without icon kept it")
+	}
+}

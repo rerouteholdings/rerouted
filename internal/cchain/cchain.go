@@ -134,6 +134,21 @@ type Code struct {
 	Seq     uint64 // the entry that added it
 }
 
+// MaxIconSize is the largest icon, in bytes (§16.2.3).
+const MaxIconSize = 262144
+
+// Icon is a community's icon, named by hash (§16.2.3). It's readable, like the name.
+type Icon struct {
+	Mime string
+	Hash []byte // SHA-256 of the bytes
+	Size int
+}
+
+// IconMime reports whether t is an icon type the spec allows.
+func IconMime(t string) bool {
+	return t == "image/png" || t == "image/jpeg" || t == "image/webp"
+}
+
 // State is a community's state after its chain's head (§16.2.1).
 type State struct {
 	ID       []byte // the community's identifier
@@ -142,6 +157,7 @@ type State struct {
 	TS       int64  // the head's ts
 	Name     string
 	Desc     string
+	Icon     *Icon // nil: no icon
 	Public   bool
 	Approval bool
 	Owner    string
@@ -203,6 +219,11 @@ func newState() *State {
 func (st *State) Clone() *State {
 	c := *st
 	c.ID, c.Head = bytes.Clone(st.ID), bytes.Clone(st.Head)
+	if st.Icon != nil {
+		ic := *st.Icon
+		ic.Hash = bytes.Clone(st.Icon.Hash)
+		c.Icon = &ic
+	}
 	c.Roles = make(map[uint64]*Role, len(st.Roles))
 	for k, r := range st.Roles {
 		rr := *r

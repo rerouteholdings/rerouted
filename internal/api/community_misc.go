@@ -339,7 +339,7 @@ func (c *community) reportClose(w http.ResponseWriter, r *http.Request, _ csess)
 
 // maintainCommunities runs each community's upkeep: inbox, commits, and sent results past
 // 30 days; trees no commit named within an hour, and kept ones past 30 days; files past the
-// retention; idle non-members' key packages; and the daily chain re-fetch (spec/api/community.md).
+// retention; icons uploaded over 24 hours ago that the state doesn't name; idle non-members' key packages; and the daily chain re-fetch (spec/api/community.md).
 func (s *Server) maintainCommunities(ctx context.Context) {
 	if s.comm == nil || len(s.comm.byName) == 0 {
 		return
@@ -354,6 +354,15 @@ func (s *Server) maintainCommunities(ctx context.Context) {
 		if days := s.cfg.CommunityFileDays; days > 0 {
 			if _, err := cs.ExpireMedia(ctx, c.name, t-int64(days)*24*3600); err != nil {
 				s.log.Error("expiring community files", "err", err)
+			}
+		}
+		if st := c.snapshot(); st != nil {
+			var keep []byte
+			if st.Icon != nil {
+				keep = st.Icon.Hash
+			}
+			if _, err := cs.PruneIcons(ctx, c.name, keep, t-iconKeep); err != nil {
+				s.log.Error("pruning community icons", "err", err)
 			}
 		}
 		if _, err := cs.PruneKPs(ctx, c.name, t-30*24*3600); err != nil {
