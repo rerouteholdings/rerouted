@@ -1,4 +1,4 @@
-package keyd
+package ipc
 
 import (
 	"errors"
@@ -6,8 +6,8 @@ import (
 	"syscall"
 )
 
-// peerUID is the user of the process at the other end of a unix socket (SO_PEERCRED).
-func peerUID(c net.Conn) (int, error) {
+// PeerUID is the user of the process at the other end of a unix socket (SO_PEERCRED).
+func PeerUID(c net.Conn) (int, error) {
 	uc, ok := c.(*net.UnixConn)
 	if !ok {
 		return -1, errors.New("not a unix socket")

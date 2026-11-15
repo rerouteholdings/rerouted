@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rerouteholdings/rerouted/internal/fed"
+	"github.com/rerouteholdings/rerouted/internal/ipc"
 	"github.com/rerouteholdings/rerouted/internal/serverkey"
 	"github.com/rerouteholdings/rerouted/internal/wire"
 )
@@ -171,7 +172,7 @@ func TestKeydRestart(t *testing.T) {
 
 // Only the allowed user may connect.
 func TestKeydPeerUID(t *testing.T) {
-	if !PeerCheckSupported {
+	if !ipc.PeerCheckSupported {
 		t.Skip("no SO_PEERCRED here")
 	}
 	keys, err := LoadDir(t.TempDir(), "chat.test", nil)

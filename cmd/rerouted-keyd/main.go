@@ -14,12 +14,10 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"os"
 	"os/signal"
 	"os/user"
@@ -29,6 +27,7 @@ import (
 	"syscall"
 
 	"github.com/rerouteholdings/rerouted/internal/config"
+	"github.com/rerouteholdings/rerouted/internal/ipc"
 	"github.com/rerouteholdings/rerouted/internal/keyd"
 )
 
@@ -120,7 +119,7 @@ func main() {
 	}
 	uid := -1
 	if *allow != "" {
-		if !keyd.PeerCheckSupported {
+		if !ipc.PeerCheckSupported {
 			fail(log, "-allow-user isn't supported on this system", nil, 2)
 		}
 		u, err := user.Lookup(*allow)
@@ -131,7 +130,7 @@ func main() {
 			fail(log, "-allow-user", err, 2)
 		}
 	}
-	l, err := listener(*listen)
+	l, err := ipc.Listen(*listen)
 	if err != nil {
 		fail(log, "listen", err, 1)
 	}
@@ -145,25 +144,6 @@ func main() {
 	if err := (&keyd.Server{Keys: keys, UID: uid, Log: log}).Serve(l); err != nil {
 		fail(log, "serve", err, 1)
 	}
-}
-
-// listener is the socket systemd passes (socket activation), or a new one at path.
-func listener(path string) (net.Listener, error) {
-	if os.Getenv("LISTEN_PID") == strconv.Itoa(os.Getpid()) && os.Getenv("LISTEN_FDS") == "1" {
-		f := os.NewFile(3, "systemd socket")
-		defer f.Close()
-		return net.FileListener(f)
-	}
-	if path == "" {
-		return nil, errors.New("no socket from systemd, and no -listen")
-	}
-	os.Remove(path)
-	l, err := net.Listen("unix", path)
-	if err != nil {
-		return nil, err
-	}
-	// rerouted connects as another user, in this one's group: -allow-user checks which.
-	return l, os.Chmod(path, 0o660)
 }
 
 func exists(p string) bool {

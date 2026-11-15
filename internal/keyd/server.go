@@ -8,6 +8,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/rerouteholdings/rerouted/internal/ipc"
 	"github.com/rerouteholdings/rerouted/internal/wire"
 )
 
@@ -43,7 +44,7 @@ func (s *Server) Serve(l net.Listener) error {
 func (s *Server) serve(c net.Conn) {
 	defer c.Close()
 	if s.UID != -1 {
-		uid, err := peerUID(c)
+		uid, err := ipc.PeerUID(c)
 		if err != nil || uid != s.UID {
 			s.Log.Warn("refused a connection from another user", "uid", uid, "err", err)
 			return

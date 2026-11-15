@@ -1,13 +1,13 @@
 //go:build !linux
 
-package keyd
+package ipc
 
 import (
 	"errors"
 	"net"
 )
 
-func peerUID(net.Conn) (int, error) {
+func PeerUID(net.Conn) (int, error) {
 	return -1, errors.New("checking a unix socket's peer isn't supported on this system")
 }
 

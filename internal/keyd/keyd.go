@@ -12,12 +12,11 @@ package keyd
 
 import (
 	"crypto/ed25519"
-	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"slices"
 
+	"github.com/rerouteholdings/rerouted/internal/ipc"
 	"github.com/rerouteholdings/rerouted/internal/serverkey"
 	"github.com/rerouteholdings/rerouted/internal/wire"
 )
@@ -49,36 +48,9 @@ type pubKey struct {
 	Created int64      `json:"created"`
 }
 
-func writeMsg(w io.Writer, v any) error {
-	b, err := wire.Marshal(v)
-	if err != nil {
-		return err
-	}
-	if len(b) > maxMessage {
-		return errors.New("keyd: message too large")
-	}
-	msg := make([]byte, 4+len(b))
-	binary.BigEndian.PutUint32(msg, uint32(len(b)))
-	copy(msg[4:], b)
-	_, err = w.Write(msg)
-	return err
-}
+func writeMsg(w io.Writer, v any) error { return ipc.Write(w, v, maxMessage) }
 
-func readMsg(r io.Reader, v any) error {
-	var n [4]byte
-	if _, err := io.ReadFull(r, n[:]); err != nil {
-		return err
-	}
-	size := binary.BigEndian.Uint32(n[:])
-	if size > maxMessage {
-		return errors.New("keyd: message too large")
-	}
-	b := make([]byte, size)
-	if _, err := io.ReadFull(r, b); err != nil {
-		return err
-	}
-	return wire.Unmarshal(b, v)
-}
+func readMsg(r io.Reader, v any) error { return ipc.Read(r, v, maxMessage) }
 
 // held is one private key, and the server name it signs as.
 type held struct {
