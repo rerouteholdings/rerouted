@@ -509,6 +509,21 @@ func TestV2Chain(t *testing.T) {
 	if err != nil || !pub.Equal(phone.Public()) {
 		t.Fatalf("the proof: %v", err)
 	}
+	// An approving device that showed an approval code lists the waiting proofs instead,
+	// since it doesn't know the new device's key (SPEC §7.2). Only its own identity's.
+	var list struct {
+		Proofs []wire.Raw `json:"proofs"`
+	}
+	if c := call2(t, ts, "GET", "link/proofs", kat.token, nil, &list); c != 200 || len(list.Proofs) != 1 || string(list.Proofs[0]) != string(got.Proof) {
+		t.Fatalf("listing the proofs: %d %d", c, len(list.Proofs))
+	}
+	ravi := newV2User(t, ts, "ravi", "chat.test")
+	if c := call2(t, ts, "GET", "link/proofs", ravi.token, nil, &list); c != 200 || len(list.Proofs) != 0 {
+		t.Fatalf("another identity's proofs: %d %d", c, len(list.Proofs))
+	}
+	if c := call2(t, ts, "GET", "link/proofs", "", nil, nil); c != 401 {
+		t.Fatalf("listing without a session: %d", c)
+	}
 	// The laptop adds it, with the composite key from the proof.
 	if c, e := kat.appendSigned(signed2(t, "chain-entry", kat.entry(addDevice(phone, "phone")), kat.dev)); c != 200 {
 		t.Fatalf("add-device: %d %+v", c, e)

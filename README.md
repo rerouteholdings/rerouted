@@ -36,7 +36,7 @@ A version 1 identity migrates to version 2 (§6.8) in one request: the version 1
 | Encoding | §4 | I-JSON (the Internet JSON profile) with duplicate-name, UTF-8, and integer checks; strict base64url; and the JSON Canonicalization Scheme (JCS) for everything signed or hashed |
 | Discovery | §5, §8.1 | The server document and handle documents. Reserved handles can't be registered. Handle changes: a new name under the handle domain has to be free, and a name an identity stops using, by a rename or a move away, is held for it for 30 days, then freed unless the operator keeps it (`keep-handle`). |
 | Identities | §6 | Identity chains and the fork rule, vouching, tombstones, recovery with the recovery key, alerts on device changes, and moves between homeservers |
-| Devices | §7 | Two-way device approval with link proofs, wrapped account keys, versioned account data, and backups |
+| Devices | §7 | Two-way device approval with link proofs, including approval codes a new device scans (listed with `GET link/proofs`), wrapped account keys, versioned account data, and backups |
 | Contacts | §9 | Registration and contact requests by invite code; accept, decline, cancel, remove, block, and unblock; and the rate limits |
 | Delivery | §10 | Send, inbox, acknowledge, and a WebSocket stream. Deliveries to other servers wait in a durable outbox, and are retried with backoff for up to 72 hours. |
 | Groups | §11 | The hub, which orders a group's changes, with epoch keys and signed receipts; commits through a remote hub; missed commits; and hub handoff |
