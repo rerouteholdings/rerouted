@@ -16,6 +16,9 @@ type Community struct {
 	ID      []byte // its identifier: the hash of its create entry (SPEC §16.2.1)
 	Group   []byte // its members group, nil until registered (after a move-in, SPEC §16.6)
 	Created int64
+	// Listed, for a move-in: the identities the owner's signed member list names, the only
+	// ones who may join by registering for the members group (SPEC §16.6). Create only.
+	Listed []string
 }
 
 // CommunityMember is one identity the community server counts as a member, for
@@ -170,6 +173,8 @@ type Communities interface {
 	Member(ctx context.Context, name, id string) (*CommunityMember, error) // ErrNotFound
 	Members(ctx context.Context, name string) ([]CommunityMember, error)
 	MemberCount(ctx context.Context, name string) (int, error)
+	// Listed reports whether a move-in's member list names id.
+	Listed(ctx context.Context, name, id string) (bool, error)
 
 	// Sessions.
 	CreateToken(ctx context.Context, name string, hash []byte, id, home string, dev []byte, expires int64) error

@@ -358,9 +358,14 @@ func (c *community) groupRegister(allow bool) func(http.ResponseWriter, *http.Re
 				return
 			}
 			if !member {
-				// After a move-in, members join the server's list as they register for the
-				// members group (spec/api/community.md, Creating and moving a community).
-				if g.See != "" || !c.movedInRecently(ctx) {
+				// After a move-in, the identities on the owner's signed member list join the
+				// server's list as they register for the members group (SPEC §16.6).
+				listed, lerr := c.st.Listed(ctx, c.name, sess.id)
+				if lerr != nil {
+					c.hs.unavailableRead(w, "checking the member list", lerr)
+					return
+				}
+				if g.See != "" || !listed {
 					writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "not a member")
 					return
 				}
@@ -508,31 +513,6 @@ func (c *community) treeUpload(w http.ResponseWriter, r *http.Request, sess cses
 		return
 	}
 	writeBody(w, http.StatusOK, map[string]any{"hash": wire.Bytes(hash), "size": size})
-}
-
-// movedInRecently: the community moved here in the last 30 days, the hub handoff window
-// (SPEC §11.11), so its members are still finding the server.
-func (c *community) movedInRecently(ctx context.Context) bool {
-	c.mu.RLock()
-	var first []byte
-	if len(c.ent) > 0 {
-		first = c.ent[0]
-	}
-	c.mu.RUnlock()
-	sig, err := wire.DecodeSignedV2(first)
-	if err != nil {
-		return false
-	}
-	var body struct {
-		Ops []struct {
-			Server string `json:"server"`
-		} `json:"ops"`
-	}
-	if sig.Open(&body) != nil || len(body.Ops) == 0 || body.Ops[0].Server == c.name {
-		return false
-	}
-	cm, err := c.st.Get(ctx, c.name)
-	return err == nil && cm.Created > now()-30*24*3600
 }
 
 // ---- the hub (SPEC §11.6) ----

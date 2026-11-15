@@ -301,17 +301,18 @@ func (c *community) checkReg(w http.ResponseWriter, ctx context.Context, g group
 
 func (c *community) create(w http.ResponseWriter, r *http.Request, sess csess) {
 	var req struct {
-		Entry wire.Raw          `json:"entry,omitempty"`
-		Chain []wire.Raw        `json:"chain,omitempty"`
-		Group *groupReg         `json:"group,omitempty"`
-		Code  string            `json:"code,omitempty"`
-		Homes map[string]string `json:"homes,omitempty"`
+		Entry   wire.Raw          `json:"entry,omitempty"`
+		Chain   []wire.Raw        `json:"chain,omitempty"`
+		Group   *groupReg         `json:"group,omitempty"`
+		Code    string            `json:"code,omitempty"`
+		Homes   map[string]string `json:"homes,omitempty"`
+		Members wire.Raw          `json:"members,omitempty"`
 	}
 	if !readBody(w, r, &req) {
 		return
 	}
-	if (req.Entry == nil) == (len(req.Chain) == 0) || (req.Group != nil && req.Entry == nil) {
-		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, `exactly one of "entry" and "chain"; "group" goes with "entry"`)
+	if (req.Entry == nil) == (len(req.Chain) == 0) || (req.Group != nil && req.Entry == nil) || (req.Members == nil) == (req.Entry == nil) {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, `exactly one of "entry" and "chain"; "group" goes with "entry", and "members" with "chain"`)
 		return
 	}
 	// Who may create is the operator's choice: a creation code, or open (spec/api/community.md).
@@ -327,7 +328,7 @@ func (c *community) create(w http.ResponseWriter, r *http.Request, sess csess) {
 		c.createNew(w, ctx, sess, req.Entry, req.Group, t)
 		return
 	}
-	c.moveIn(w, ctx, sess, req.Chain, req.Homes, t)
+	c.moveIn(w, ctx, sess, req.Chain, req.Homes, req.Members, t)
 }
 
 func (c *community) createNew(w http.ResponseWriter, ctx context.Context, sess csess, entry wire.Raw, g *groupReg, t int64) {
@@ -387,7 +388,7 @@ const treeKeep = 30 * 24 * 3600
 
 // moveIn takes a community moving here: its whole chain, ending in a set-home naming this
 // server, checked entry by entry (SPEC §16.2.3, §16.6).
-func (c *community) moveIn(w http.ResponseWriter, ctx context.Context, sess csess, raws []wire.Raw, homes map[string]string, t int64) {
+func (c *community) moveIn(w http.ResponseWriter, ctx context.Context, sess csess, raws []wire.Raw, homes map[string]string, membersRaw wire.Raw, t int64) {
 	keys := c.importKeys(ctx, homes)
 	var st *cchain.State
 	var last *cchain.Applied
@@ -428,7 +429,11 @@ func (c *community) moveIn(w http.ResponseWriter, ctx context.Context, sess cses
 		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "only the owner moves a community")
 		return
 	}
-	err := c.st.Create(ctx, store.Community{Name: c.name, ID: st.ID, Created: t}, encs, hashes, store.CommunityMember{ID: sess.id, Home: sess.home, Since: t}, nil)
+	listed, ok := c.memberList(w, ctx, sess, st, membersRaw, t)
+	if !ok {
+		return
+	}
+	err := c.st.Create(ctx, store.Community{Name: c.name, ID: st.ID, Created: t, Listed: listed}, encs, hashes, store.CommunityMember{ID: sess.id, Home: sess.home, Since: t}, nil)
 	switch {
 	case errors.Is(err, store.ErrExists):
 		writeError(w, http.StatusConflict, wire.ErrCodeAlreadyExists, "")
@@ -442,6 +447,51 @@ func (c *community) moveIn(w http.ResponseWriter, ctx context.Context, sess cses
 	c.mu.Unlock()
 	c.hs.log.Info("community moved in", "name", c.name, "id", hex.EncodeToString(st.ID), "entries", len(encs))
 	writeBody(w, http.StatusOK, map[string]any{"id": wire.Bytes(st.ID)})
+}
+
+// maxListed is the most identities a member list can name: the member cap (SPEC §16.1).
+const maxListed = memberCap
+
+// memberList checks a move-in's community-members (SPEC §16.6): signed by a current device
+// of the owner, for this community, at most 10 minutes from the server's clock, naming each
+// identity once. It writes the error itself.
+func (c *community) memberList(w http.ResponseWriter, ctx context.Context, sess csess, st *cchain.State, raw wire.Raw, t int64) ([]string, bool) {
+	sig, err := wire.DecodeSignedV2(raw)
+	if err != nil || sig.T != "community-members" || len(sig.K) != 32 {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "members must be a community-members signed by the owner's device")
+		return nil, false
+	}
+	var body struct {
+		Community wire.Bytes `json:"community"`
+		Members   []string   `json:"members"`
+		TS        int64      `json:"ts"`
+	}
+	if sig.OpenClosed(&body) != nil || !bytes.Equal(body.Community, st.ID) || len(body.Members) > maxListed {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "members: a list for this community, of at most 1,000 identities")
+		return nil, false
+	}
+	seen := map[string]bool{}
+	for _, id := range body.Members {
+		if !wire.ValidIdentityID(id) || seen[id] {
+			writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "members: identifiers, each once")
+			return nil, false
+		}
+		seen[id] = true
+	}
+	if absDiff(body.TS, t) > cchain.ClockSkew {
+		c.hs.writeClockSkew(w, body.TS, cchain.ClockSkew)
+		return nil, false
+	}
+	signer, err := c.appendKeys(ctx, sess)(st.Owner, sig.K)
+	if err != nil {
+		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "members must be signed by a current device of the owner")
+		return nil, false
+	}
+	if sig.VerifyComposite("community-members", signer.Pub) != nil {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "members")
+		return nil, false
+	}
+	return body.Members, true
 }
 
 // ---- GET chain, POST chain/append (spec/api/community.md, The community chain) ----

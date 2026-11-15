@@ -65,7 +65,7 @@ Set `REROUTED_COMMUNITIES` to the names to serve (see [Settings](docs/settings.m
 - Code access needs a session, and a code whose creator is still a member here. Joins count each code's uses and the 1,000-member cap in the same transaction as the hub step.
 - A timed-out member can't send to channels, upload, send a voice key, or cast, but can still send protocol traffic without a channel, and join a voice channel to listen.
 - A device gets a group's traffic only from its registration on. A Welcome registers its devices; the device that creates a group is registered for it.
-- Moving in takes `homes`, the homeservers of the chain's signers it may not know, and accepts any device a signer's chain added, as a client does. For 30 days after a move-in, an identity that registers for the members group becomes a member, as the API reference says: anyone who signs in then can read the community's structure.
+- Moving in takes `homes`, the homeservers of the chain's signers it may not know, and accepts any device a signer's chain added, as a client does. Only the identities on the owner's signed member list become members by registering for the members group.
 - A community that moved away answers `410 expired` to everything but `GET chain`, sessions, and what its hub handoff needs; appends get `403`.
 - History over the quota is refused, not trimmed. `replace` works only for a segment with the same start and end, after a delete recorded inside it.
 - An approval's claimed key packages are kept in memory for its 10 minutes, so a retry after a restart claims new ones.

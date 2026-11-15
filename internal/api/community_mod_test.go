@@ -448,16 +448,26 @@ func TestCommunityMove(t *testing.T) {
 	// The new server takes the chain from the owner.
 	e.host = "new.test"
 	kn, rn := e.signIn(kat.v2User), e.signIn(ravi.v2User)
-	if c, _ := e.errOf("POST", "create", rn.tok, map[string]any{"chain": chain.Entries, "code": testCreateCode}); c != 403 {
+	lee := e.signIn(newV2User(t, e.ts, "lee", "chat.test"))
+	list := func(by *cmUser, ids ...string) wire.Raw {
+		return signed2(t, "community-members", map[string]any{"community": m.ch.id, "members": ids, "ts": time.Now().Unix()}, by.dev)
+	}
+	if c, _ := e.errOf("POST", "create", rn.tok, map[string]any{"chain": chain.Entries, "code": testCreateCode, "members": list(rn, ravi.id)}); c != 403 {
 		t.Fatalf("a move-in by a member: %d", c)
 	}
-	if c, code := e.errOf("POST", "create", kn.tok, map[string]any{"chain": chain.Entries[:len(chain.Entries)-1], "code": testCreateCode}); c != 400 || code != wire.ErrCodeInvalidChain {
+	if c, _ := e.errOf("POST", "create", kn.tok, map[string]any{"chain": chain.Entries, "code": testCreateCode}); c != 400 {
+		t.Fatalf("a move-in without its member list: %d", c)
+	}
+	if c, _ := e.errOf("POST", "create", kn.tok, map[string]any{"chain": chain.Entries, "code": testCreateCode, "members": list(rn, ravi.id)}); c != 403 {
+		t.Fatalf("a member list signed by someone other than the owner: %d", c)
+	}
+	if c, code := e.errOf("POST", "create", kn.tok, map[string]any{"chain": chain.Entries[:len(chain.Entries)-1], "code": testCreateCode, "members": list(kn, ravi.id)}); c != 400 || code != wire.ErrCodeInvalidChain {
 		t.Fatalf("a chain that doesn't end in set-home here: %d %s", c, code)
 	}
 	var res struct {
 		ID wire.Bytes `json:"id"`
 	}
-	if c := e.call("POST", "create", kn.tok, map[string]any{"chain": chain.Entries, "code": testCreateCode}, &res); c != 200 || !bytes.Equal(res.ID, m.ch.id) {
+	if c := e.call("POST", "create", kn.tok, map[string]any{"chain": chain.Entries, "code": testCreateCode, "members": list(kn, ravi.id)}, &res); c != 200 || !bytes.Equal(res.ID, m.ch.id) {
 		t.Fatalf("move-in: %d", c)
 	}
 	var pv struct {
@@ -474,6 +484,13 @@ func TestCommunityMove(t *testing.T) {
 	}
 	if c, _ := e.errOf("GET", "chain", rn.tok, nil); c != 403 {
 		t.Fatalf("ravi read the moved chain before registering: %d", c)
+	}
+	// A stranger isn't on the list, and can't join by registering.
+	if c, code := e.errOf("POST", "groups/register", lee.tok, map[string]any{"group": handed}); c != 403 || code != wire.ErrCodeNotAllowed {
+		t.Fatalf("a stranger registered after the move: %d %s", c, code)
+	}
+	if c, _ := e.errOf("GET", "chain", lee.tok, nil); c != 403 {
+		t.Fatalf("a stranger became a member: %d", c)
 	}
 	if c := e.call("POST", "groups/register", rn.tok, map[string]any{"group": handed}, nil); c != 204 {
 		t.Fatalf("ravi registers after the move: %d", c)

@@ -20,6 +20,7 @@ import (
 const communitySchema = `
 CREATE TABLE IF NOT EXISTS cm_communities (name TEXT PRIMARY KEY, id BLOB NOT NULL, grp BLOB, created INTEGER NOT NULL, pruned INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS cm_chain    (name TEXT NOT NULL, seq INTEGER NOT NULL, entry BLOB NOT NULL, hash BLOB NOT NULL, PRIMARY KEY (name, seq));
+CREATE TABLE IF NOT EXISTS cm_listed   (name TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY (name, id));
 CREATE TABLE IF NOT EXISTS cm_members  (name TEXT NOT NULL, id TEXT NOT NULL, home TEXT NOT NULL, since INTEGER NOT NULL, PRIMARY KEY (name, id));
 CREATE TABLE IF NOT EXISTS cm_tokens   (hash BLOB PRIMARY KEY, name TEXT NOT NULL, id TEXT NOT NULL, home TEXT NOT NULL, device BLOB NOT NULL, expires INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS cm_tokens_id ON cm_tokens (name, id);
@@ -84,6 +85,11 @@ func (c communities) Create(ctx context.Context, cm store.Community, entries, ha
 	}
 	if _, err := tx.ExecContext(ctx, "INSERT INTO cm_communities (name, id, grp, created) VALUES (?, ?, ?, ?)", cm.Name, cm.ID, cm.Group, cm.Created); err != nil {
 		return err
+	}
+	for _, id := range cm.Listed {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO cm_listed (name, id) VALUES (?, ?) ON CONFLICT DO NOTHING", cm.Name, id); err != nil {
+			return err
+		}
 	}
 	for i, e := range entries {
 		if _, err := tx.ExecContext(ctx, "INSERT INTO cm_chain (name, seq, entry, hash) VALUES (?, ?, ?, ?)", cm.Name, i, e, hashes[i]); err != nil {
@@ -208,6 +214,12 @@ func (c communities) Members(ctx context.Context, name string) ([]store.Communit
 		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+func (c communities) Listed(ctx context.Context, name, id string) (bool, error) {
+	var n int
+	err := c.rdb.QueryRowContext(ctx, "SELECT count(*) FROM cm_listed WHERE name = ? AND id = ?", name, id).Scan(&n)
+	return n > 0, err
 }
 
 func (c communities) MemberCount(ctx context.Context, name string) (int, error) {
