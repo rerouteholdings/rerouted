@@ -680,6 +680,8 @@ func (c *community) stream(w http.ResponseWriter, r *http.Request) {
 		s.close(closeGoingAway, "too slow; reconnect and replay")
 		return
 	}
+	// Who's in each voice channel now: the device missed what changed before it connected.
+	c.voice.opened(ctx, s)
 	sess := csess{id: id, home: home, dev: dev, tokenHash: sum[:]}
 	for {
 		conn.SetReadDeadline(time.Now().Add(streamIdleCommunity))

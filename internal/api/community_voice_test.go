@@ -115,6 +115,11 @@ func TestCommunityVoice(t *testing.T) {
 	if f := voiceAnswer(t, rc); f["t"] != "voice-joined" {
 		t.Fatalf("ravi's join: %v", f)
 	}
+	// A stream that opens now hears who's in the channel, after its stored items: it missed
+	// both joins.
+	if st := waitFrame(t, lee.openStream(), "voice-state"); fmt.Sprint(st["channel"]) != "1" || len(st["in"].([]any)) != 2 {
+		t.Fatalf("voice-state as a stream opens: %v", st)
+	}
 	// Full: the channel holds 2.
 	sendFrame(t, mc, map[string]any{"t": "voice-join", "channel": 1, "visit": 9, "sdp": voiceOffer(t)})
 	if f := voiceAnswer(t, mc); f["t"] != "error" || f["error"] != wire.ErrCodeNotAllowed {

@@ -25,6 +25,9 @@ type voiceRooms struct {
 	sfu *sfu.SFU // nil if it didn't start: voice-join answers unavailable
 	mu  sync.Mutex
 	at  map[string]*visitRec // devKey -> the visit the device is on
+	// sent orders voice-state frames: each is built and queued under it, so a stream never
+	// gets an older state after a newer one.
+	sent sync.Mutex
 }
 
 type visitRec struct {
@@ -190,14 +193,8 @@ func sfuCode(err error) string {
 	return wire.ErrCodeUnavailable
 }
 
-// broadcast sends a voice channel's voice-state to every device registered for the group
-// that carries it, with a stream open (spec/api/community.md).
-func (v *voiceRooms) broadcast(ctx context.Context, channel uint64) {
-	st := v.c.snapshot()
-	if st == nil {
-		return
-	}
-	ch := st.Channels[channel]
+// stateFrame is a voice channel's voice-state, and how many are in it. v.sent is held.
+func (v *voiceRooms) stateFrame(channel uint64) ([]byte, int, error) {
 	in := []map[string]any{}
 	if v.sfu != nil {
 		for _, p := range v.room(channel).State() {
@@ -209,7 +206,18 @@ func (v *voiceRooms) broadcast(ctx context.Context, channel uint64) {
 		}
 	}
 	frame, err := wire.Marshal(map[string]any{"t": "voice-state", "channel": channel, "in": in})
-	if err != nil || ch == nil {
+	return frame, len(in), err
+}
+
+// broadcast sends a voice channel's voice-state to every device registered for the group
+// that carries it, with a stream open (spec/api/community.md).
+func (v *voiceRooms) broadcast(ctx context.Context, channel uint64) {
+	st := v.c.snapshot()
+	if st == nil {
+		return
+	}
+	ch := st.Channels[channel]
+	if ch == nil {
 		return
 	}
 	group, err := v.c.carrier(ctx, st, ch)
@@ -220,12 +228,63 @@ func (v *voiceRooms) broadcast(ctx context.Context, channel uint64) {
 	if err != nil {
 		return
 	}
+	v.sent.Lock()
+	defer v.sent.Unlock()
+	frame, _, err := v.stateFrame(channel)
+	if err != nil {
+		return
+	}
 	for _, reg := range regs {
 		for _, s := range v.c.streams.of(reg.ID) {
 			if string(s.device) == string(reg.Dev) {
 				s.offer(frame, -1)
 			}
 		}
+	}
+}
+
+// opened sends a stream that just opened, after its stored items, the voice-state of each
+// voice channel with people in it whose group the device is registered for: it missed the
+// changes before it connected (spec/api/community.md, GET stream). A channel with no
+// voice-state is empty.
+func (v *voiceRooms) opened(ctx context.Context, s *stream) {
+	if v.sfu == nil {
+		return
+	}
+	st := v.c.snapshot()
+	if st == nil || v.c.moved(st) {
+		return
+	}
+	registered := map[string]bool{} // group -> whether this device is registered for it
+	for id, ch := range st.Channels {
+		if ch.Kind != "voice" || v.room(id).Len() == 0 {
+			continue
+		}
+		group, err := v.c.carrier(ctx, st, ch)
+		if err != nil || group == nil {
+			continue
+		}
+		ok, seen := registered[string(group)]
+		if !seen {
+			regs, err := v.c.st.Regs(ctx, group)
+			if err != nil {
+				continue
+			}
+			for _, reg := range regs {
+				if reg.ID == s.id && string(reg.Dev) == string(s.device) {
+					ok = true
+				}
+			}
+			registered[string(group)] = ok
+		}
+		if !ok {
+			continue
+		}
+		v.sent.Lock()
+		if frame, n, err := v.stateFrame(id); err == nil && n > 0 {
+			s.offer(frame, -1)
+		}
+		v.sent.Unlock()
 	}
 }
 
