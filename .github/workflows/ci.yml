@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
 
+# Actions are pinned to commits, with the release in a comment: a tag can be moved, a commit
+# can't. Dependabot (.github/dependabot.yml) proposes updates.
 permissions:
   contents: read
 
@@ -12,8 +14,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
       - name: gofmt
@@ -25,11 +29,11 @@ jobs:
       - name: Build with the test clock
         run: go build -tags rerouted_testclock ./...
       - name: staticcheck
-        uses: dominikh/staticcheck-action@v1
+        uses: dominikh/staticcheck-action@9716614d4101e79b4340dd97b10e54d68234e431 # v1.4.1
         with:
           install-go: false
       - name: govulncheck
-        uses: golang/govulncheck-action@v1
+        uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
         with:
           go-version-file: go.mod
 
@@ -51,8 +55,10 @@ jobs:
           - ./internal/cchain FuzzCommunityEntry
           - ./internal/keyd FuzzKeydRequest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
       - name: Fuzz
@@ -61,7 +67,7 @@ jobs:
           go test -run '^$' -fuzz "^$2\$" -fuzztime 60s "$1"
       - name: Keep the failing input
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: fuzz-failure-${{ strategy.job-index }}
           path: internal/*/testdata/fuzz

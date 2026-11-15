@@ -37,6 +37,11 @@ A failing input is saved under the package's `testdata/fuzz/`. Commit it with th
 - Every behavior change comes with a test. A protocol rule gets a test that breaks it and checks the server refuses.
 - Keep dependencies few. Anything new needs a reason.
 
+## CI and releases
+
+- Actions in `.github/workflows/` are pinned to commits, with the release in a comment. Dependabot proposes updates, for actions and Go modules, once a week. Pin any new action the same way.
+- Pushing a tag such as `v0.2.0` runs `release.yml`. It builds `rerouted`, `rerouted-keyd`, and `rerouted-sfu` for Linux on amd64 and arm64 with `.github/build-release.sh`. It builds them again on another runner and fails unless every byte matches, and attests their provenance. Anyone can check a binary with `gh attestation verify FILE --repo rerouteholdings/rerouted`, or rebuild it with the same Go version and that script.
+
 ## Pull requests
 
 Keep each one to one change, with a description of what it does and why. By contributing, you agree that your work is licensed under MIT.

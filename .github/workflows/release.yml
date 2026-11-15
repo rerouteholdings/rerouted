@@ -1,0 +1,64 @@
+name: Release
+
+# A tag like v0.2.0 builds rerouted, rerouted-keyd, and rerouted-sfu for Linux on amd64 and
+# arm64, builds them again separately and checks every byte matches, and attests where they
+# came from (SLSA provenance, signed through Sigstore with this workflow's identity). Check a
+# download with:
+#
+#   gh attestation verify rerouted-linux-amd64 --repo rerouteholdings/rerouted
+#
+# or rebuild it from the tag with the same Go and the flags in build below, and compare.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Sigstore signing
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build
+        run: ./.github/build-release.sh dist
+      - name: Attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/rerouted*
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release
+          path: dist/
+
+  # The same build on another runner: a release whose bytes differ isn't reproducible, and
+  # fails.
+  reproduce:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build again
+        run: ./.github/build-release.sh again
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release
+          path: dist
+      - name: Compare
+        run: cd again && sha256sum -c ../dist/SHA256SUMS
