@@ -1,6 +1,7 @@
 package fed
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -54,6 +55,21 @@ func (f *Fed) PublicOnly(allow []netip.Prefix) {
 		return nil
 	}
 	f.HTTP = &c
+}
+
+// Through sends f's connections and DNS TXT lookups through dial and txt: rerouted-egress's
+// (internal/egress), when rerouted runs without a network. rerouted-egress checks each
+// address as PublicOnly would, under its own settings. After PublicOnly, redirects still
+// stay on https.
+func (f *Fed) Through(dial func(ctx context.Context, network, addr string) (net.Conn, error), txt func(ctx context.Context, name string) ([]string, error)) {
+	if t, ok := f.HTTP.Transport.(*http.Transport); ok {
+		t = t.Clone()
+		t.DialContext, t.Proxy = dial, nil
+		c := *f.HTTP
+		c.Transport = t
+		f.HTTP = &c
+	}
+	f.LookupTXT = txt
 }
 
 // guard is a net.Dialer Control function that refuses addresses PublicAddr rejects.

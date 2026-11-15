@@ -29,6 +29,7 @@ func twoServersWithStore(t *testing.T, makeStore func() store.Store) (a, b *http
 	peers := map[string]string{"a.test": "http://" + a.Listener.Addr().String(), "b.test": "http://" + b.Listener.Addr().String()}
 	mk := func(ts *httptest.Server, name string) *Server {
 		cfg := &config.Config{Name: name, PublicURL: peers[name], Handles: name, Registration: "invite", RegistrationCode: testRegCode, Dev: true, Peers: peers}
+		testEgress(t, cfg)
 		key := testKey(t, t.TempDir(), cfg)
 		st := makeStore()
 		t.Cleanup(func() { st.Close() })

@@ -50,13 +50,22 @@ func Read(r io.Reader, v any, max int) error {
 	return wire.Unmarshal(b, v)
 }
 
+// Passed answers the one listening socket systemd passes (socket activation), if it did.
+func Passed() (net.Listener, bool, error) {
+	if os.Getenv("LISTEN_PID") != strconv.Itoa(os.Getpid()) || os.Getenv("LISTEN_FDS") != "1" {
+		return nil, false, nil
+	}
+	f := os.NewFile(3, "systemd socket")
+	defer f.Close()
+	l, err := net.FileListener(f)
+	return l, true, err
+}
+
 // Listen answers the one socket systemd passes (socket activation), or listens on a new
 // unix socket at path, which the owner's group may connect to.
 func Listen(path string) (net.Listener, error) {
-	if os.Getenv("LISTEN_PID") == strconv.Itoa(os.Getpid()) && os.Getenv("LISTEN_FDS") == "1" {
-		f := os.NewFile(3, "systemd socket")
-		defer f.Close()
-		return net.FileListener(f)
+	if l, ok, err := Passed(); ok {
+		return l, err
 	}
 	if path == "" {
 		return nil, errors.New("no socket from systemd, and no -listen")

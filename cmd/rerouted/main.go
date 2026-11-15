@@ -14,6 +14,7 @@ import (
 	"errors"
 	"flag"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/rerouteholdings/rerouted/internal/api"
 	"github.com/rerouteholdings/rerouted/internal/config"
+	"github.com/rerouteholdings/rerouted/internal/ipc"
 	"github.com/rerouteholdings/rerouted/internal/keyd"
 	"github.com/rerouteholdings/rerouted/internal/serverkey"
 	"github.com/rerouteholdings/rerouted/internal/store/sqlite"
@@ -131,7 +133,20 @@ func main() {
 	if cfg.PauseMoves {
 		log.Warn("moves are paused (REROUTED_PAUSE_MOVES=on): device-signed moves to and from this server are refused")
 	}
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	// With socket activation, systemd made the listening socket, so rerouted needs no
+	// network of its own (deploy/rerouted.socket). Otherwise, REROUTED_LISTEN.
+	l, passed, err := ipc.Passed()
+	if err == nil && !passed {
+		l, err = net.Listen("tcp", cfg.Listen)
+	}
+	if err != nil {
+		log.Error("listen", "err", err)
+		os.Exit(1)
+	}
+	if passed {
+		log.Info("listening on the socket systemd passed", "addr", l.Addr().String())
+	}
+	if err := srv.Serve(l); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error("listen", "err", err)
 		os.Exit(1)
 	}

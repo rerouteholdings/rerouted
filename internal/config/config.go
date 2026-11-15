@@ -61,6 +61,10 @@ type Config struct {
 	// REROUTED_SFU: the unix socket of rerouted-sfu, which runs voice channels' SFU in a
 	// process of its own (internal/sfuipc). Empty: the SFU runs in this process.
 	SFU string
+	// REROUTED_EGRESS: the unix socket of rerouted-egress, which then makes this process's
+	// connections out, and its DNS TXT lookups, under its own policy (internal/egress).
+	// Empty: this process connects itself.
+	Egress string
 
 	// Community servers (SPEC §16). REROUTED_COMMUNITIES lists the server names this process
 	// serves as community servers, each hosting one community: name or name=url, comma-
@@ -116,6 +120,7 @@ func Load(envFile string) (*Config, error) {
 		PauseMoves:         get("REROUTED_PAUSE_MOVES", "off") == "on",
 		Keyd:               os.Getenv("REROUTED_KEYD"),
 		SFU:                os.Getenv("REROUTED_SFU"),
+		Egress:             os.Getenv("REROUTED_EGRESS"),
 	}
 	c.Defaults()
 	for _, u := range strings.Split(os.Getenv("REROUTED_TLS_ASK_ALSO"), ",") {

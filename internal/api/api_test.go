@@ -42,6 +42,7 @@ func testServerCfg(t *testing.T, st store.Store, change func(*config.Config)) *h
 	}
 	cfg := &config.Config{Name: "chat.test", Handles: "chat.test", Registration: "invite", RegistrationCode: testRegCode}
 	change(cfg)
+	testEgress(t, cfg)
 	ts := httptest.NewServer(New(cfg, key, slog.New(slog.NewTextHandler(io.Discard, nil)), st).Handler())
 	t.Cleanup(ts.Close)
 	return ts

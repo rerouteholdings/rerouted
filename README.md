@@ -116,6 +116,7 @@ Tests run against real SQLite databases in temporary directories, and the federa
 | `cmd/rerouted/` | The server and its admin commands |
 | `cmd/rerouted-keyd/` | An optional process that holds the server keys and signs for rerouted |
 | `cmd/rerouted-sfu/` | An optional process that runs voice channels' SFU for rerouted |
+| `cmd/rerouted-egress/` | An optional process that makes rerouted's connections out, so rerouted can run without a network |
 | `cmd/linetest/` | A scripted client that drives two homeservers over HTTP, for end-to-end tests |
 | `internal/api/` | HTTP routes and handlers, one file for each area of the API |
 | `internal/chain/` | Identity chains: validation, the fork rule, alerts, and clock checks |
@@ -126,6 +127,7 @@ Tests run against real SQLite databases in temporary directories, and the federa
 | `internal/config/`, `internal/serverkey/` | Settings, and the server's signing key |
 | `internal/keyd/` | rerouted-keyd: what it signs, its socket protocol, and its encrypted key bundle |
 | `internal/sfu/`, `internal/sfuipc/` | Voice channels' SFU, on Pion WebRTC, and running it in rerouted-sfu |
+| `internal/egress/` | rerouted-egress: its policy, and the dialer and TXT lookup rerouted uses through it |
 | `internal/ipc/` | Messages, peer checks, and socket activation for rerouted's processes |
 | `deploy/` | Example systemd, Caddy, and coturn configurations, and AppArmor and SELinux policies |
 | `docs/` | Guides and reference for operators |

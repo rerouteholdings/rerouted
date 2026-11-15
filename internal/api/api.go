@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/rerouteholdings/rerouted/internal/config"
+	"github.com/rerouteholdings/rerouted/internal/egress"
 	"github.com/rerouteholdings/rerouted/internal/fed"
 	"github.com/rerouteholdings/rerouted/internal/serverkey"
 	"github.com/rerouteholdings/rerouted/internal/store"
@@ -107,6 +108,12 @@ func newServer(cfg *config.Config, key serverkey.Key, log *slog.Logger, st store
 	s.fed = fed.New(cfg.Name, key, cfg.Peers)
 	if !cfg.Dev {
 		s.fed.PublicOnly(cfg.FedAllow)
+	}
+	if cfg.Egress != "" {
+		// Without a network: rerouted-egress connects, and checks where (internal/egress).
+		e := egress.Client{Path: cfg.Egress}
+		s.fed.Through(e.DialContext, e.LookupTXT)
+		s.localHTTP.Transport = &http.Transport{DialContext: e.DialContext}
 	}
 	s.fed.V = v
 	s.fed.OnClock = s.peerClock
