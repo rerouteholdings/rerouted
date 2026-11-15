@@ -1,0 +1,58 @@
+# rerouted-sfu runs voice channels' SFU for rerouted (internal/sfuipc): the UDP anyone can
+# send to, and WebRTC's parsers, in a process with no keys, no database, no settings file,
+# and nowhere to write. rerouted sends it the settings it needs when it connects. It starts
+# when rerouted first connects to its socket, and stops with rerouted.
+[Unit]
+Description=rerouted-sfu, voice channels for rerouted
+Requires=rerouted-sfu.socket
+After=rerouted-sfu.socket
+PartOf=rerouted.service
+
+[Service]
+Type=exec
+User=rerouted-sfu
+Group=rerouted-sfu
+ExecStart=/usr/local/bin/rerouted-sfu -allow-user rerouted
+UMask=0077
+Restart=on-failure
+RestartSec=2
+
+# No PrivateUsers=: it would hide which user is at the other end of the socket.
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=true
+KeyringMode=private
+
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+DevicePolicy=closed
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+InaccessiblePaths=-/var/lib/rerouted -/var/lib/rerouted-keyd -/etc/rerouted
+
+PrivateIPC=true
+RemoveIPC=true
+RestrictNamespaces=true
+
+# UDP for media, netlink to find this host's addresses, and unix sockets for rerouted's and
+# the journal's. A device's ICE candidates can't make it send to this host's own services
+# or to link-local addresses (cloud metadata): nobody's device is there.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+IPAddressDeny=localhost link-local
+
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallErrorNumber=EPERM
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true

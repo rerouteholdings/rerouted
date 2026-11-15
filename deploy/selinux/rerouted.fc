@@ -12,3 +12,8 @@
 /usr/bin/rerouted-keyd	--	gen_context(system_u:object_r:rerouted_keyd_exec_t,s0)
 /var/lib/rerouted-keyd(/.*)?	gen_context(system_u:object_r:rerouted_keyd_var_lib_t,s0)
 /run/rerouted-keyd(/.*)?	gen_context(system_u:object_r:rerouted_keyd_runtime_t,s0)
+
+# rerouted-sfu: its binary, and the socket rerouted reaches it on.
+/usr/local/bin/rerouted-sfu	--	gen_context(system_u:object_r:rerouted_sfu_exec_t,s0)
+/usr/bin/rerouted-sfu	--	gen_context(system_u:object_r:rerouted_sfu_exec_t,s0)
+/run/rerouted-sfu(/.*)?	gen_context(system_u:object_r:rerouted_sfu_runtime_t,s0)

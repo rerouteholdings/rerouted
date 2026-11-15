@@ -1,0 +1,16 @@
+# The socket rerouted reaches rerouted-sfu on. Only rerouted's group may connect, and
+# rerouted-sfu checks that the other end is rerouted's user too. Install with
+# rerouted-sfu.service and rerouted.service.d/sfu.conf (deploy/README.md).
+[Unit]
+Description=rerouted-sfu socket
+
+[Socket]
+ListenStream=/run/rerouted-sfu/sfu.sock
+SocketUser=rerouted-sfu
+SocketGroup=rerouted
+SocketMode=0660
+DirectoryMode=0755
+RemoveOnStop=true
+
+[Install]
+WantedBy=sockets.target

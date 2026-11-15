@@ -82,8 +82,9 @@ profile rerouted /usr/local/bin/rerouted flags=(enforce, attach_disconnected) {
   deny /var/lib/rerouted-keyd/ rwk,
   deny /var/lib/rerouted-keyd/** rwkmx,
 
-  # REROUTED_KEYD: rerouted-keyd's socket (deploy/rerouted-keyd.socket).
+  # REROUTED_KEYD and REROUTED_SFU: rerouted-keyd's and rerouted-sfu's sockets.
   /{run,var/run}/rerouted-keyd/keyd.sock rw,
+  /{run,var/run}/rerouted-sfu/sfu.sock rw,
 
   # REROUTED_STORE=temp: a throwaway database in a new directory under $TMPDIR.
   /tmp/ r,

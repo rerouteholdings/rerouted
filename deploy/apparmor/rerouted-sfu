@@ -1,0 +1,64 @@
+# AppArmor profile for rerouted-sfu, which runs voice channels' SFU for rerouted
+# (internal/sfuipc). Install as /etc/apparmor.d/rerouted-sfu, next to the rerouted profile:
+#
+#   sudo install -m 644 deploy/apparmor/rerouted-sfu /etc/apparmor.d/rerouted-sfu
+#   sudo apparmor_parser -r -W /etc/apparmor.d/rerouted-sfu
+#
+# It reads no settings and writes nothing: UDP, netlink to find this host's addresses, and
+# rerouted's socket are all it has.
+
+abi <abi/3.0>,
+
+include <tunables/global>
+
+# attach_disconnected: in the unit's mount namespace, a path like its socket can't be named
+# from the host's root without it.
+profile rerouted-sfu /usr/local/bin/rerouted-sfu flags=(enforce, attach_disconnected) {
+  include <abstractions/base>
+
+  deny capability,
+
+  # Media over UDP; net.Interfaces through rtnetlink; rerouted's socket and the journal's.
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+  network unix stream,
+  deny network inet stream,
+  deny network inet6 stream,
+  deny network packet,
+  deny network inet raw,
+  deny network inet6 raw,
+  /{run,var/run}/rerouted-sfu/sfu.sock rw,
+
+  /usr/local/bin/rerouted-sfu mr,
+  /usr/share/zoneinfo/** r,
+  /etc/localtime r,
+  # -allow-user: the user's ID.
+  /etc/passwd r,
+
+  # The Go runtime.
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  @{PROC}/sys/net/core/somaxconn r,
+  @{PROC}/@{pid}/cgroup r,
+  @{PROC}/@{pid}/mountinfo r,
+  @{PROC}/@{pid}/stat r,
+  /sys/fs/cgroup/{,**/}cpu.max r,
+  /sys/fs/cgroup/{,**/}cpu.cfs_{quota,period}_us r,
+  /sys/devices/system/cpu/online r,
+
+  signal (receive) set=(term, int, kill, hup) peer=unconfined,
+  signal (send, receive) peer=rerouted-sfu,
+
+  # rerouted's settings, data, and keys are never its business.
+  deny /etc/rerouted/** rwklmx,
+  deny /var/lib/rerouted{,-*}/** rwklmx,
+  deny /{usr/,}{s,}bin/** x,
+  deny ptrace,
+  deny mount,
+  deny umount,
+  deny pivot_root,
+  deny @{PROC}/sys/** w,
+  deny /sys/** w,
+
+  include if exists <local/rerouted-sfu>
+}

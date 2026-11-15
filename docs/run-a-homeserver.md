@@ -168,6 +168,49 @@ sudo systemctl start rerouted
 
 Turn off the socket first, as here: if rerouted-keyd started again, it would move the key files back.
 
+## Run voice channels apart
+
+If this server hosts communities, its voice channels' SFU takes UDP from anyone and runs WebRTC's parsers on it. Optionally, run it in rerouted-sfu, a process of its own, with no keys, no database, no settings file, and nowhere to write. rerouted sends it the voice settings when it connects. Its unit also keeps it from sending anything to this host or to link-local addresses, so a device's ICE candidates can't point it at local services or a cloud metadata service.
+
+1. Build `rerouted-sfu` with `rerouted`, then install it and create the user it runs as:
+
+   ```sh
+   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o rerouted-sfu ./cmd/rerouted-sfu
+   ```
+
+   ```sh
+   sudo install -m 755 rerouted-sfu /usr/local/bin/rerouted-sfu
+   sudo useradd --system --no-create-home --shell /usr/sbin/nologin rerouted-sfu
+   ```
+
+2. Install the units, and the drop-in that points rerouted at rerouted-sfu:
+
+   ```sh
+   sudo install -m 644 deploy/rerouted-sfu.socket deploy/rerouted-sfu.service /etc/systemd/system/
+   sudo install -D -m 644 deploy/rerouted.service.d/sfu.conf /etc/systemd/system/rerouted.service.d/sfu.conf
+   ```
+
+3. With AppArmor, add rerouted-sfu's profile, and load rerouted's again. With SELinux, the module already has rerouted-sfu's domain: build and install it again if it's older, then label the binary.
+
+   ```sh
+   sudo install -m 644 deploy/apparmor/rerouted deploy/apparmor/rerouted-sfu /etc/apparmor.d/
+   sudo apparmor_parser -r -W /etc/apparmor.d/rerouted /etc/apparmor.d/rerouted-sfu
+   ```
+
+   ```sh
+   sudo restorecon /usr/local/bin/rerouted-sfu
+   ```
+
+4. Start it, and restart rerouted:
+
+   ```sh
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now rerouted-sfu.socket
+   sudo systemctl restart rerouted
+   ```
+
+   `journalctl -u rerouted-sfu` says `SFU started`. rerouted-sfu stops and starts with rerouted, and everyone in a voice channel is disconnected then, as they are when rerouted restarts without it.
+
 ## Put Caddy in front
 
 1. Copy [`deploy/Caddyfile.example`](../deploy/Caddyfile.example) to `/etc/caddy/Caddyfile`, and replace every `chat.example` with your domain. If Caddy already serves other sites, add its blocks to your Caddyfile instead, and put the `on_demand_tls` option in your global options block.

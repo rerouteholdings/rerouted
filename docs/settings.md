@@ -16,6 +16,7 @@ rerouted checks its settings when it starts, and exits with a message naming the
 | `REROUTED_DATA_DIR` | `./data` | Where the database, files, and server key live. |
 | `REROUTED_STORE` | `sqlite` | `sqlite` keeps everything in `REROUTED_DATA_DIR`. `temp` uses a throwaway database that's deleted on shutdown, for demos. |
 | `REROUTED_KEYD` | None | The unix socket of rerouted-keyd, which holds the server keys and signs for rerouted, such as `/run/rerouted-keyd/keyd.sock`. rerouted then never reads the keys. Set by `deploy/rerouted.service.d/keyd.conf`: see [Keep the server keys apart](run-a-homeserver.md#keep-the-server-keys-apart). Without it, the keys are files in `REROUTED_DATA_DIR`. |
+| `REROUTED_SFU` | None | The unix socket of rerouted-sfu, which then runs voice channels' SFU in a process of its own, such as `/run/rerouted-sfu/sfu.sock`. Set by `deploy/rerouted.service.d/sfu.conf`: see [Run voice channels apart](run-a-homeserver.md#run-voice-channels-apart). Without it, the SFU runs in rerouted. |
 | `REROUTED_FED_ALLOW` | None | Networks other servers may be reached at although they aren't on the public internet, as addresses or CIDR prefixes, comma-separated, such as `10.20.0.0/16`. Outside dev mode, rerouted refuses to connect to loopback, link-local, private, and other non-global addresses otherwise, so nobody can point a server name or a redirect at this host's or its network's internal services. A proxy set with `HTTPS_PROXY` needs its address listed here if it's on such a network. |
 
 ## Identities and registration

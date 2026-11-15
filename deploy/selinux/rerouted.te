@@ -62,6 +62,16 @@ files_type(rerouted_keyd_var_lib_t)
 type rerouted_keyd_runtime_t;
 files_pid_file(rerouted_keyd_runtime_t)
 
+# rerouted-sfu, which runs voice channels' SFU for rerouted (REROUTED_SFU).
+type rerouted_sfu_t;
+type rerouted_sfu_exec_t;
+init_daemon_domain(rerouted_sfu_t, rerouted_sfu_exec_t)
+init_nnp_daemon_domain(rerouted_sfu_t)
+
+# /run/rerouted-sfu: the socket.
+type rerouted_sfu_runtime_t;
+files_pid_file(rerouted_sfu_runtime_t)
+
 ########################################
 #
 # rerouted local policy
@@ -145,6 +155,11 @@ allow rerouted_t rerouted_keyd_runtime_t:dir search_dir_perms;
 allow rerouted_t rerouted_keyd_runtime_t:sock_file write_sock_file_perms;
 allow rerouted_t rerouted_keyd_t:unix_stream_socket connectto;
 
+# REROUTED_SFU: rerouted-sfu, over its socket.
+allow rerouted_t rerouted_sfu_runtime_t:dir search_dir_perms;
+allow rerouted_t rerouted_sfu_runtime_t:sock_file write_sock_file_perms;
+allow rerouted_t rerouted_sfu_t:unix_stream_socket connectto;
+
 ########################################
 #
 # rerouted-keyd local policy: no network, nothing to write but its own key files.
@@ -194,3 +209,42 @@ miscfiles_read_localization(rerouted_keyd_t)
 
 logging_send_syslog_msg(rerouted_keyd_t)
 init_use_fds(rerouted_keyd_t)
+
+########################################
+#
+# rerouted-sfu local policy: UDP and netlink, rerouted's socket, and nothing to read or
+# write of its own.
+#
+
+allow rerouted_sfu_t self:process { getsched signal sigchld sigkill sigstop signull };
+allow rerouted_sfu_t self:fifo_file rw_fifo_file_perms;
+allow rerouted_sfu_t self:unix_stream_socket { create_stream_socket_perms listen accept };
+allow rerouted_sfu_t self:udp_socket create_socket_perms;
+allow rerouted_sfu_t self:netlink_route_socket r_netlink_socket_perms;
+allow rerouted_sfu_t rerouted_sfu_exec_t:file { map read execute entrypoint };
+
+# Media: UDP on ephemeral ports, or REROUTED_VOICE_UDP_PORT.
+corenet_udp_bind_generic_node(rerouted_sfu_t)
+corenet_udp_bind_all_ephemeral_ports(rerouted_sfu_t)
+allow rerouted_sfu_t rerouted_port_t:udp_socket name_bind;
+tunable_policy(`rerouted_bind_voice_port',`
+	corenet_udp_bind_all_unreserved_ports(rerouted_sfu_t)
+')
+
+# -allow-user: the user's ID.
+auth_read_passwd(rerouted_sfu_t)
+
+# The Go runtime.
+kernel_read_system_state(rerouted_sfu_t)
+kernel_read_kernel_sysctls(rerouted_sfu_t)
+kernel_read_net_sysctls(rerouted_sfu_t)
+dev_read_sysfs(rerouted_sfu_t)
+fs_getattr_all_fs(rerouted_sfu_t)
+fs_search_cgroup_dirs(rerouted_sfu_t)
+fs_read_cgroup_files(rerouted_sfu_t)
+dev_read_urand(rerouted_sfu_t)
+dev_read_rand(rerouted_sfu_t)
+miscfiles_read_localization(rerouted_sfu_t)
+
+logging_send_syslog_msg(rerouted_sfu_t)
+init_use_fds(rerouted_sfu_t)
