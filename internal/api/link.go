@@ -155,6 +155,22 @@ func (s *Server) getLinkProof(w http.ResponseWriter, r *http.Request, sess sessi
 	writeBody(w, http.StatusOK, map[string]any{"proof": wire.Raw(p.enc)})
 }
 
+// GET link/proofs: every proof waiting for the caller's own identity, parked keys included
+// (spec/api/client-stage3.md). An approving device that showed an approval code (SPEC §7.2)
+// doesn't know the new device's key yet, so it finds the new device's proof here.
+func (s *Server) listLinkProofs(w http.ResponseWriter, r *http.Request, sess session) {
+	s.links.mu.Lock()
+	defer s.links.mu.Unlock()
+	s.links.sweep(now())
+	proofs := []wire.Raw{}
+	for k, p := range s.links.m {
+		if id, _, _ := strings.Cut(k, "|"); id == sess.id {
+			proofs = append(proofs, wire.Raw(p.enc))
+		}
+	}
+	writeBody(w, http.StatusOK, map[string]any{"proofs": proofs})
+}
+
 // clientIP is the caller's address. Behind a reverse proxy on the same machine (rerouted
 // listens on localhost), it's the last X-Forwarded-For entry: the one that proxy added, for
 // the address that connected to it. Earlier entries are whatever the caller sent, unless

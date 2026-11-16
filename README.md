@@ -37,7 +37,7 @@ A version 1 identity migrates to version 2 (§6.8) in one request: the version 1
 | Encoding | §4 | I-JSON (the Internet JSON profile) with duplicate-name, UTF-8, and integer checks; strict base64url; and the JSON Canonicalization Scheme (JCS) for everything signed or hashed |
 | Discovery | §5, §8.1 | The server document and handle documents. Reserved handles can't be registered. Handle changes: a new name under the handle domain has to be free, and a name an identity stops using, by a rename or a move away, is held for it for 30 days, then freed unless the operator keeps it (`keep-handle`). |
 | Identities | §6 | Identity chains and the fork rule, vouching, tombstones, recovery with the recovery key, alerts on device changes, and moves between homeservers |
-| Devices | §7 | Two-way device approval with link proofs, wrapped account keys, versioned account data, and backups |
+| Devices | §7 | Two-way device approval with link proofs, including approval codes a new device scans (listed with `GET link/proofs`), wrapped account keys, versioned account data, and backups |
 | Contacts | §9 | Registration and contact requests by invite code; accept, decline, cancel, remove, block, and unblock; and the rate limits |
 | Delivery | §10 | Send, inbox, acknowledge, and a WebSocket stream. Deliveries to other servers wait in a durable outbox, and are retried with backoff for up to 72 hours. |
 | Groups | §11 | The hub, which orders a group's changes, with epoch keys and signed receipts; commits through a remote hub; missed commits; and hub handoff |
@@ -45,7 +45,7 @@ A version 1 identity migrates to version 2 (§6.8) in one request: the version 1
 | Files | §14 | Uploads up to 64 MiB under a quota for each identity, fetched through the recipient's own homeserver and deleted after 30 days |
 | Calls | §15.1 | Time-limited credentials for a TURN (Traversal Using Relays around NAT) relay |
 | Reports | §17 | Reports kept for the operator, and optionally forwarded to the reported identity's homeserver |
-| Community servers | §16 | Every endpoint in the community server API, for any number of server names, each hosting one community: the community chain checked as the server must check it, the hub for the members group and restricted channels' groups with code joins' external commits, channel sequence numbers, history segments, files, reports, and voice channels through an SFU (selective forwarding unit) on Pion WebRTC |
+| Community servers | §16 | Every endpoint in the community server API, for any number of server names, each hosting one community: the community chain checked as the server must check it, the hub for the members group and restricted channels' groups with code joins' external commits, channel sequence numbers, history segments, read positions, files, reports, and voice channels through an SFU (selective forwarding unit) on Pion WebRTC |
 
 What isn't built yet:
 
@@ -72,7 +72,7 @@ Set `REROUTED_COMMUNITIES` to the names to serve (see [Settings](docs/settings.m
 - History over the quota is refused, not trimmed. `replace` works only for a segment with the same start and end, after a delete recorded inside it.
 - An approval's claimed key packages are kept in memory for its 10 minutes, so a retry after a restart claims new ones.
 - Voice: a device is in one voice channel at a time. The cast limit counts devices, and losing the right to speak ends a cast. The server keeps its own offer when offers cross. Who may speak is checked again every 5 seconds, so a timeout's end takes effect.
-- Rate limits: 120 appends an hour per identity, 30 sign-in challenges an hour, 10 failed joins an hour per identity and 100 per origin domain, 5 tree uploads an hour for non-members, 50 key package claims a day per claimant and target, 50 reports a day, and 1,000 pending join requests.
+- Rate limits: 120 appends an hour per identity, 30 sign-in challenges an hour, 10 failed joins an hour per identity and 100 per origin domain, 5 tree uploads an hour for non-members, 50 key package claims a day per claimant and target, 50 reports a day, 1,200 read positions sent and 600 fetches an hour per identity, and 1,000 pending join requests.
 
 ## Try it locally
 

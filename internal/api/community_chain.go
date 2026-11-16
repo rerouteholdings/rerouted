@@ -878,6 +878,7 @@ func (c *community) afterAppend(ctx context.Context, before, st *cchain.State, a
 	for _, op := range a.Ops {
 		if op.Op == "remove-channel" {
 			c.hs.logged("deleting a removed channel's history", c.st.DeleteSegments(ctx, c.name, op.ID))
+			c.hs.logged("deleting a removed channel's read positions", c.st.DeleteChannelReads(ctx, c.name, op.ID))
 			c.voice.closeChannel(op.ID)
 		}
 	}

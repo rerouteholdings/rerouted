@@ -123,6 +123,69 @@ func (c *community) historyGet(w http.ResponseWriter, r *http.Request, sess cses
 	writeBody(w, http.StatusOK, map[string]any{"channel": id, "start": s.Start, "end": s.End, "ct": wire.Bytes(s.CT)})
 }
 
+// ---- read positions (SPEC §16.4, spec/api/community.md) ----
+
+// Read positions are sent as channels are read, and fetched every so often by each device.
+const (
+	readPutsPerHour = 1200
+	readGetsPerHour = 600
+)
+
+// readPut keeps how far the caller has read a text channel they can see: the highest number
+// sent, never lowered.
+func (c *community) readPut(w http.ResponseWriter, r *http.Request, sess csess) {
+	var req struct {
+		Channel uint64 `json:"channel"`
+		Seq     uint64 `json:"seq"`
+	}
+	if !readBody(w, r, &req) {
+		return
+	}
+	if !c.hs.limits.allow("cm-read|"+c.name+"|"+sess.id, readPutsPerHour, 3600, now(), true) {
+		rateLimited(w, 60)
+		return
+	}
+	ctx := r.Context()
+	if _, ok := c.channelFor(w, c.snapshot(), sess, req.Channel, "text"); !ok {
+		return
+	}
+	head, err := c.st.ChannelHead(ctx, c.name, req.Channel)
+	if err != nil {
+		c.hs.unavailableRead(w, "reading a channel", err)
+		return
+	}
+	if req.Seq == 0 || req.Seq > head {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "seq from 1 to the channel's newest sequence number")
+		return
+	}
+	if err := c.st.SetRead(ctx, c.name, sess.id, req.Channel, req.Seq); err != nil {
+		c.hs.unavailableRead(w, "storing a read position", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// readGet lists the caller's own read positions, for the text channels they can still see.
+func (c *community) readGet(w http.ResponseWriter, r *http.Request, sess csess) {
+	if !c.hs.limits.allow("cm-read-get|"+c.name+"|"+sess.id, readGetsPerHour, 3600, now(), true) {
+		rateLimited(w, 60)
+		return
+	}
+	reads, err := c.st.Reads(r.Context(), c.name, sess.id)
+	if err != nil {
+		c.hs.unavailableRead(w, "reading read positions", err)
+		return
+	}
+	st := c.snapshot()
+	items := []map[string]any{}
+	for _, rd := range reads {
+		if ch := st.Channels[rd.Channel]; ch != nil && ch.Kind == "text" && st.CanSee(sess.id, ch) {
+			items = append(items, map[string]any{"channel": rd.Channel, "seq": rd.Seq})
+		}
+	}
+	writeBody(w, http.StatusOK, map[string]any{"items": items})
+}
+
 // ---- files (SPEC §16.4) ----
 
 func (c *community) mediaUpload(w http.ResponseWriter, r *http.Request, sess csess) {

@@ -280,6 +280,10 @@ func (u *cmUser) commit(m *made, welcomes []any, extra map[string]any) (*wire.Co
 		d["welcomes"] = welcomes
 	}
 	for k, v := range extra {
+		if v == nil { // drops the field
+			delete(d, k)
+			continue
+		}
 		d[k] = v
 	}
 	res := u.send(d)
@@ -653,7 +657,7 @@ func TestCommunityEveryEndpointRouted(t *testing.T) {
 		"POST groups/register", "POST groups/unregister", "GET groups/AAAA/commits", "GET groups/AAAA/info", "GET groups/AAAA/tree",
 		"POST tree/upload", "POST send", "GET inbox", "POST inbox/ack", "GET channels/1/messages", "POST history/put", "GET history/list",
 		"GET history/get", "GET members/tr:aaaaaaaaaaaaaaaaaaaaaaaa/chain", "POST media/upload", "GET media/AAAA", "POST voice/move", "POST messages/delete", "POST members/kick",
-		"POST report", "GET reports", "POST reports/close", "GET icon/AAAA", "POST icon/upload"}
+		"POST report", "GET reports", "POST reports/close", "GET icon/AAAA", "POST icon/upload", "POST read", "GET read"}
 	for _, host := range []string{"", "games.test"} {
 		e.host = host
 		for _, ep := range endpoints {

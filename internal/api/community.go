@@ -290,6 +290,8 @@ func (c *community) routes(mux *http.ServeMux) {
 		"POST voice/move":                 c.authed(c.perm(cchain.Moderate, c.voiceMove)),
 		"POST messages/delete":            c.authed(c.member(c.messagesDelete)),
 		"POST members/kick":               c.authed(c.perm(cchain.Moderate, c.kick)),
+		"POST read":                       c.authed(c.member(c.readPut)),
+		"GET read":                        c.authed(c.member(c.readGet)),
 		"POST report":                     c.authed(c.member(c.report)),
 		"GET reports":                     c.authed(c.perm(cchain.Moderate, c.reports)),
 		"POST reports/close":              c.authed(c.perm(cchain.Moderate, c.reportClose)),
