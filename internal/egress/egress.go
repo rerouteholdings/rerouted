@@ -21,6 +21,7 @@ import (
 	"net/netip"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -119,6 +120,14 @@ func (s *Server) serve(c net.Conn) {
 	defer cancel()
 	switch req.Op {
 	case "txt":
+		// The one record rerouted reads is a handle's, _tieroute.{handle} (SPEC §5.3):
+		// lookups of other names would be a way to send anything out, a query at a time.
+		handle, ok := strings.CutPrefix(req.Name, "_tieroute.")
+		if !ok || !fed.ValidName(handle) {
+			s.Log.Warn("refused a lookup", "name", req.Name)
+			ipc.Write(c, response{Err: "egress: only _tieroute.{handle} is looked up"}, maxMessage)
+			return
+		}
 		txt, err := s.resolver().LookupTXT(ctx, req.Name)
 		if err != nil {
 			ipc.Write(c, response{Err: err.Error()}, maxMessage)
@@ -146,7 +155,7 @@ func (s *Server) serve(c net.Conn) {
 // dial connects to host:port as the policy allows: an address is checked as it's dialed,
 // so a name can't resolve to one address when checked and another when used.
 func (s *Server) dial(ctx context.Context, host string, port int) (net.Conn, error) {
-	if host == "" || port <= 0 || port > 65535 {
+	if _, err := netip.ParseAddr(host); (err != nil && !fed.ValidName(host)) || port <= 0 || port > 65535 {
 		return nil, errors.New("egress: bad host or port")
 	}
 	addr := net.JoinHostPort(host, strconv.Itoa(port))

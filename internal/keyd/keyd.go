@@ -21,9 +21,9 @@ import (
 	"github.com/rerouteholdings/rerouted/internal/wire"
 )
 
-// maxMessage bounds a request or response: an S2S body can carry a community's ratchet
-// tree, which may be 32 MiB.
-const maxMessage = 64 << 20
+// maxMessage bounds a request or response. The largest thing signed is an S2S request,
+// which the server it's for reads 1 MiB of at most (api.MaxBody).
+const maxMessage = 4 << 20
 
 type request struct {
 	Op  string `json:"op"` // "keys" or "sign"

@@ -142,16 +142,23 @@ func fakeDNS(records map[string][]string) *net.Resolver {
 }
 
 func TestLookupTXT(t *testing.T) {
-	c := serve(t, &Server{UID: -1, Resolver: fakeDNS(map[string][]string{"_tieroute.kat.example.": {"id=tr:abc", "v=1"}})})
+	c := serve(t, &Server{UID: -1, Resolver: fakeDNS(map[string][]string{"_tieroute.kat.example.": {"id=tr:abc", "v=1"}, "secret-data.evil.example.": {"x"}})})
 	txt, err := c.LookupTXT(context.Background(), "_tieroute.kat.example")
 	if err != nil || !slices.Equal(txt, []string{"id=tr:abc", "v=1"}) {
 		t.Fatalf("TXT: %v %v", txt, err)
+	}
+	// Only handle records: any other name would carry data out in the query itself.
+	for _, name := range []string{"secret-data.evil.example", "_tieroute.", "_tieroute.a/b", "kat.example"} {
+		if _, err := c.LookupTXT(context.Background(), name); err == nil {
+			t.Errorf("looked up %q", name)
+		}
 	}
 }
 
 func TestBadRequests(t *testing.T) {
 	c := serve(t, &Server{UID: -1})
-	for _, r := range []request{{Op: "connect", Host: "", Port: 443}, {Op: "connect", Host: "example.com", Port: 70000}, {Op: "nope"}} {
+	for _, r := range []request{{Op: "connect", Host: "", Port: 443}, {Op: "connect", Host: "example.com", Port: 70000},
+		{Op: "connect", Host: "example.com/x", Port: 443}, {Op: "connect", Host: "a b", Port: 443}, {Op: "nope"}} {
 		if _, _, err := c.ask(context.Background(), r); err == nil {
 			t.Errorf("%+v was accepted", r)
 		}
@@ -166,11 +173,11 @@ func TestPeerUID(t *testing.T) {
 		t.Skip("no SO_PEERCRED here")
 	}
 	c := serve(t, &Server{UID: os.Getuid() + 1, Resolver: fakeDNS(nil)})
-	if _, err := c.LookupTXT(context.Background(), "x.example"); err == nil {
+	if _, err := c.LookupTXT(context.Background(), "_tieroute.x.example"); err == nil {
 		t.Fatal("another user's connection was served")
 	}
-	c = serve(t, &Server{UID: os.Getuid(), Resolver: fakeDNS(map[string][]string{"x.example.": {"ok"}})})
-	if txt, err := c.LookupTXT(context.Background(), "x.example"); err != nil || len(txt) != 1 {
+	c = serve(t, &Server{UID: os.Getuid(), Resolver: fakeDNS(map[string][]string{"_tieroute.x.example.": {"ok"}})})
+	if txt, err := c.LookupTXT(context.Background(), "_tieroute.x.example"); err != nil || len(txt) != 1 {
 		t.Fatalf("the allowed user: %v %v", txt, err)
 	}
 }
