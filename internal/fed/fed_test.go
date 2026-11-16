@@ -325,7 +325,9 @@ func TestVectorS2SV2(t *testing.T) {
 	if err != nil || from != "a.example" {
 		t.Fatalf("verify: %q %v", from, err)
 	}
-	var b struct{ ID string }
+	var b struct {
+		ID string `json:"id"`
+	}
 	if wire.Unmarshal(body, &b) != nil || b.ID != "tr:cnshscx3enbgf6r7zjmj5w2z" {
 		t.Fatalf("body %s", body)
 	}

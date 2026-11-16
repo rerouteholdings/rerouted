@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf16"
 	"unicode/utf8"
 )
@@ -84,9 +85,10 @@ func Marshal(v any) ([]byte, error) {
 }
 
 // Unmarshal decodes an I-JSON body into v. Any formatting is accepted, but duplicate
-// member names, invalid UTF-8, non-integer numbers, and trailing data are rejected.
+// member names, invalid UTF-8, non-integer numbers, and trailing data are rejected, and so
+// is a member named like one of v's in another case: names are matched exactly.
 func Unmarshal(data []byte, v any) error {
-	if err := CheckIJSON(data); err != nil {
+	if err := checkIJSON(data, reflect.TypeOf(v)); err != nil {
 		return err
 	}
 	d := json.NewDecoder(bytes.NewReader(data))
@@ -97,7 +99,7 @@ func Unmarshal(data []byte, v any) error {
 // UnmarshalClosed is Unmarshal for closed schemas (SPEC §20.2): members that v's
 // struct doesn't declare are rejected instead of ignored.
 func UnmarshalClosed(data []byte, v any) error {
-	if err := CheckIJSON(data); err != nil {
+	if err := checkIJSON(data, reflect.TypeOf(v)); err != nil {
 		return err
 	}
 	d := json.NewDecoder(bytes.NewReader(data))
@@ -124,10 +126,23 @@ var (
 	ErrDuplicateName = errors.New("wire: duplicate member name")
 	ErrNotInteger    = errors.New("wire: numbers must be integers within ±(2^53 − 1)")
 	ErrSurrogate     = errors.New("wire: a lone surrogate isn't I-JSON")
+	ErrMemberCase    = errors.New("wire: member name in the wrong case")
+	ErrTooDeep       = errors.New("wire: nested too deeply")
 )
 
-// CheckIJSON verifies data is exactly one I-JSON value (RFC 7493) with integer numbers.
-func CheckIJSON(data []byte) error {
+// MaxDepth is how deeply a value's arrays and objects may nest. Nothing in the protocol
+// comes near it, and each level costs memory to check.
+const MaxDepth = 128
+
+// CheckIJSON verifies data is exactly one I-JSON value (RFC 7493) with integer numbers,
+// nested no deeper than MaxDepth.
+func CheckIJSON(data []byte) error { return checkIJSON(data, nil) }
+
+// checkIJSON is CheckIJSON for a value about to be decoded into a Go value of type root
+// (nil for any). It also refuses a member whose name matches one of a struct's fields in
+// everything but case (ErrMemberCase): encoding/json would take "ID" for "id", so an object
+// a stricter reader refuses, or reads differently, would be accepted here.
+func checkIJSON(data []byte, root reflect.Type) error {
 	if !utf8.Valid(data) {
 		return errors.New("wire: invalid UTF-8")
 	}
@@ -137,12 +152,15 @@ func CheckIJSON(data []byte) error {
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.UseNumber()
 	type frame struct {
-		obj   bool
-		names map[string]bool
-		key   bool // in an object: the next token is a member name (or '}')
+		obj    bool
+		names  map[string]bool
+		key    bool         // in an object: the next token is a member name (or '}')
+		fields *fieldSet    // the struct this object decodes into, if it's one
+		elem   reflect.Type // what this array's elements, or this map's values, decode into
 	}
 	var stack []*frame
 	values := 0
+	next := root // the Go type the next value decodes into; nil if unknown
 	// valueDone marks the end of a value: in an object, a member name comes next.
 	valueDone := func() {
 		if len(stack) == 0 {
@@ -172,11 +190,37 @@ func CheckIJSON(data []byte) error {
 			}
 			top.names[name] = true
 			top.key = false
+			next = top.elem
+			if top.fields != nil {
+				t, ok := top.fields.exact[name]
+				if !ok && top.fields.folds(name) {
+					return fmt.Errorf("%w: %q", ErrMemberCase, name)
+				}
+				next = t
+			}
 			continue
+		}
+		if n := len(stack); n > 0 && !stack[n-1].obj {
+			next = stack[n-1].elem
 		}
 		switch t := tok.(type) {
 		case json.Delim: // '{' or '['
-			stack = append(stack, &frame{obj: t == '{', names: map[string]bool{}, key: t == '{'})
+			if len(stack) >= MaxDepth {
+				return ErrTooDeep
+			}
+			f := &frame{obj: t == '{', key: t == '{'}
+			into := container(next)
+			if f.obj {
+				f.names = map[string]bool{}
+				if into != nil && into.Kind() == reflect.Struct {
+					f.fields = fieldsOf(into)
+				} else if into != nil && into.Kind() == reflect.Map {
+					f.elem = into.Elem()
+				}
+			} else if into != nil && (into.Kind() == reflect.Slice || into.Kind() == reflect.Array) {
+				f.elem = into.Elem()
+			}
+			stack = append(stack, f)
 			continue
 		case json.Number:
 			if _, err := parseInt(t); err != nil {
@@ -189,6 +233,83 @@ func CheckIJSON(data []byte) error {
 		return errors.New("wire: expected exactly one JSON value")
 	}
 	return nil
+}
+
+var unmarshalerType = reflect.TypeFor[json.Unmarshaler]()
+
+// container is the struct, map, slice, or array type a JSON object or array decodes into
+// for a Go value of type t, or nil if that's unknown: an interface, or a type that decodes
+// itself (wire.Raw, which is checked when it's decoded in turn).
+func container(t reflect.Type) reflect.Type {
+	for t != nil {
+		if t.Implements(unmarshalerType) || reflect.PointerTo(t).Implements(unmarshalerType) {
+			return nil
+		}
+		if t.Kind() != reflect.Pointer {
+			break
+		}
+		t = t.Elem()
+	}
+	if t == nil || t.Kind() == reflect.Interface {
+		return nil
+	}
+	return t
+}
+
+// fieldSet is a struct's JSON member names, as encoding/json sees them.
+type fieldSet struct {
+	exact map[string]reflect.Type
+	names []string
+}
+
+// folds reports whether name matches a field's name in everything but case.
+func (f *fieldSet) folds(name string) bool {
+	for _, n := range f.names {
+		if strings.EqualFold(n, name) {
+			return true
+		}
+	}
+	return false
+}
+
+var fieldSets sync.Map // reflect.Type -> *fieldSet
+
+func fieldsOf(t reflect.Type) *fieldSet {
+	if f, ok := fieldSets.Load(t); ok {
+		return f.(*fieldSet)
+	}
+	fs := &fieldSet{exact: map[string]reflect.Type{}}
+	var add func(t reflect.Type, depth int)
+	add = func(t reflect.Type, depth int) {
+		for i := 0; i < t.NumField(); i++ {
+			f := t.Field(i)
+			tag, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+			if tag == "-" {
+				continue
+			}
+			if f.Anonymous && tag == "" {
+				// An embedded struct's fields are the outer one's, unless it names one itself.
+				if et := container(f.Type); et != nil && et.Kind() == reflect.Struct && depth < 8 {
+					add(et, depth+1)
+					continue
+				}
+			}
+			if !f.IsExported() {
+				continue
+			}
+			name := tag
+			if name == "" {
+				name = f.Name
+			}
+			if _, dup := fs.exact[name]; !dup {
+				fs.exact[name] = f.Type
+				fs.names = append(fs.names, name)
+			}
+		}
+	}
+	add(t, 0)
+	fieldSets.Store(t, fs)
+	return fs
 }
 
 // checkSurrogates refuses a \u escape of a surrogate that isn't half of a pair: I-JSON has

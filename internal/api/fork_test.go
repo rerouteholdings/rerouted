@@ -38,7 +38,10 @@ func TestRecoveryForkPropagates(t *testing.T) {
 	a, b, _, _ := twoServers(t)
 	kat := newUserOn(t, a, "kat", "a.test")
 	bob := newUserOn(t, b, "bob", "b.test")
-	var res struct{ ID, Home string }
+	var res struct {
+		ID   string `json:"id"`
+		Home string `json:"home"`
+	}
 	call(t, a, "GET", "resolve/bob.b.test", kat.token, nil, &res)
 	req := signed(t, "contact-request", map[string]any{"from": kat.id, "to": bob.id, "ts": time.Now().Unix(), "nonce": randBytes(16), "invite": bob.invite(false)}, kat.dev)
 	call(t, a, "POST", "contacts/request", kat.token, map[string]any{"request": req}, nil)

@@ -75,7 +75,11 @@ func FuzzKeydRequest(f *testing.F) {
 			if c, err := wire.Canonical([]byte(req.B)); err != nil || !bytes.Equal(c, []byte(req.B)) {
 				t.Fatalf("signed a body that isn't canonical: %q", req.B)
 			}
-			var names struct{ From, Hub, Server string }
+			var names struct {
+				From   string `json:"from"`
+				Hub    string `json:"hub"`
+				Server string `json:"server"`
+			}
 			wire.Unmarshal([]byte(req.B), &names)
 			name := map[string]string{"s2s": names.From, "commit-receipt": names.Hub}[req.T]
 			if name == "" {

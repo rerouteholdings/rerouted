@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -198,5 +199,75 @@ func TestLoneSurrogate(t *testing.T) {
 		if err := CheckIJSON([]byte(s)); err != nil {
 			t.Errorf("%s: %v", s, err)
 		}
+	}
+}
+
+// Member names are matched exactly: encoding/json alone would take "ID" for "id", and an
+// object a stricter reader refuses would be accepted here.
+func TestMemberNamesExact(t *testing.T) {
+	type inner struct {
+		Op  string `json:"op"`
+		Key Bytes  `json:"key,omitempty"`
+	}
+	type embedded struct {
+		Extra int `json:"extra"`
+	}
+	type outer struct {
+		embedded
+		ID    string           `json:"id"`
+		Ops   []inner          `json:"ops"`
+		ByKey map[string]inner `json:"by_key"`
+		Ptr   *inner           `json:"ptr"`
+		Raw   Raw              `json:"raw"`
+		Any   any              `json:"any"`
+		Plain string
+		skip  int
+	}
+	_ = outer{}.skip
+	for _, s := range []string{
+		`{"ID":"x"}`, `{"Id":"x"}`, `{"id":"x","ID":"y"}`, `{"ops":[{"OP":"a"}]}`, `{"ops":[{"op":"a"},{"Op":"b"}]}`,
+		`{"by_key":{"k":{"OP":"a"}}}`, `{"ptr":{"Key":"AA"}}`, `{"EXTRA":1}`, `{"plain":"x"}`, `{"By_Key":{}}`,
+	} {
+		var v outer
+		if err := Unmarshal([]byte(s), &v); !errors.Is(err, ErrMemberCase) {
+			t.Errorf("Unmarshal %s: %v, want ErrMemberCase", s, err)
+		}
+		if err := UnmarshalClosed([]byte(s), &v); !errors.Is(err, ErrMemberCase) {
+			t.Errorf("UnmarshalClosed %s: %v, want ErrMemberCase", s, err)
+		}
+	}
+	// Exact names decode as ever. What isn't decoded here isn't judged here: map keys, raw
+	// members (checked when they're decoded), and any.
+	var v outer
+	ok := `{"id":"x","extra":2,"ops":[{"op":"a","key":"AA"}],"by_key":{"OP":{"op":"b"}},"ptr":{"op":"c"},"raw":{"ID":1},"any":{"ID":1},"Plain":"p","other":{"ID":1}}`
+	if err := Unmarshal([]byte(ok), &v); err != nil || v.ID != "x" || v.Extra != 2 || len(v.Ops) != 1 || v.ByKey["OP"].Op != "b" || v.Ptr.Op != "c" || v.Plain != "p" {
+		t.Fatalf("exact names: %v %+v", err, v)
+	}
+	var e ChainEntry
+	if err := UnmarshalClosed([]byte(`{"ID":"tr:x","SEQ":3,"Ops":[]}`), &e); !errors.Is(err, ErrMemberCase) {
+		t.Fatalf("a chain entry with its names in capitals: %v", err)
+	}
+	var m map[string]any
+	if err := Unmarshal([]byte(`{"ID":1,"id":2}`), &m); err != nil || len(m) != 2 {
+		t.Fatalf("a map keeps both: %v", err)
+	}
+}
+
+// A value may nest MaxDepth deep, and no deeper: each level costs memory to check.
+func TestMaxDepth(t *testing.T) {
+	deep := func(n int) []byte {
+		return []byte(strings.Repeat("[", n) + strings.Repeat("]", n))
+	}
+	if err := CheckIJSON(deep(MaxDepth)); err != nil {
+		t.Fatalf("%d levels: %v", MaxDepth, err)
+	}
+	if err := CheckIJSON(deep(MaxDepth + 1)); !errors.Is(err, ErrTooDeep) {
+		t.Fatalf("%d levels: %v", MaxDepth+1, err)
+	}
+	if err := CheckIJSON([]byte(strings.Repeat(`{"a":`, MaxDepth+1) + "1" + strings.Repeat("}", MaxDepth+1))); !errors.Is(err, ErrTooDeep) {
+		t.Fatalf("objects: %v", err)
+	}
+	if err := CheckIJSON([]byte(strings.Repeat("[", 1<<20))); !errors.Is(err, ErrTooDeep) {
+		t.Fatalf("a megabyte of [: %v", err)
 	}
 }

@@ -93,7 +93,10 @@ func TestPushAndRemoteHub(t *testing.T) {
 	bob := newUserOn(t, b, "bob", "b.test")
 
 	// Connect them (Kat asks, Bob accepts), with Bob's server as the hub.
-	var res struct{ ID, Home string }
+	var res struct {
+		ID   string `json:"id"`
+		Home string `json:"home"`
+	}
 	call(t, a, "GET", "resolve/bob.b.test", kat.token, nil, &res)
 	req := signed(t, "contact-request", map[string]any{"from": kat.id, "to": bob.id, "ts": time.Now().Unix(), "nonce": randBytes(16), "invite": bob.invite(false)}, kat.dev)
 	call(t, a, "POST", "contacts/request", kat.token, map[string]any{"request": req}, nil)
@@ -146,7 +149,10 @@ func TestPushAndRemoteHub(t *testing.T) {
 	for time.Now().Before(deadline) {
 		for _, it := range bob.inbox() {
 			if it.Notice != nil {
-				var n struct{ T, ID string }
+				var n struct {
+					T  string `json:"t"`
+					ID string `json:"id"`
+				}
 				wire.Unmarshal(it.Notice, &n)
 				if n.T == "chain-update" && n.ID == kat.id {
 					var ch struct {

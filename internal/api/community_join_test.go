@@ -434,8 +434,9 @@ func TestCommunityHistory(t *testing.T) {
 		t.Fatalf("list: %+v", list)
 	}
 	var seg struct {
-		Start, End uint64
-		CT         wire.Bytes `json:"ct"`
+		Start uint64     `json:"start"`
+		End   uint64     `json:"end"`
+		CT    wire.Bytes `json:"ct"`
 	}
 	if c := e.call("GET", "history/get?channel=1&start=1", kat.tok, nil, &seg); c != 200 || !bytes.Equal(seg.CT, ct2) {
 		t.Fatalf("get: %d", c)
