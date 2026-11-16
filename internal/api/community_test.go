@@ -283,6 +283,10 @@ func (u *cmUser) commit(m *made, welcomes []any, extra map[string]any) (*wire.Co
 		d["welcomes"] = welcomes
 	}
 	for k, v := range extra {
+		if v == nil { // drops the field
+			delete(d, k)
+			continue
+		}
 		d[k] = v
 	}
 	res := u.send(d)

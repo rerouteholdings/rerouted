@@ -451,6 +451,12 @@ func (c *community) groupInfo(w http.ResponseWriter, r *http.Request, sess csess
 	if !ok || !c.treeAccess(w, r, sess, g) {
 		return
 	}
+	// A restricted channel's group may have committed without one (spec/api/community.md):
+	// then there's none for this epoch, never an older epoch's (SPEC §16.6).
+	if len(g.Info) == 0 {
+		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "no GroupInfo for the current epoch")
+		return
+	}
 	writeBody(w, http.StatusOK, map[string]any{"epoch": g.Epoch, "info": wire.Bytes(g.Info), "tree": wire.Bytes(g.Tree), "size": g.TreeSize})
 }
 

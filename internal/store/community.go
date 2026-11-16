@@ -64,7 +64,7 @@ type CAccept struct {
 	Key      []byte
 	Awaiting bool
 	Commit   CCommit
-	Info     []byte // nil keeps none
+	Info     []byte // nil: the new epoch has none, and the old one's is cleared
 	Tree     []byte
 	TreeSize int64
 	// Join, for a code join: the same transaction counts the code's use (ErrOverQuota if

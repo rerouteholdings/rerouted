@@ -566,13 +566,10 @@ func (c communities) Accept(ctx context.Context, a store.CAccept) error {
 		a.Group, a.Epoch, a.Commit.Data, a.Commit.Receipt, a.Commit.Request, a.Commit.Proof, a.Commit.TS); err != nil {
 		return err
 	}
-	q := "UPDATE cm_groups SET epoch = ?, key = ?, awaiting = ? WHERE grp = ?"
-	args := []any{a.Epoch + 1, a.Key, a.Awaiting, a.Group}
-	if a.Info != nil {
-		q = "UPDATE cm_groups SET epoch = ?, key = ?, awaiting = ?, info = ?, tree = ?, tree_size = ? WHERE grp = ?"
-		args = []any{a.Epoch + 1, a.Key, a.Awaiting, a.Info, a.Tree, a.TreeSize, a.Group}
-	}
-	if _, err := tx.ExecContext(ctx, q, args...); err != nil {
+	// A commit without a GroupInfo clears the old one: the old epoch's GroupInfo next to
+	// the new epoch number is a pair a joiner would have to refuse (SPEC §16.6).
+	if _, err := tx.ExecContext(ctx, "UPDATE cm_groups SET epoch = ?, key = ?, awaiting = ?, info = ?, tree = ?, tree_size = ? WHERE grp = ?",
+		a.Epoch+1, a.Key, a.Awaiting, a.Info, a.Tree, a.TreeSize, a.Group); err != nil {
 		return err
 	}
 	if a.Tree != nil {

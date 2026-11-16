@@ -192,6 +192,27 @@ func TestCommunityRestrictedGroups(t *testing.T) {
 	if res := mia.say(staff, 1, "x"); res.Error != wire.ErrCodeNotAllowed {
 		t.Fatalf("mia in the staff group: %+v", res)
 	}
+	// A commit without a GroupInfo: the old epoch's isn't served next to the new epoch.
+	sg := "groups/" + base64.RawURLEncoding.EncodeToString(staff.group) + "/info"
+	var gi struct {
+		Epoch uint64     `json:"epoch"`
+		Info  wire.Bytes `json:"info"`
+	}
+	if c := e.call("GET", sg, ravi.tok, nil, &gi); c != 200 || gi.Epoch != 0 || string(gi.Info) != "i" {
+		t.Fatalf("staff GroupInfo at epoch 0: %d %+v", c, gi)
+	}
+	if _, res := kat.commit(staff, nil, map[string]any{"info": nil, "tree": nil}); res.Status != "sent" {
+		t.Fatalf("staff commit without a GroupInfo: %+v", res)
+	}
+	if c, code := e.errOf("GET", sg, ravi.tok, nil); c != 404 || code != wire.ErrCodeNotFound {
+		t.Fatalf("GroupInfo after a commit without one: %d %s", c, code)
+	}
+	if _, res := kat.commit(staff, nil, nil); res.Status != "sent" {
+		t.Fatalf("staff commit with a GroupInfo: %+v", res)
+	}
+	if c := e.call("GET", sg, ravi.tok, nil, &gi); c != 200 || gi.Epoch != 2 || string(gi.Info) != "info" {
+		t.Fatalf("staff GroupInfo at epoch 2: %d %+v", c, gi)
+	}
 	got := 0
 	for _, d := range deliveries(t, ravi.inbox()) {
 		if d.Channel == 1 {
