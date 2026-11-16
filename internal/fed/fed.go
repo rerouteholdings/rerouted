@@ -57,7 +57,10 @@ type Fed struct {
 	Now func() int64
 
 	mu         sync.Mutex
-	docs       map[string]cachedDoc
+	docs       map[string]cachedDoc // other servers' documents (docs.go)
+	docBytes   int                  // their size, as fetched
+	failed     map[string]failedDoc
+	fetching   map[string]*docFetching
 	refreshing map[string]bool
 	nonces     map[string]int64
 	nextSweep  int64
@@ -70,11 +73,6 @@ type UnavailableError struct{ Err error }
 
 func (e *UnavailableError) Error() string { return "unavailable: " + e.Err.Error() }
 func (e *UnavailableError) Unwrap() error { return e.Err }
-
-type cachedDoc struct {
-	doc     Doc
-	fetched time.Time
-}
 
 // Doc is the part of a server document (SPEC §5.1) federation uses.
 type Doc struct {
@@ -186,6 +184,9 @@ func (f *Fed) base(name string) (url, host string) {
 }
 
 func (f *Fed) get(ctx context.Context, name, path string) ([]byte, error) {
+	if !ValidName(name) {
+		return nil, fmt.Errorf("%q isn't a DNS name", name)
+	}
 	base, host := f.base(name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+path, nil)
 	if err != nil {
@@ -206,66 +207,6 @@ func (f *Fed) get(ctx context.Context, name, path string) ([]byte, error) {
 		return nil, fmt.Errorf("GET %s%s: %s", name, path, resp.Status)
 	}
 	return b, nil
-}
-
-// ServerDoc fetches (and caches) another server's document. One that's about to expire
-// is refreshed in the background, and the cached copy used meanwhile.
-func (f *Fed) ServerDoc(ctx context.Context, name string) (Doc, error) {
-	f.mu.Lock()
-	c, ok := f.docs[name]
-	f.mu.Unlock()
-	if ok {
-		if age := time.Since(c.fetched); age < docTTL {
-			if age >= docTTL-docRefresh {
-				f.refreshDoc(name)
-			}
-			return c.doc, nil
-		}
-	}
-	return f.fetchDoc(ctx, name)
-}
-
-// refreshDoc fetches name's document in the background, unless that's already under way.
-// If it fails, the cached copy stays until it expires, and is then fetched as usual.
-func (f *Fed) refreshDoc(name string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.refreshing[name] {
-		return
-	}
-	if f.refreshing == nil {
-		f.refreshing = map[string]bool{}
-	}
-	f.refreshing[name] = true
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		f.fetchDoc(ctx, name)
-		f.mu.Lock()
-		delete(f.refreshing, name)
-		f.mu.Unlock()
-	}()
-}
-
-func (f *Fed) fetchDoc(ctx context.Context, name string) (Doc, error) {
-	b, err := f.get(ctx, name, "/.well-known/tieroute/server")
-	if err != nil {
-		return Doc{}, err
-	}
-	var d Doc
-	if err := wire.Unmarshal(b, &d); err != nil {
-		return Doc{}, err
-	}
-	if d.Name != name {
-		return Doc{}, fmt.Errorf("server document for %s names %q", name, d.Name)
-	}
-	f.mu.Lock()
-	if f.docs == nil {
-		f.docs = map[string]cachedDoc{}
-	}
-	f.docs[name] = cachedDoc{doc: d, fetched: time.Now()}
-	f.mu.Unlock()
-	return d, nil
 }
 
 // KeyFor finds a server's wire version 1 public key by key ID, valid at time t.
@@ -377,6 +318,31 @@ func (f *Fed) Call(ctx context.Context, dest, path string, body []byte) ([]byte,
 // MaxResponse is the largest S2S response read: a 64 MiB file plus its tag (SPEC §14).
 const MaxResponse = 64<<20 + 1024
 
+// Responses over smallResponse are read a few at a time, by every Fed together: a peer
+// that answers every call with 64 MiB can't have this server hold dozens of them at once.
+const (
+	smallResponse = 1 << 20
+	bigResponses  = 6
+)
+
+var bigResponse = make(chan struct{}, bigResponses)
+
+// readResponse reads an S2S response of up to MaxResponse bytes.
+func readResponse(ctx context.Context, body io.Reader) ([]byte, error) {
+	b, _ := io.ReadAll(io.LimitReader(body, smallResponse+1))
+	if len(b) <= smallResponse {
+		return b, nil
+	}
+	select {
+	case bigResponse <- struct{}{}:
+		defer func() { <-bigResponse }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	rest, _ := io.ReadAll(io.LimitReader(body, MaxResponse-int64(len(b))))
+	return append(b, rest...), nil
+}
+
 // Fetch is Call, also returning the response's content type, for media/fetch, whose
 // answer is raw bytes rather than JSON.
 func (f *Fed) Fetch(ctx context.Context, dest, path string, body []byte) (string, []byte, error) {
@@ -407,7 +373,10 @@ func (f *Fed) Fetch(ctx context.Context, dest, path string, body []byte) (string
 	}
 	defer resp.Body.Close()
 	f.noteDate(dest, resp.Header.Get("Date"), sent, time.Now())
-	b, _ := io.ReadAll(io.LimitReader(resp.Body, MaxResponse))
+	b, err := readResponse(ctx, resp.Body)
+	if err != nil {
+		return "", nil, err
+	}
 	if resp.StatusCode/100 != 2 {
 		var e wire.Error
 		wire.Unmarshal(b, &e)
@@ -458,6 +427,8 @@ func (f *Fed) Verify(ctx context.Context, raw []byte, path string) (from string,
 	}
 	now := f.now()
 	switch {
+	case !ValidName(req.From):
+		return "", nil, errors.New("the sender isn't a server name")
 	case req.To != f.Name:
 		return "", nil, fmt.Errorf("request is for %q", req.To)
 	case req.Path != path:
@@ -535,6 +506,9 @@ func (f *Fed) resolveTXT(ctx context.Context, handle string) (HandleDoc, error) 
 	lookup := f.LookupTXT
 	if lookup == nil {
 		lookup = net.DefaultResolver.LookupTXT
+	}
+	if !ValidName(handle) {
+		return HandleDoc{}, fmt.Errorf("%q isn't a DNS name", handle)
 	}
 	recs, err := lookup(ctx, "_tieroute."+handle)
 	if err != nil {
