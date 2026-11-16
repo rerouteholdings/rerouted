@@ -5,6 +5,7 @@ These files are starting points for running rerouted on a Linux server. [Run a h
 | File | What it is | Install it as |
 |---|---|---|
 | `rerouted.service` | A systemd unit for one rerouted instance, locked down to its own data directory and the network | `/etc/systemd/system/rerouted.service` |
+| `install-ubuntu.sh` | Installs rerouted from binaries on Ubuntu 22.04 or later, using the files in this directory: the users, the settings with a new registration code, the units, and the AppArmor profiles. With the other three binaries next to rerouted's, it sets up rerouted-keyd, rerouted-sfu, and rerouted-egress too, where systemd is new enough (Ubuntu 24.04). It leaves nginx and Caddy configurations for your names in `/etc/rerouted`, and turns the nginx ones on if nginx is installed and it finds a certificate. `sudo deploy/install-ubuntu.sh BINARIES NAME [HANDLES]` | Run it, as root |
 | `Caddyfile.example` | Caddy in front of rerouted, with certificates on demand for handle subdomains | `/etc/caddy/Caddyfile`, or merged into yours |
 | `apparmor/rerouted` | An AppArmor profile confining rerouted to its settings, data directory, and network, for Debian and Ubuntu | `/etc/apparmor.d/rerouted` |
 | `selinux/rerouted.te`, `.fc`, `.if` | An SELinux policy module doing the same, for Fedora, RHEL, and their relatives, with rerouted-keyd's, rerouted-sfu's, and rerouted-egress's domains | Built into `rerouted.pp`, then `semodule -i` |

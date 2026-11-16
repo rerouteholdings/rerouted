@@ -1,9 +1,9 @@
 name: Release
 
-# A tag like v0.2.0 builds rerouted, rerouted-keyd, and rerouted-sfu for Linux on amd64 and
-# arm64, builds them again separately and checks every byte matches, and attests where they
-# came from (SLSA provenance, signed through Sigstore with this workflow's identity). Check a
-# download with:
+# A tag like v0.2.0 builds rerouted, rerouted-keyd, rerouted-sfu, and rerouted-egress for
+# Linux on amd64 and arm64, builds them again separately and checks every byte matches, and
+# attests where they came from (SLSA provenance, signed through Sigstore with this workflow's
+# identity). Check a download with:
 #
 #   gh attestation verify rerouted-linux-amd64 --repo rerouteholdings/rerouted
 #
