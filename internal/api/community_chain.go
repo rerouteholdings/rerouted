@@ -651,6 +651,22 @@ func (c *community) chainRead(w http.ResponseWriter, r *http.Request) {
 	writeBody(w, http.StatusOK, map[string]any{"entries": items, "head": st.Seq})
 }
 
+// membersList is GET members: the server's membership list, with each member's home, for
+// re-creating the community's groups (SPEC §16.5). The route allows the owner and
+// members with administrate.
+func (c *community) membersList(w http.ResponseWriter, r *http.Request, _ csess) {
+	ms, err := c.st.Members(r.Context(), c.name)
+	if err != nil {
+		c.hs.unavailableRead(w, "listing members", err)
+		return
+	}
+	items := make([]map[string]any, len(ms))
+	for i, m := range ms {
+		items[i] = map[string]any{"id": m.ID, "home": m.Home}
+	}
+	writeBody(w, http.StatusOK, map[string]any{"items": items})
+}
+
 // GET members/{id}/chain: the community server's copy of a member's identity chain, as it
 // last fetched it, for members and code access. Members can't otherwise find the chains of
 // signers and joiners on homeservers they don't know. The chain is self-certifying; a client

@@ -202,10 +202,51 @@ func (c *community) mayReceive(st *cchain.State, g *store.CGroup, id string) boo
 	return g.See == "" || seesList(st, id, g.See)
 }
 
+// current follows a replaced group to the group that replaces it now (SPEC §16.5): the
+// group's own ID if it isn't replaced.
+func (c *community) current(ctx context.Context, g *store.CGroup) ([]byte, error) {
+	for i := 0; g.Replaced != nil; i++ {
+		if i > 1000 {
+			return nil, errors.New("a replacement cycle")
+		}
+		next, err := c.st.Group(ctx, g.Replaced)
+		if err != nil {
+			return nil, err
+		}
+		g = next
+	}
+	return g.Group, nil
+}
+
+// writeReplaced answers 409 replaced for a replaced group, naming the group that replaces
+// it now (spec/api/conventions.md).
+func (c *community) writeReplaced(w http.ResponseWriter, ctx context.Context, g *store.CGroup) {
+	cur, err := c.current(ctx, g)
+	if err != nil {
+		c.hs.unavailableRead(w, "following a replaced group", err)
+		return
+	}
+	writeBody(w, http.StatusConflict, wire.Error{Code: wire.ErrCodeReplaced, Msg: "this group was re-created", Group: cur})
+}
+
+// parseSee reads a see list from a request, as a cchain.SeeKey.
+func parseSee(see []json.Number) (string, bool) {
+	list := make([]uint64, len(see))
+	for i, n := range see {
+		v, err := strconv.ParseUint(string(n), 10, 64)
+		if err != nil {
+			return "", false
+		}
+		list[i] = v
+	}
+	return cchain.SeeKey(list), true
+}
+
 func (c *community) groupCreate(w http.ResponseWriter, r *http.Request, sess csess) {
 	var req struct {
 		groupReg
-		See []json.Number `json:"see,omitempty"`
+		See      []json.Number `json:"see,omitempty"`
+		Replaces wire.Bytes    `json:"replaces,omitempty"`
 	}
 	if !readBody(w, r, &req) {
 		return
@@ -219,6 +260,10 @@ func (c *community) groupCreate(w http.ResponseWriter, r *http.Request, sess cse
 	member, err := c.isMember(ctx, sess.id)
 	if err != nil {
 		c.hs.unavailableRead(w, "checking membership", err)
+		return
+	}
+	if req.Replaces != nil {
+		c.groupReplace(w, ctx, sess, st, member, req.groupReg, req.See, req.Replaces)
 		return
 	}
 	see := ""
@@ -237,16 +282,11 @@ func (c *community) groupCreate(w http.ResponseWriter, r *http.Request, sess cse
 			writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "needs administrate")
 			return
 		}
-		list := make([]uint64, len(req.See))
-		for i, n := range req.See {
-			v, err := strconv.ParseUint(string(n), 10, 64)
-			if err != nil {
-				writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "see")
-				return
-			}
-			list[i] = v
+		var ok bool
+		if see, ok = parseSee(req.See); !ok {
+			writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "see")
+			return
 		}
-		see = cchain.SeeKey(list)
 		carried := false
 		for _, ch := range st.Channels {
 			if st.Restricted(ch) && cchain.SeeKey(ch.See) == see {
@@ -263,7 +303,7 @@ func (c *community) groupCreate(w http.ResponseWriter, r *http.Request, sess cse
 			return
 		}
 		for _, g := range groups {
-			if g.See == see {
+			if g.See == see && g.Replaced == nil {
 				writeError(w, http.StatusConflict, wire.ErrCodeAlreadyExists, "another group carries that see list")
 				return
 			}
@@ -287,6 +327,69 @@ func (c *community) groupCreate(w http.ResponseWriter, r *http.Request, sess cse
 	if c.mayReceive(st, &g, sess.id) {
 		c.hs.logged("registering a group's creator", c.st.Register(ctx, c.name, req.Group, sess.id, sess.dev))
 	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// groupReplace registers a group in place of one of the community's groups, re-creating it
+// (SPEC §16.5): for the owner and members with administrate, as of the newest chain entry.
+func (c *community) groupReplace(w http.ResponseWriter, ctx context.Context, sess csess, st *cchain.State, member bool, reg groupReg, seeReq []json.Number, replaces []byte) {
+	if !member || !st.Has(sess.id, cchain.Administrate) {
+		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "re-creating the community's groups needs administrate")
+		return
+	}
+	old, err := c.st.Group(ctx, replaces)
+	if errors.Is(err, store.ErrNotFound) || (err == nil && old.Name != c.name) {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "replaces isn't a group of this community")
+		return
+	}
+	if err != nil {
+		c.hs.unavailableRead(w, "reading a group", err)
+		return
+	}
+	if old.Replaced != nil {
+		c.writeReplaced(w, ctx, old)
+		return
+	}
+	// The members group is replaced with no see list; a restricted channel's group with its
+	// own, or none.
+	if seeReq != nil {
+		see, ok := parseSee(seeReq)
+		if !ok || old.See == "" || see != old.See {
+			writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "see doesn't match the group it replaces")
+			return
+		}
+	}
+	size, ok := c.checkReg(w, ctx, reg)
+	if !ok {
+		return
+	}
+	g := store.CGroup{Name: c.name, Group: reg.Group, See: old.See, Epoch: reg.Epoch, Key: reg.EpochKey, Info: reg.Info, Tree: reg.Tree, TreeSize: size}
+	switch err := c.st.ReplaceGroup(ctx, g, replaces); {
+	case errors.Is(err, store.ErrConflict):
+		writeError(w, http.StatusConflict, wire.ErrCodeAlreadyExists, "")
+		return
+	case errors.Is(err, store.ErrReplaced):
+		// Another re-creation got there first.
+		if old, err = c.st.Group(ctx, replaces); err != nil {
+			c.hs.unavailableRead(w, "reading a group", err)
+			return
+		}
+		c.writeReplaced(w, ctx, old)
+		return
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "replaces isn't a group of this community")
+		return
+	case err != nil:
+		c.hs.unavailableRead(w, "replacing a group", err)
+		return
+	}
+	c.hs.logged("keeping a group's tree", c.st.UseTree(ctx, c.name, reg.Tree, reg.Group, reg.Epoch, now()+treeKeep))
+	// The device that re-created the group is in it; everyone else is registered as their
+	// Welcome is delivered.
+	if c.mayReceive(st, &g, sess.id) {
+		c.hs.logged("registering a group's creator", c.st.Register(ctx, c.name, reg.Group, sess.id, sess.dev))
+	}
+	c.hs.log.Info("community group re-created", "name", c.name, "by", sess.id, "members", old.See == "")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -369,6 +472,10 @@ func (c *community) groupRegister(allow bool) func(http.ResponseWriter, *http.Re
 					writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "not a member")
 					return
 				}
+				if g.Replaced != nil {
+					c.writeReplaced(w, ctx, g)
+					return
+				}
 				if err := c.st.AddMember(ctx, c.name, store.CommunityMember{ID: sess.id, Home: sess.home, Since: now()}); err != nil {
 					c.hs.unavailableRead(w, "adding a member", err)
 					return
@@ -376,6 +483,11 @@ func (c *community) groupRegister(allow bool) func(http.ResponseWriter, *http.Re
 			}
 			if !c.mayReceive(c.snapshot(), g, sess.id) {
 				writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "no role in this group's see list")
+				return
+			}
+			// A replaced group's registrations don't carry over, and it takes no new ones.
+			if g.Replaced != nil {
+				c.writeReplaced(w, ctx, g)
 				return
 			}
 			err = c.st.Register(ctx, c.name, req.Group, sess.id, sess.dev)
@@ -449,6 +561,11 @@ func (c *community) treeAccess(w http.ResponseWriter, r *http.Request, sess cses
 func (c *community) groupInfo(w http.ResponseWriter, r *http.Request, sess csess) {
 	g, ok := c.pathGroup(w, r)
 	if !ok || !c.treeAccess(w, r, sess, g) {
+		return
+	}
+	// A re-created group's GroupInfo is the new group's (SPEC §16.5): nobody joins the old one.
+	if g.Replaced != nil {
+		c.writeReplaced(w, r.Context(), g)
 		return
 	}
 	// A restricted channel's group may have committed without one (spec/api/community.md):
@@ -583,7 +700,16 @@ func (c *community) hubStep(ctx context.Context, in hubIn) (wire.Signed, string)
 		return wire.Signed{}, wire.ErrCodeUnavailable
 	}
 	if g.Epoch != in.epoch {
-		return c.retried(ctx, in.group, in.epoch, in.request)
+		// An exact retry of a commit accepted before the group was replaced still gets its
+		// receipt; anything else for a replaced group is refused as replaced.
+		sig, code := c.retried(ctx, in.group, in.epoch, in.request)
+		if code != "" && g.Replaced != nil {
+			return wire.Signed{}, wire.ErrCodeReplaced
+		}
+		return sig, code
+	}
+	if g.Replaced != nil {
+		return wire.Signed{}, wire.ErrCodeReplaced
 	}
 	if g.Awaiting {
 		return wire.Signed{}, wire.ErrCodeAwaitingKey
@@ -606,6 +732,8 @@ func (c *community) hubStep(ctx context.Context, in hubIn) (wire.Signed, string)
 		Info:   in.info, Tree: in.tree, TreeSize: in.treeSize, Join: in.join,
 	})
 	switch {
+	case errors.Is(err, store.ErrReplaced):
+		return wire.Signed{}, wire.ErrCodeReplaced
 	case errors.Is(err, store.ErrConflict):
 		return c.retried(ctx, in.group, in.epoch, in.request)
 	case errors.Is(err, store.ErrOverQuota):
@@ -632,7 +760,7 @@ func (c *community) retried(ctx context.Context, group []byte, epoch uint64, req
 // hubStatus is the HTTP status for a hub error code.
 func hubStatus(code string) int {
 	switch code {
-	case wire.ErrCodeStaleEpoch, wire.ErrCodeAwaitingKey, wire.ErrCodeAlreadyExists:
+	case wire.ErrCodeStaleEpoch, wire.ErrCodeAwaitingKey, wire.ErrCodeAlreadyExists, wire.ErrCodeReplaced:
 		return http.StatusConflict
 	case wire.ErrCodeNotFound:
 		return http.StatusNotFound

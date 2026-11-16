@@ -139,6 +139,10 @@ func (c *community) join(w http.ResponseWriter, r *http.Request, sess csess) {
 	case wire.ErrCodeNotAllowed:
 		refuse("the code is used up, or the community is full")
 		return
+	case wire.ErrCodeReplaced:
+		// The members group was re-created while this join was checked (SPEC §16.5).
+		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "group isn't the members group")
+		return
 	default:
 		writeError(w, hubStatus(ecode), ecode, "")
 		return
