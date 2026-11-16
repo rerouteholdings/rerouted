@@ -14,9 +14,11 @@ PartOf=rerouted.service
 Type=exec
 User=rerouted-egress
 Group=rerouted-egress
-# To read rerouted's settings (REROUTED_FED_ALLOW and REROUTED_TLS_ASK_ALSO).
-SupplementaryGroups=rerouted
-ExecStart=/usr/local/bin/rerouted-egress -env /etc/rerouted/rerouted.env -allow-user rerouted
+# rerouted's settings (REROUTED_FED_ALLOW and REROUTED_TLS_ASK_ALSO), handed over by
+# systemd: it needs no place in rerouted's group, which is who may open the other
+# processes' sockets.
+LoadCredential=rerouted.env:/etc/rerouted/rerouted.env
+ExecStart=/usr/local/bin/rerouted-egress -env %d/rerouted.env -allow-user rerouted
 UMask=0077
 Restart=on-failure
 RestartSec=2
@@ -41,7 +43,7 @@ ProtectKernelLogs=true
 ProtectControlGroups=true
 ProtectClock=true
 ProtectHostname=true
-InaccessiblePaths=-/var/lib/rerouted -/var/lib/rerouted-keyd
+InaccessiblePaths=-/var/lib/rerouted -/var/lib/rerouted-keyd -/etc/rerouted
 
 PrivateIPC=true
 RemoveIPC=true

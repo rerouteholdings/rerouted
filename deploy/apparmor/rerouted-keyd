@@ -54,13 +54,15 @@ profile rerouted-keyd /usr/local/bin/rerouted-keyd flags=(enforce, attach_discon
   /sys/fs/cgroup/{,**/}cpu.cfs_{quota,period}_us r,
   /sys/devices/system/cpu/online r,
 
-  # rerouted's settings: REROUTED_NAME and REROUTED_COMMUNITIES.
+  # rerouted's settings: REROUTED_NAME and REROUTED_COMMUNITIES. The service gets them
+  # from systemd, above; the bundle command, as root, reads the file.
   @{rerouted_conf}/ r,
   @{rerouted_conf}/** r,
 
-  # The key bundle, which systemd decrypts for the service.
+  # The key bundle, which systemd decrypts for the service, and rerouted's settings, which
+  # it hands over.
   /{run,var/run}/credentials/rerouted-keyd.service/ r,
-  /{run,var/run}/credentials/rerouted-keyd.service/keys r,
+  /{run,var/run}/credentials/rerouted-keyd.service/{keys,rerouted.env} r,
   # Without systemd-creds: the key files in -keys DIR.
   @{keyd_dir}/ rw,
   @{keyd_dir}/*.json rw,

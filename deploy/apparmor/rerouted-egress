@@ -55,7 +55,10 @@ profile rerouted-egress /usr/local/bin/rerouted-egress flags=(enforce, attach_di
   /sys/fs/cgroup/{,**/}cpu.cfs_{quota,period}_us r,
   /sys/devices/system/cpu/online r,
 
-  # rerouted's settings: REROUTED_FED_ALLOW and REROUTED_TLS_ASK_ALSO.
+  # rerouted's settings (REROUTED_FED_ALLOW and REROUTED_TLS_ASK_ALSO), which systemd
+  # hands over; run by hand, with -env, the file.
+  /{run,var/run}/credentials/rerouted-egress.service/ r,
+  /{run,var/run}/credentials/rerouted-egress.service/rerouted.env r,
   @{rerouted_conf}/ r,
   @{rerouted_conf}/** r,
 

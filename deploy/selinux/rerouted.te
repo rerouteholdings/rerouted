@@ -199,6 +199,9 @@ gen_require(`
 ')
 allow init_t rerouted_keyd_var_lib_t:dir list_dir_perms;
 allow init_t rerouted_keyd_var_lib_t:file read_file_perms;
+# The settings file too, for rerouted-keyd and rerouted-egress (LoadCredential).
+allow init_t rerouted_conf_t:dir search_dir_perms;
+allow init_t rerouted_conf_t:file read_file_perms;
 # The decrypted keys, in /run/credentials/rerouted-keyd.service, which systemd labels
 # init_var_run_t.
 files_search_pids(rerouted_keyd_t)
@@ -285,7 +288,11 @@ tunable_policy(`rerouted_connect_any',`
 ')
 sysnet_dns_name_resolve(rerouted_egress_t)
 
-# rerouted's settings: REROUTED_FED_ALLOW and REROUTED_TLS_ASK_ALSO.
+# rerouted's settings: REROUTED_FED_ALLOW and REROUTED_TLS_ASK_ALSO. systemd hands them
+# over in /run/credentials/rerouted-egress.service, which it labels init_var_run_t.
+files_search_pids(rerouted_egress_t)
+allow rerouted_egress_t init_var_run_t:dir list_dir_perms;
+allow rerouted_egress_t init_var_run_t:file read_file_perms;
 read_files_pattern(rerouted_egress_t, rerouted_conf_t, rerouted_conf_t)
 list_dirs_pattern(rerouted_egress_t, rerouted_conf_t, rerouted_conf_t)
 files_search_etc(rerouted_egress_t)

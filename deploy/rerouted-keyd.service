@@ -15,9 +15,10 @@ PartOf=rerouted.service
 Type=exec
 User=rerouted-keyd
 Group=rerouted-keyd
-# To read rerouted's settings (REROUTED_NAME and REROUTED_COMMUNITIES).
-SupplementaryGroups=rerouted
-ExecStart=/usr/local/bin/rerouted-keyd -env /etc/rerouted/rerouted.env -allow-user rerouted
+# rerouted's settings (REROUTED_NAME and REROUTED_COMMUNITIES), handed over by systemd: it
+# needs no place in rerouted's group, which is who may open the other processes' sockets.
+LoadCredential=rerouted.env:/etc/rerouted/rerouted.env
+ExecStart=/usr/local/bin/rerouted-keyd -env %d/rerouted.env -allow-user rerouted
 LoadCredentialEncrypted=keys:/var/lib/rerouted-keyd/keys.cred
 UMask=0077
 Restart=on-failure
@@ -43,7 +44,7 @@ ProtectKernelLogs=true
 ProtectControlGroups=true
 ProtectClock=true
 ProtectHostname=true
-InaccessiblePaths=-/var/lib/rerouted
+InaccessiblePaths=-/var/lib/rerouted -/etc/rerouted
 
 PrivateIPC=true
 RemoveIPC=true
