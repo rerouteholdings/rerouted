@@ -25,6 +25,8 @@ Anything that breaks a promise in the Tieroute spec's security considerations (S
 
 Weaknesses in the protocol itself are welcome too, through the same private report.
 
+[Security architecture](docs/security-architecture.md) describes how rerouted is split into processes, and what it checks itself.
+
 ## Supported versions
 
 rerouted is in alpha. Fixes go into the newest commit on `main`; there are no maintained older releases yet.

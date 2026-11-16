@@ -12,6 +12,7 @@ rerouted is alpha software, maintained by Reroute Holdings LLC. It runs the publ
 - [Run a call relay](docs/run-a-call-relay.md): relay your users' calls, so they don't show each other their IP addresses.
 - [Administer a homeserver](docs/administer-a-homeserver.md): back up, control registration, and handle reports.
 - [Settings](docs/settings.md): every setting, its default, and what it does.
+- [Security architecture](docs/security-architecture.md): the processes rerouted can be split into, what each can reach, and what a takeover of each gets.
 - [Public firehose](docs/public-firehose.md): an optional public feed of delivery metadata, for development servers.
 - [How rerouted stores moves and recovery wraps](docs/moves-and-recovery-wraps.md): how the multi-record changes stay consistent.
 
