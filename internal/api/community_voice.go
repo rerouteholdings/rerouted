@@ -335,11 +335,21 @@ func (v *voiceRooms) closeChannel(channel uint64) {
 func (v *voiceRooms) gone(key string) {
 	v.mu.Lock()
 	rec := v.at[key]
-	delete(v.at, key)
 	v.mu.Unlock()
-	if rec != nil {
-		v.broadcast(context.Background(), rec.channel)
+	if rec == nil {
+		return
 	}
+	// The SFU drops a connection before it says so. A device that joined again in between
+	// is in its room: the news is of its old connection, and its new visit stays.
+	if v.sfu != nil && v.room(rec.channel).Has(key) {
+		return
+	}
+	v.mu.Lock()
+	if v.at[key] == rec {
+		delete(v.at, key)
+	}
+	v.mu.Unlock()
+	v.broadcast(context.Background(), rec.channel)
 }
 
 // regate applies the chain to every visit: one that can't see its channel anymore leaves,

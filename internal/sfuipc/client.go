@@ -213,6 +213,11 @@ func (c *Client) dispatch() {
 			}
 		case "gone":
 			if !m.OK { // OK: already removed when the connection dropped
+				// rerouted-sfu drops a connection before it says so. A device that joined
+				// again in between is in the room: the news is of its old connection.
+				if c.Room(m.Room).Has(m.Key) {
+					continue
+				}
 				c.mu.Lock()
 				delete(c.signals, k)
 				c.mu.Unlock()

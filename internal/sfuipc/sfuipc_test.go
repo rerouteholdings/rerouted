@@ -166,3 +166,56 @@ func TestPeerUID(t *testing.T) {
 	}
 	c.Close()
 }
+
+// News that a participant is gone, when the room has it again, is of its old connection:
+// its signal stays, and OnGone doesn't hear of it.
+func TestStaleGone(t *testing.T) {
+	sock, l := listen(t)
+	has := make(chan bool, 4)
+	go func() { // an rerouted-sfu that says kat is gone, twice
+		c, err := l.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		for {
+			var req request
+			if ipc.Read(c, &req, maxMessage) != nil {
+				return
+			}
+			switch req.Op {
+			case "hello":
+				ipc.Write(c, message{ID: req.ID}, maxMessage)
+				ipc.Write(c, message{Ev: "gone", Room: "c|1", Key: "kat"}, maxMessage)
+			case "has":
+				in := <-has
+				ipc.Write(c, message{ID: req.ID, OK: in}, maxMessage)
+				if in {
+					ipc.Write(c, message{Ev: "gone", Room: "c|1", Key: "kat"}, maxMessage)
+				}
+			}
+		}
+	}()
+	gone := make(chan string, 4)
+	c := &Client{path: sock, cfg: sfu.Config{OnGone: func(room, key string) { gone <- room + " " + key }},
+		waiting: map[uint64]chan message{}, signals: map[[2]string]signalOn{}, events: newQueue()}
+	c.signals[[2]string{"c|1", "kat"}] = signalOn{signal: func(map[string]any) {}}
+	go c.dispatch()
+	defer c.Close()
+	has <- true // the first time, kat is in the room again
+	has <- false
+	if _, err := c.connect(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case g := <-gone:
+		if g != "c|1 kat" {
+			t.Fatal(g)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnGone never heard")
+	}
+	if len(gone) != 0 {
+		t.Fatal("OnGone heard of the old connection too")
+	}
+}
