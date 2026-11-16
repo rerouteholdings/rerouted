@@ -101,13 +101,22 @@ type streams struct {
 	m  map[string]map[*stream]bool
 }
 
-func (ss *streams) add(st *stream) {
+// maxStreams is how many streams one identity may have open at once: a few per device is
+// all a client needs, and each holds a connection and its buffers.
+const maxStreams = 64
+
+// add registers st, unless its identity has maxStreams open already.
+func (ss *streams) add(st *stream) bool {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
+	if len(ss.m[st.id]) >= maxStreams {
+		return false
+	}
 	if ss.m[st.id] == nil {
 		ss.m[st.id] = map[*stream]bool{}
 	}
 	ss.m[st.id][st] = true
+	return true
 }
 
 // remove drops st, and reports whether it was the identity's last stream.
@@ -216,7 +225,10 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 
 	// Register before replaying, so nothing that arrives meanwhile is missed. Items pushed
 	// live during the replay are skipped if the replay already sent them.
-	s.streams.add(st)
+	if !s.streams.add(st) {
+		conn.Close(closeRateLimited, "too many streams open")
+		return
+	}
 	s.presenceConnected(ctx, id)
 	defer func() {
 		st.close(ws.CloseNormal, "")

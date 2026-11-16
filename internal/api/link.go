@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"sync"
 
@@ -55,7 +56,7 @@ func (s *Server) postLinkProof(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Unauthenticated, so limited per source address too (SPEC §7.2).
-	if !s.limits.allow("link|"+clientIP(r), linkProofsPerAddress, 3600, now(), true) {
+	if !s.limits.allow("link|"+addrKey(clientIP(r)), linkProofsPerAddress, 3600, now(), true) {
 		writeBody(w, http.StatusTooManyRequests, wire.Error{Code: wire.ErrCodeRateLimited, Retry: 3600})
 		return
 	}
@@ -155,17 +156,34 @@ func (s *Server) getLinkProof(w http.ResponseWriter, r *http.Request, sess sessi
 }
 
 // clientIP is the caller's address. Behind a reverse proxy on the same machine (rerouted
-// listens on localhost), it's the first X-Forwarded-For entry.
+// listens on localhost), it's the last X-Forwarded-For entry: the one that proxy added, for
+// the address that connected to it. Earlier entries are whatever the caller sent, unless
+// the proxy replaces the header (Caddy does), and a caller mustn't choose its own rate
+// limit's key.
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
 	}
 	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
-		if f := r.Header.Get("X-Forwarded-For"); f != "" {
-			first, _, _ := strings.Cut(f, ",")
-			return strings.TrimSpace(first)
+		vals := r.Header.Values("X-Forwarded-For")
+		if len(vals) > 0 {
+			parts := strings.Split(vals[len(vals)-1], ",")
+			if a := net.ParseIP(strings.TrimSpace(parts[len(parts)-1])); a != nil {
+				return a.String()
+			}
 		}
 	}
 	return host
+}
+
+// addrKey is what a per-address limit counts an address under: itself, or for IPv6 its /64,
+// since whoever has one address there has all of them.
+func addrKey(addr string) string {
+	a, err := netip.ParseAddr(addr)
+	if err != nil || a.Unmap().Is4() {
+		return addr
+	}
+	p, _ := a.Prefix(64)
+	return p.String()
 }

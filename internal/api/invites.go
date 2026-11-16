@@ -178,6 +178,9 @@ type limit struct {
 type limiter struct {
 	mu sync.Mutex
 	m  map[string][]int64 // key -> event times within the window
+	// win is each key's window, as its limit last gave it: a key is forgotten once its
+	// events are older than that. It isn't saved: after a restart, 30 days until then.
+	win map[string]int64
 }
 
 func (l *limiter) prune(key string, window, t int64) []int64 {
@@ -202,16 +205,33 @@ func (l *limiter) allow(key string, max int, window, t int64, record bool) bool 
 	ev := l.prune(key, window, t)
 	if record {
 		l.m[key] = append(ev, t)
+		if l.win == nil {
+			l.win = map[string]int64{}
+		}
+		l.win[key] = window
 	}
 	return len(ev) < max
 }
 
-// sweep forgets keys with no events in the last 30 days, the longest window any limit uses.
+// sweep forgets keys with no events in their window, or, for a key from before a restart,
+// in the last 30 days, the longest window any limit uses. Limits keyed by something a caller
+// chooses, an address above all, then cost memory for their window only.
 func (l *limiter) sweep(t int64) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for k := range l.m {
-		l.prune(k, 30*24*3600, t)
+		window, ok := l.win[k]
+		if !ok {
+			window = 30 * 24 * 3600
+		}
+		if len(l.prune(k, window, t)) == 0 {
+			delete(l.win, k)
+		}
+	}
+	for k := range l.win {
+		if _, ok := l.m[k]; !ok {
+			delete(l.win, k)
+		}
 	}
 }
 

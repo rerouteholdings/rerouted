@@ -323,9 +323,20 @@ func (c *community) create(w http.ResponseWriter, r *http.Request, sess csess) {
 		return
 	}
 	// Who may create is the operator's choice: a creation code, or open (spec/api/community.md).
-	if code := c.hs.cfg.CommunityCode; code != "" && subtle.ConstantTimeCompare([]byte(req.Code), []byte(code)) != 1 {
-		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "creating a community here needs this server's creation code")
-		return
+	// Wrong codes are counted like failed joins, per identity and per home server, so the
+	// code can't be guessed at any rate.
+	if code := c.hs.cfg.CommunityCode; code != "" {
+		byID, byHome := "cm-badcode|"+sess.id, "cm-badcode|@"+originKey(sess.home)
+		if t := now(); !c.hs.limits.allow(byID, failedJoinsPerID, 3600, t, false) || !c.hs.limits.allow(byHome, failedJoinsPerOrigin, 3600, t, false) {
+			rateLimited(w, 3600)
+			return
+		}
+		if subtle.ConstantTimeCompare([]byte(req.Code), []byte(code)) != 1 {
+			c.hs.limits.allow(byID, failedJoinsPerID, 3600, now(), true)
+			c.hs.limits.allow(byHome, failedJoinsPerOrigin, 3600, now(), true)
+			writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "creating a community here needs this server's creation code")
+			return
+		}
 	}
 	ctx := r.Context()
 	c.appending.Lock()

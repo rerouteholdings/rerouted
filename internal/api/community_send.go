@@ -648,7 +648,10 @@ func (c *community) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s := &stream{id: id, device: dev, out: make(chan []byte, 256), conn: conn, done: make(chan struct{}), replaying: true}
-	c.streams.add(s)
+	if !c.streams.add(s) {
+		conn.Close(closeRateLimited, "too many streams open")
+		return
+	}
 	defer func() {
 		s.close(ws.CloseNormal, "")
 		c.streams.remove(s)

@@ -128,7 +128,57 @@ func (s *Server) V2() *Server { return s.v2 }
 // doesn't wait on them.
 func (s *Server) CloseFirehose() { s.fire.closeAll() }
 
-func (s *Server) Handler() http.Handler { return s.cors(s.dispatch(s.mux)) }
+func (s *Server) Handler() http.Handler { return hardened(s.cors(s.dispatch(s.mux))) }
+
+// How long a request's body may take to arrive: JSON bodies are 2 MiB at most, files 64.
+// (Variables for the tests.)
+var (
+	bodyTime   = 2 * time.Minute
+	uploadTime = 30 * time.Minute
+)
+
+// hardened wraps every request, the community servers' too. Nothing served here is a page:
+// responses say not to guess their type, and to run and load nothing if a browser is ever
+// pointed at one, a user's file included. And a POST's body has a deadline, so a client
+// that sends it a byte at a time doesn't hold a connection for as long as it likes: the
+// server otherwise only times out a request's headers.
+func hardened(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; sandbox")
+		if r.Method == http.MethodPost && r.Body != nil && r.Body != http.NoBody {
+			d := bodyTime
+			if strings.Contains(r.URL.Path, "/upload") {
+				d = uploadTime
+			}
+			rc := http.NewResponseController(w)
+			if rc.SetReadDeadline(time.Now().Add(d)) == nil {
+				r.Body = &timedBody{ReadCloser: r.Body, rc: rc}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// timedBody lifts the body's deadline once the body has been read, so it doesn't run on
+// into the handler's own work, or cancel its context.
+type timedBody struct {
+	io.ReadCloser
+	rc   *http.ResponseController
+	done bool
+}
+
+func (b *timedBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	// Only once it's all here: after any other error, the timeout among them, the deadline
+	// stays, and the server closes the connection instead of waiting for the rest.
+	if err == io.EOF && !b.done {
+		b.done = true
+		b.rc.SetReadDeadline(time.Time{})
+	}
+	return n, err
+}
 
 // cors lets browser clients on any origin use the client API and read discovery
 // documents, as Reroute's web build does. It's safe to open to every origin: the

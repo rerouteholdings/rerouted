@@ -119,6 +119,9 @@ func validHandleUnder(handle, domain string) bool {
 	return true
 }
 
+// wrongCodesPerAddress is how many wrong registration codes an address may send in an hour.
+const wrongCodesPerAddress = 20
+
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Genesis wire.Raw   `json:"genesis"`
@@ -145,10 +148,16 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	// Registration is by invite (SPEC §8.2). Open signups are a published code.
+	// Registration is by invite (SPEC §8.2). Open signups are a published code. Wrong codes
+	// are counted per address, so the code can't be guessed at any rate.
+	addr := "bad-reg|" + addrKey(clientIP(r))
 	switch {
+	case s.cfg.Registration == "invite" && !s.limits.allow(addr, wrongCodesPerAddress, 3600, now(), false):
+		rateLimited(w, 3600)
+		return
 	case s.cfg.Registration == "invite" && subtle.ConstantTimeCompare([]byte(req.Invite), []byte(s.cfg.RegistrationCode)) == 1:
 	case s.cfg.Registration == "invite":
+		s.limits.allow(addr, wrongCodesPerAddress, 3600, now(), true)
 		writeError(w, http.StatusForbidden, wire.ErrCodeBadInvite, "registration needs a valid invite code")
 		return
 	default:
