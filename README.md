@@ -19,29 +19,7 @@ The protocol itself is documented in the [Tieroute specification](https://rerout
 
 ## What it implements
 
-rerouted implements every wire version 1 endpoint in the spec's Appendix A, for clients and for other servers. Comments in the code cite the spec section each rule comes from, such as `SPEC §11.6`. Section numbers are those of the current spec; where version 2.0 changed a rule, the version 1 API follows wire version 1.
-
-The wire version 2 API serves the same endpoints for version 2 identities, with these differences:
-
-- Signatures are composite ML-DSA-65 + Ed25519 (§3.2).
-- Chains carry composite device keys, allow at most 10 devices, and accept recovery forks of any age (§6.4).
-- Key packages carry a `kp-binding` (§3.2.2).
-- Server-to-server (S2S) calls are signed with a composite server key (§8.3).
-- The hub (§11.6) uses composite epoch keys. `epoch-key`, `next`, and `reg` are composite public keys, a `commit-request` or `epoch-key` carries its whole composite key in `k`, and commit receipts are signed with the composite server key.
-- Profiles, moves, and link proofs are signed with composite device keys.
-- A recovery wrap's `commit` is the hash of the code's composite recovery key 1.
-- A report's evidence is the app-message, signed by a message key, with its `msg-key` (§17.3).
-- `POST send` refuses an MLS PublicMessage with `bad-request` (§10.1), since only a community code join sends one.
-
-Account data, backups, files, presence, and call relay credentials work as in version 1. The two versions keep their identities apart, and neither accepts the other's signatures (§5.1). Handles share one namespace across both. A hub keeps each version's groups apart, but a group ID registered in either version is taken in both.
-
-A version 1 identity migrates to version 2 (§6.8) in one request. The version 1 `POST chain/append` that carries `migrate` also carries, in `genesis`, the version 2 genesis it names. One transaction appends the entry, registers the version 2 identity on the same server, hands it the handle, and copies the contact and group allowlists, so neither half can exist without the other. The version 2 `POST register` with that genesis only confirms a finished migration: it answers `200` after one, and `403 not-allowed` before. After a migration:
-
-- The version 1 chain is closed: any later entry is `400 invalid-chain`, and no recovery fork can override the `migrate`. The entry that carries `migrate` carries no other op, except a recovery-signed entry's `set-recovery`.
-- Deliveries, key-package claims, and contact requests for the version 1 identity are refused with `410 migrated` (SPEC §6.8, and the error registry in the API conventions). A delivery refused by another server reaches the sender's devices as a `delivery-failed` event with reason `migrated`. The version 1 identity can't send, but its devices can still read its version 1 inbox.
-- On the version 1 API its handle doesn't resolve (`404`). On the version 2 API it resolves to the version 2 identity, as does a handle record that still names the version 1 identity.
-- A contact that has migrated too is listed under its version 2 identifier, on both servers: at the migration, when another server pushes a closed version 1 chain, and when a version 2 client lists its contacts. Contacts that haven't migrated stay listed under their version 1 identifiers until they do, and changes to the version 2 identity's chain are pushed to their servers meanwhile.
-- A version 2 client can fetch a closed version 1 chain with `GET chain/{id}`, to check the link.
+rerouted implements every wire version 1 and version 2 endpoint in the spec's Appendix A, for clients and for other servers. Comments in the code cite the spec section each rule comes from, such as `SPEC §11.6`. Section numbers are those of the current spec.
 
 | Area | Spec | What rerouted does |
 |---|---|---|
@@ -56,7 +34,7 @@ A version 1 identity migrates to version 2 (§6.8) in one request. The version 1
 | Files | §14 | Uploads up to 64 MiB under a quota for each identity, fetched through the recipient's own homeserver and deleted after 30 days |
 | Calls | §15.1 | Time-limited credentials for a TURN (Traversal Using Relays around NAT) relay |
 | Reports | §17 | Reports kept for the operator, and optionally forwarded to the reported identity's homeserver |
-| Community servers | §16 | Every endpoint in the community server API, for any number of server names with one community each: the community chain, the hub for the community's groups, channel sequence numbers, history segments, read positions, files, reports, and voice channels through an SFU (selective forwarding unit) on Pion WebRTC. See [Community servers](#community-servers). |
+| Community servers | §16 | Every endpoint in the community server API, for any number of server names with one community each: the community chain, the hub for the community's groups, channel sequence numbers, history segments, read positions, files, reports, and voice channels through an SFU (selective forwarding unit) on Pion WebRTC. [Settings](docs/settings.md#community-servers) explains how to turn them on. |
 
 What isn't built yet:
 
@@ -66,41 +44,6 @@ What isn't built yet:
 - Registration codes with use counts or expiry dates. There's one code, `REROUTED_REGISTRATION_CODE`.
 - Combining presence updates for each destination server. A small server may send each one right away (SPEC §13.2).
 - A rate limit on `recover` for each identity and address.
-
-## Community servers
-
-Set `REROUTED_COMMUNITIES` to the names to serve (see [Settings](docs/settings.md#community-servers)). The API is in the [community server API reference](https://rerouteholdings.llc/specs/community). Where the spec and that reference leave a choice open, rerouted does this:
-
-- Requests reach a community by their `Host` header. A name that's only a community server answers `501` on its S2S base.
-- The community server fetches identity chains from their homeservers with S2S `identity/fetch`, signed with its own key. It fetches at every sign-in, and at least once a day for each identity with a session. A device removed from its chain loses its sessions, stream, and voice at once.
-- Members read the community server's copy of each other's chains with `GET members/{id}/chain`. That includes former members (those who left, were kicked, or were banned here) and the community chain's signers.
-- The chain (`internal/cchain`) follows §16.2.2's checks and error table. Breaking a §16.1 limit gets `403 not-allowed`, an edit that changes nothing gets `400 bad-request`, and any other broken rule gets `400 invalid-chain`. A domain ban that's already there gets `invalid-chain`, as a repeated member ban does. Names and descriptions count Unicode code points.
-- A ban removes its members in the append's own transaction: the banned identity, or for a domain ban, every member it covers except the owner.
-- Code access needs a session, and a code whose creator is still a member. A join checks the code's use count and the 1,000-member cap in the same transaction as the hub step.
-- A timed-out member can't send to channels, upload, send a voice key, or cast. They can still send protocol traffic that has no channel, and join a voice channel to listen.
-- A device gets a group's traffic only from its registration on. A Welcome registers its devices, and the device that creates a group is registered for it.
-- Re-creating the community's groups (`POST groups/create` with `replaces`) swaps the group in one transaction, so no commit to the old group can land beside it. Devices registered for the old group can still read its commits and trees. Commits, sends, registrations, and `GET groups/{group}/info` there get `409 replaced`, with `group` naming the newest replacement; in `POST send`, the rejected result carries `group`. A code join that raced the swap gets `404 not-found`, as for any group that isn't the members group.
-- Moving in takes `homes`, the homeservers of chain signers the new community server may not know. It accepts any device a signer's chain added, as a client does. Only the identities on the owner's signed member list become members, by registering for the members group.
-- The old community server answers the `set-home` with each text channel's last sequence number (`seqs`). The new one takes them with the move-in, and numbers on from there.
-- A move reservation (`POST create` with `check`) holds the name for its community, in the database, for 30 days after the reservation expires. The community's move-in ends the hold. To release one by hand, delete its row from `cm_holds`. The old community server checks the reservation, fetching the new one's server document, while it holds its append lock.
-- A community that moved away answers `410 expired` to everything except `GET chain`, sessions, and what its hub handoff needs. Messages and appends get `409 wrong-home`. A `set-home`'s append waits for sends already under way, so none is numbered past its `seqs`.
-- History over the quota is refused, not trimmed. `replace` works only on a segment with the same start and end, after a delete recorded inside it.
-- An approval's claimed key packages are kept in memory for the approval's 10 minutes, so a retry after a restart claims new ones.
-- Voice: a device is in one voice channel at a time. The cast limit counts devices, and losing the right to speak ends a cast. When offers cross, the community server keeps its own. Who may speak is checked again every 5 seconds, so the end of a timeout takes effect within 5 seconds.
-
-Its rate limits:
-
-| What | Limit |
-|---|---|
-| Chain appends | 120 an hour per identity |
-| Sign-in challenges | 30 an hour |
-| Failed joins | 10 an hour per identity, and 100 an hour per origin domain |
-| Tree uploads by non-members | 5 an hour |
-| Key package claims | 50 a day per claimant and target |
-| Reports | 50 a day |
-| Read positions sent | 1,200 an hour per identity |
-| Read position fetches | 600 an hour per identity |
-| Pending join requests | 1,000 at a time |
 
 ## Try it locally
 
