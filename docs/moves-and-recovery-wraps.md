@@ -4,7 +4,7 @@ Two parts of the spec change several records at once: an identity moving between
 
 ## Moves
 
-An *identity* moves by appending a move entry to its chain on its old homeserver, then registering the whole chain on the new one.
+An identity moves by appending a move entry to its chain on its old homeserver, then registering the whole chain on the new one.
 
 ### Registering a move here
 

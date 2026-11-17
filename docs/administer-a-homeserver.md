@@ -28,7 +28,7 @@ rerouted upgrades the database to the current schema when it starts. It refuses 
 
 2. Copy `media/`, `server-key.json`, and `server-key-v2.json` to the same place.
 
-Keep both key files safe. If you lose one, rerouted makes a new key, and other servers pick it up from the server document, but if you lose `server-key.json`, every invite code your users made stops working. Codes are keyed with a secret derived from that key (SPEC §9.1).
+Keep both key files safe. If you lose one, rerouted makes a new key, and other servers pick it up from the server document. Losing `server-key.json` also breaks every invite code your users made, because codes are keyed with a secret derived from that key (SPEC §9.1).
 
 > Caution: **Never restore an old database over a running server.** Groups whose hub is this server stop accepting changes, because the restored hub holds old epoch keys, and their members have to re-create them (SPEC §11.6). Inboxes and chains go back to an older state too. Restore a backup only to replace a server that's gone permanently.
 
