@@ -1,4 +1,4 @@
-# Contributing
+# Contribute to rerouted
 
 This page explains how to build and test rerouted, and how to send us a change.
 
@@ -11,7 +11,7 @@ rerouted is the reference homeserver for Tieroute, so its job is to follow the s
 
 ## Build and test
 
-You need Go (the version in `go.mod`). No cgo: SQLite is the pure-Go `modernc.org/sqlite`.
+You need Go, at the version in `go.mod`. rerouted doesn't use cgo: its SQLite is the pure-Go `modernc.org/sqlite`.
 
 ```sh
 go build ./cmd/rerouted
@@ -19,7 +19,7 @@ go vet ./...
 go test -race ./...
 ```
 
-Tests run against real SQLite databases in temporary directories, and federation tests start two servers in-process.
+Tests run against real SQLite databases in temporary directories, and federation tests start two homeservers in one process.
 
 Code that reads what arrives from the network has fuzz targets: JSON and signed envelopes (`internal/wire`), WebSocket frames (`internal/ws`), identity and community chain entries (`internal/chain`, `internal/cchain`), and rerouted-keyd's requests (`internal/keyd`). `go test` runs their seeds, and CI fuzzes each for a minute. To fuzz one longer:
 

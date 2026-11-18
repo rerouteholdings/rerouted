@@ -1,8 +1,6 @@
 # Public firehose
 
-The public firehose is a live feed of every delivery this server stores in a local user's inbox, for showing the protocol at work on a public development server. It isn't part of Tieroute, and other servers don't need it.
-
-This page describes what it sends, and what it costs your users in privacy.
+The public firehose is a live feed of every delivery this server stores in a local user's inbox, for showing the protocol at work on a public development server. It isn't part of Tieroute, and other servers don't need it. This page describes what it sends, and what it costs your users in privacy.
 
 ## Turn it on
 

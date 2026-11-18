@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS cm_deletes  (name TEXT NOT NULL, channel INTEGER NOT 
 CREATE TABLE IF NOT EXISTS cm_media    (name TEXT NOT NULL, id BLOB NOT NULL, author TEXT NOT NULL, size INTEGER NOT NULL, sha256 BLOB NOT NULL, created INTEGER NOT NULL, state INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (name, id));
 CREATE TABLE IF NOT EXISTS cm_icons    (name TEXT NOT NULL, hash BLOB NOT NULL, mime TEXT NOT NULL, data BLOB NOT NULL, uploaded INTEGER NOT NULL, PRIMARY KEY (name, hash));
 CREATE TABLE IF NOT EXISTS cm_reads    (name TEXT NOT NULL, id TEXT NOT NULL, channel INTEGER NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY (name, id, channel));
+CREATE TABLE IF NOT EXISTS cm_replaced (grp BLOB PRIMARY KEY, name TEXT NOT NULL, new_grp BLOB NOT NULL);
 CREATE TABLE IF NOT EXISTS cm_reports  (n INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, rid BLOB NOT NULL, ts INTEGER NOT NULL, reporter TEXT NOT NULL, body BLOB NOT NULL, at BLOB, UNIQUE (name, rid));
 `
 
@@ -481,11 +482,12 @@ func (c communities) RegisterGroup(ctx context.Context, g store.CGroup) error {
 	return tx.Commit()
 }
 
-const groupCols = "grp, name, see, epoch, key, awaiting, info, tree, tree_size"
+// groupCols are a group's columns, with the group that replaced it, if any (SPEC §16.5).
+const groupCols = "grp, name, see, epoch, key, awaiting, info, tree, tree_size, (SELECT new_grp FROM cm_replaced r WHERE r.grp = cm_groups.grp)"
 
 func scanGroup(sc interface{ Scan(...any) error }) (*store.CGroup, error) {
 	var g store.CGroup
-	if err := sc.Scan(&g.Group, &g.Name, &g.See, &g.Epoch, &g.Key, &g.Awaiting, &g.Info, &g.Tree, &g.TreeSize); err != nil {
+	if err := sc.Scan(&g.Group, &g.Name, &g.See, &g.Epoch, &g.Key, &g.Awaiting, &g.Info, &g.Tree, &g.TreeSize, &g.Replaced); err != nil {
 		return nil, err
 	}
 	return &g, nil
@@ -513,6 +515,57 @@ func (c communities) Groups(ctx context.Context, name string) ([]store.CGroup, e
 	return out, rows.Err()
 }
 
+// replacedBy is the group that replaced group, or nil.
+func replacedBy(ctx context.Context, tx *sql.Tx, group []byte) ([]byte, error) {
+	var by []byte
+	err := tx.QueryRowContext(ctx, "SELECT new_grp FROM cm_replaced WHERE grp = ?", group).Scan(&by)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	return by, err
+}
+
+func (c communities) ReplaceGroup(ctx context.Context, g store.CGroup, old []byte) error {
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if known, err := groupKnown(ctx, tx, g.Group); err != nil {
+		return err
+	} else if known {
+		return store.ErrConflict
+	}
+	var name, see string
+	if err := tx.QueryRowContext(ctx, "SELECT name, see FROM cm_groups WHERE grp = ?", old).Scan(&name, &see); err != nil {
+		return notFound(err)
+	}
+	if name != g.Name || see != g.See {
+		return store.ErrNotFound
+	}
+	if by, err := replacedBy(ctx, tx, old); err != nil {
+		return err
+	} else if by != nil {
+		return store.ErrReplaced
+	}
+	if err := insertGroup(ctx, tx, g); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT INTO cm_replaced (grp, name, new_grp) VALUES (?, ?, ?)", old, g.Name, g.Group); err != nil {
+		return err
+	}
+	if g.See == "" {
+		res, err := tx.ExecContext(ctx, "UPDATE cm_communities SET grp = ? WHERE name = ? AND grp = ?", g.Group, g.Name, old)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return store.ErrNotFound
+		}
+	}
+	return tx.Commit()
+}
+
 const treeKeep = 30 * 24 * 3600
 
 func (c communities) Accept(ctx context.Context, a store.CAccept) error {
@@ -526,6 +579,13 @@ func (c communities) Accept(ctx context.Context, a store.CAccept) error {
 	var awaiting bool
 	if err := tx.QueryRowContext(ctx, "SELECT name, epoch, awaiting FROM cm_groups WHERE grp = ?", a.Group).Scan(&name, &epoch, &awaiting); err != nil {
 		return notFound(err)
+	}
+	// A replaced group takes no more commits (SPEC §16.5), checked here so a commit can't
+	// slip in beside the replacement.
+	if by, err := replacedBy(ctx, tx, a.Group); err != nil {
+		return err
+	} else if by != nil {
+		return store.ErrReplaced
 	}
 	if epoch != a.Epoch || awaiting {
 		return store.ErrConflict

@@ -173,9 +173,26 @@ type cResult struct {
 	Retry   int64      `json:"retry,omitempty"`
 	Receipt wire.Raw   `json:"receipt,omitempty"`
 	Seq     uint64     `json:"seq,omitempty"`
+	Group   wire.Bytes `json:"group,omitempty"` // with replaced: the group that replaced this one (SPEC §16.5)
 }
 
 func cReject(id []byte, code string) cResult { return cResult{ID: id, Status: "rejected", Error: code} }
+
+// rejectReplaced rejects a delivery to a replaced group, naming the group that replaces it
+// now (SPEC §16.5).
+func (c *community) rejectReplaced(ctx context.Context, id []byte, group []byte) cResult {
+	g, err := c.st.Group(ctx, group)
+	if err != nil {
+		return cReject(id, wire.ErrCodeUnavailable)
+	}
+	cur, err := c.current(ctx, g)
+	if err != nil {
+		return cReject(id, wire.ErrCodeUnavailable)
+	}
+	r := cReject(id, wire.ErrCodeReplaced)
+	r.Group = cur
+	return r
+}
 
 func (c *community) send(w http.ResponseWriter, r *http.Request, sess csess) {
 	var req struct {
@@ -243,7 +260,7 @@ func (c *community) carrier(ctx context.Context, st *cchain.State, ch *cchain.Ch
 	}
 	key := cchain.SeeKey(ch.See)
 	for _, g := range groups {
-		if g.See == key {
+		if g.See == key && g.Replaced == nil {
 			return g.Group, nil
 		}
 	}
@@ -282,6 +299,10 @@ func (c *community) sendOne(ctx context.Context, sess csess, o cOutgoing) cResul
 	}
 	if !c.mayReceive(st, g, sess.id) {
 		return cReject(o.ID, wire.ErrCodeNotAllowed)
+	}
+	// A re-created group takes no more commits or sends (SPEC §16.5).
+	if g.Replaced != nil {
+		return c.rejectReplaced(ctx, o.ID, o.Group)
 	}
 	d := cDelivery{ID: o.ID, Kind: "mls", From: sess.id, Group: o.Group, Epoch: o.Epoch, MLS: o.MLS, Ephemeral: o.Ephemeral, Data: o.Data}
 	switch o.MLS {
@@ -434,6 +455,9 @@ func (c *community) sendCommit(ctx context.Context, sess csess, st *cchain.State
 	}
 	receipt, code := c.hubStep(ctx, hubIn{group: o.Group, epoch: o.Epoch, data: o.Data, request: o.Commit, sig: &creq,
 		next: cr.key, awaiting: cr.awaiting, info: info, tree: tree, treeSize: size})
+	if code == wire.ErrCodeReplaced {
+		return c.rejectReplaced(ctx, o.ID, o.Group)
+	}
 	if code != "" {
 		return cReject(o.ID, code)
 	}

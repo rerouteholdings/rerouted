@@ -43,6 +43,9 @@ type CGroup struct {
 	Info     []byte // GroupInfo for the current epoch
 	Tree     []byte // the hash of the current epoch's ratchet tree
 	TreeSize int64
+	// Replaced is the group that took over from this one when the community's groups were
+	// re-created (SPEC §16.5), or nil. The hub sequences nothing more in a replaced group.
+	Replaced []byte
 }
 
 // CCommit is one accepted commit, kept 30 days (SPEC §11.6).
@@ -218,7 +221,14 @@ type Communities interface {
 	RegisterGroup(ctx context.Context, g CGroup) error
 	Group(ctx context.Context, group []byte) (*CGroup, error)
 	Groups(ctx context.Context, name string) ([]CGroup, error)
-	// Accept applies a hub step. ErrConflict if the group isn't at a.Epoch or awaits a key.
+	// ReplaceGroup registers g in place of the group old, in one transaction (SPEC §16.5):
+	// old is marked replaced by g, and if old is the members group, g becomes the
+	// community's Group. ErrConflict if g's ID is known here (as RegisterGroup),
+	// ErrNotFound if old isn't one of the community's groups, ErrReplaced if it's already
+	// replaced.
+	ReplaceGroup(ctx context.Context, g CGroup, old []byte) error
+	// Accept applies a hub step. ErrConflict if the group isn't at a.Epoch or awaits a
+	// key, ErrReplaced if it has been replaced.
 	Accept(ctx context.Context, a CAccept) error
 	SetKey(ctx context.Context, group []byte, epoch uint64, reg, next []byte) error
 	Commits(ctx context.Context, group []byte, from uint64) ([]CCommit, error)

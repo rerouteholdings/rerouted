@@ -38,7 +38,7 @@ func TestMigrateV10ToV11(t *testing.T) {
 	if id, err := st.Chains().ByHandle(context.Background(), "kat.test"); err != nil || id != "kat" {
 		t.Fatalf("handle after upgrade: %q %v", id, err)
 	}
-	for _, table := range []string{"cm_communities", "cm_chain", "cm_members", "cm_groups", "cm_commits", "cm_inbox", "cm_segments", "cm_media", "cm_reports", "cm_code_uses", "cm_trees", "cm_icons", "cm_reads"} {
+	for _, table := range []string{"cm_communities", "cm_chain", "cm_members", "cm_groups", "cm_commits", "cm_inbox", "cm_segments", "cm_media", "cm_reports", "cm_code_uses", "cm_trees", "cm_icons", "cm_reads", "cm_replaced"} {
 		var n int
 		if err := st.db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&n); err != nil || n != 1 {
 			t.Fatalf("no table %s after the upgrade", table)
@@ -148,5 +148,45 @@ func TestIcons(t *testing.T) {
 	}
 	if n, err := cs.PruneIcons(ctx, "c.example.org", nil, 101); err != nil || n != 1 {
 		t.Fatalf("pruned %d %v", n, err)
+	}
+}
+
+// Re-creating a community's groups (SPEC §16.5): the swap is one transaction, the members
+// group moves to the new group, a replaced group takes no commits and can't be replaced
+// again, and a known ID is a conflict.
+func TestCommunityReplaceGroup(t *testing.T) {
+	cs := newCommunityStore(t)
+	ctx := context.Background()
+	old := []byte("members-group-0123456789abcdefgh")
+	g := store.CGroup{Name: "c.test", Group: []byte("members-group-new-456789abcdefgh"), Key: []byte("k1")}
+	if err := cs.ReplaceGroup(ctx, store.CGroup{Name: "c.test", Group: old, Key: []byte("k")}, old); err != store.ErrConflict {
+		t.Fatalf("a known ID: %v", err)
+	}
+	if err := cs.ReplaceGroup(ctx, g, []byte("no-such-group-0123456789abcdefgh")); err != store.ErrNotFound {
+		t.Fatalf("an unknown group: %v", err)
+	}
+	if err := cs.ReplaceGroup(ctx, store.CGroup{Name: "c.test", Group: g.Group, See: "1", Key: []byte("k1")}, old); err != store.ErrNotFound {
+		t.Fatalf("a see list that isn't the old group's: %v", err)
+	}
+	if err := cs.ReplaceGroup(ctx, g, old); err != nil {
+		t.Fatal(err)
+	}
+	if cm, err := cs.Get(ctx, "c.test"); err != nil || !bytes.Equal(cm.Group, g.Group) {
+		t.Fatalf("the members group after: %v %+v", err, cm)
+	}
+	if og, err := cs.Group(ctx, old); err != nil || !bytes.Equal(og.Replaced, g.Group) {
+		t.Fatalf("the old group: %v %+v", err, og)
+	}
+	if ng, err := cs.Group(ctx, g.Group); err != nil || ng.Replaced != nil || ng.Epoch != 0 {
+		t.Fatalf("the new group: %v %+v", err, ng)
+	}
+	if err := cs.ReplaceGroup(ctx, store.CGroup{Name: "c.test", Group: []byte("members-group-3rd-456789abcdefgh"), Key: []byte("k")}, old); err != store.ErrReplaced {
+		t.Fatalf("replacing a replaced group: %v", err)
+	}
+	if err := cs.Accept(ctx, store.CAccept{Group: old, Epoch: 0, Key: []byte("k2"), Commit: store.CCommit{Epoch: 0, Data: []byte("c"), Receipt: []byte("r"), Request: []byte("q"), TS: 1}}); err != store.ErrReplaced {
+		t.Fatalf("a commit to the replaced group: %v", err)
+	}
+	if err := cs.Accept(ctx, store.CAccept{Group: g.Group, Epoch: 0, Key: []byte("k2"), Commit: store.CCommit{Epoch: 0, Data: []byte("c"), Receipt: []byte("r"), Request: []byte("q"), TS: 1}}); err != nil {
+		t.Fatalf("a commit to the new group: %v", err)
 	}
 }

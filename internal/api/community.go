@@ -264,6 +264,7 @@ func (c *community) routes(mux *http.ServeMux) {
 		"POST join/decline":               c.authed(c.perm(cchain.Moderate, c.joinDecline)),
 		"POST leave":                      c.authed(c.member(c.leave)),
 		"GET chain":                       c.chainRead,
+		"GET members":                     c.authed(c.perm(cchain.Administrate, c.membersList)),
 		"GET members/{id}/chain":          c.authed(c.memberChain),
 		"POST chain/append":               c.authed(c.member(c.chainAppend), movedOK),
 		"POST keypackages/upload":         c.authed(c.kpUpload),

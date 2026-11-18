@@ -21,6 +21,8 @@ var (
 	// ErrExists is a write that conflicts with what's stored under the same key, as
 	// opposed to ErrConflict, a write based on a stale version.
 	ErrExists = errors.New("store: exists with different content")
+	// ErrReplaced is a write to a community group that another has replaced (SPEC §16.5).
+	ErrReplaced = errors.New("store: replaced")
 )
 
 // Store is everything a homeserver keeps.

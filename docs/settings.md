@@ -10,7 +10,7 @@ rerouted checks its settings when it starts, and exits with a message naming the
 |---|---|---|
 | `REROUTED_NAME` | None: required | This server's DNS name, such as `chat.example`. Never an IP address or a URL (SPEC §5.1). |
 | `REROUTED_LISTEN` | `127.0.0.1:8080` | The address and port rerouted listens on, over plain HTTP. Put a reverse proxy in front for TLS. |
-| `REROUTED_PUBLIC_URL` | `https://` + `REROUTED_NAME` | The origin clients and other servers reach the APIs at. It MUST be `https://` outside dev mode. |
+| `REROUTED_PUBLIC_URL` | `https://` + `REROUTED_NAME` | The origin clients and other servers reach the APIs at. It has to be `https://` outside dev mode. |
 | `REROUTED_API_PATH` | `/.well-known/tieroute/v1/` | Where the wire version 1 APIs live under the public URL. The server document publishes them, so clients and other servers find them there (SPEC §8.1). |
 | `REROUTED_API_PATH_V2` | `/.well-known/tieroute/v2/` | Where the wire version 2 APIs live, published beside version 1's. It has to differ from `REROUTED_API_PATH`. |
 | `REROUTED_DATA_DIR` | `./data` | Where the database, files, and server key live. |
@@ -50,7 +50,9 @@ See [Run a call relay](run-a-call-relay.md).
 
 ## Community servers
 
-rerouted can serve any number of server names as community servers (SPEC §16), each hosting one community, beside its homeserver. Each name answers as its own server: its own server document, listing the `community` role, its own composite server key (`community-key-NAME.json` in the data directory), and its own API base. A name equal to `REROUTED_NAME` is also the homeserver, with both roles in one document and the homeserver's keys. Point each name's DNS at the reverse proxy, which passes the `Host` header on: rerouted tells the communities apart by it, and says yes to certificates for them on demand.
+Beside its homeserver, rerouted can serve any number of server names as community servers (SPEC §16), each hosting one community. Each name answers as its own server, with its own server document listing the `community` role, its own composite server key (`community-key-NAME.json` in the data directory), and its own API base. A name equal to `REROUTED_NAME` is also the homeserver: one document lists both roles, with the homeserver's keys.
+
+Point each name's DNS at the reverse proxy, and have the proxy pass the `Host` header on. rerouted tells the communities apart by that header, and approves certificates for them on demand.
 
 | Setting | Default | What it does |
 |---|---|---|
