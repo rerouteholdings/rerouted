@@ -2,7 +2,7 @@
 
 rerouted reads its settings from environment variables, and from a settings file named by `-env` (`.env` by default). A variable that's already set in the environment wins over the file. [`.env.example`](../.env.example) is a starting point with every setting.
 
-rerouted checks its settings when it starts, and exits with a message naming the problem if one is wrong.
+rerouted checks its settings when it starts, and exits with a message naming the problem if one is wrong. To check a changed file before a reload or restart, run `rerouted config check`: it also flags likely typos in setting names.
 
 ## Reload settings without a restart
 

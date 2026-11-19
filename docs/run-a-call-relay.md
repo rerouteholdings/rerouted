@@ -108,6 +108,8 @@ The example is set up for calls and nothing else:
 
 ## Check that it works
 
+`rerouted checkup` tries every URL in `REROUTED_TURN_URLS`, or the built-in relay's. `rerouted backup` includes the built-in relay's generated secret (`turn-secret`).
+
 Sign in from a client and ask for credentials. In Reroute, start a call: it uses the relay when a direct connection isn't allowed. With the client API, `GET turn` with a session token now answers with `urls`, `username`, and `credential` instead of `501`.
 
 If calls still don't connect with coturn, check coturn's log (`journalctl -u coturn`) for refused credentials. The usual cause is a secret that doesn't match `REROUTED_TURN_SECRET`. With the built-in relay, check that the firewall lets the relay ports through, and that `REROUTED_TURN_PUBLIC_IP` is the address clients reach the host at. Setting `REROUTED_LOG_LEVEL=debug` logs refused credentials.

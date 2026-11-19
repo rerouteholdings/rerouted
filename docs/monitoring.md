@@ -36,7 +36,7 @@ A rising `rerouted_outbox_requests` with a rising `rerouted_s2s_send_failures_to
 
 ## Status file
 
-While it runs, rerouted keeps a small JSON file at `status.json` in `REROUTED_DATA_DIR`. It writes the file when it starts, every 30 seconds, and whenever something in it changes, and it deletes the file when it shuts down cleanly. `rerouted status` reads it. Local tools can read it too: rerouted replaces it in one step, so a reader never sees half a file.
+While it runs, rerouted keeps a small JSON file at `status.json` in `REROUTED_DATA_DIR`. It writes the file when it starts, every 30 seconds, and whenever something in it changes, and it deletes the file when it shuts down cleanly. `rerouted status` reads it (add `--json` for scripts), along with counts from the database. The data directory is readable only by the `rerouted` user, so run it as that user or as root. For checks from the outside, such as DNS, certificates, and the call relay, run `rerouted checkup`. Local tools can read it too: rerouted replaces it in one step, so a reader never sees half a file.
 
 For example:
 
