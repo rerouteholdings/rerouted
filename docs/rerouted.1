@@ -1,0 +1,225 @@
+.TH REROUTED 1 2026-11-18 "rerouted" "User Commands"
+.SH NAME
+rerouted \- the reference Tieroute homeserver
+.SH SYNOPSIS
+.B rerouted
+.RB [ \-env
+.IR FILE ]
+.br
+.B rerouted
+.RB [ \-env
+.IR FILE ]
+.I COMMAND
+.RI [ ARGS ]
+.SH DESCRIPTION
+.B rerouted
+is the reference homeserver for Tieroute, a federated, end-to-end encrypted chat protocol.
+With no command, it runs the server until it gets SIGINT or SIGTERM.
+With a command, it sets up, checks, backs up, or administers a homeserver, and exits.
+.PP
+Commands that only look at the database open it read-only, and never upgrade it, so they're
+safe beside a running server of another version.
+Commands that read the data directory need the user rerouted runs as, or root:
+.BR "sudo \-u rerouted rerouted status" .
+.SH OPTIONS
+.TP
+.BI \-env " FILE"
+The settings file. See
+.B SETTINGS FILE
+for where rerouted looks without it. A file named here must exist.
+.TP
+.BR \-h ", " \-\-help
+Print the commands and exit.
+.SH COMMANDS
+.TP
+.BR init " [\fIflags\fR]"
+Set up a new homeserver: write the settings file (never over an existing one), create the
+data directory and the server's keys, print the DNS records to add, and add the sites to
+Caddy if it's installed. It asks for what it needs, or takes flags:
+.RS
+.TP
+.BI \-\-name " NAME"
+The server's DNS name. Required with
+.BR \-\-yes .
+.TP
+.BI \-\-handles " DOMAIN"
+The domain handles go under. Default: the name.
+.TP
+.BI \-\-listen " HOST:PORT"
+The local address. Default: the first free port from 8080 on 127.0.0.1.
+.TP
+.BI \-\-data\-dir " DIR"
+The data directory.
+.TP
+.BR \-\-registration " invite|public|closed"
+Who can sign up. Default: invite.
+.TP
+.BI \-\-env " FILE"
+The settings file to write.
+.TP
+.B \-\-yes
+Ask nothing: take the flags and the defaults.
+.TP
+.B \-\-no\-caddy
+Leave Caddy alone.
+.TP
+.B \-\-caddy\-only
+Only add an existing settings file's sites to Caddy.
+.TP
+.B \-\-auto\-updates
+Turn on automatic updates.
+.TP
+.B \-\-start
+Enable and start the systemd service.
+.RE
+.IP
+As root, init writes
+.I /etc/rerouted/rerouted.env
+with data in
+.IR /var/lib/rerouted ,
+for
+.BR rerouted.service .
+If that file exists, it sets up a second instance:
+.I /etc/rerouted/NAME.env
+with data in
+.IR /var/lib/rerouted\-NAME ,
+for
+.BR rerouted@NAME.service .
+.IP
+Caddy's configuration is never replaced. The sites go in
+.IR /etc/caddy/rerouted/NAME.caddy ,
+the on-demand TLS ask in
+.IR /etc/caddy/rerouted/global/NAME.caddy ,
+and the Caddyfile gains two import lines, after a backup to
+.IR Caddyfile.bak\-rerouted\-TIME .
+If
+.B caddy validate
+fails, init restores the Caddyfile and removes what it added.
+.TP
+.BR checkup " [\fB\-\-peer\fR \fINAME\fR] [\fB\-\-handle\fR \fIHANDLE\fR] [\fB\-\-timeout\fR \fIDURATION\fR]"
+Check the settings, disk space, the local listener, DNS, the server document over HTTPS and
+its certificate, the clock, the call relay, and optionally a handle's certificate and
+federation with another server. Prints PASS, WARN, FAIL, or INFO for each check.
+.TP
+.BR status " [\fB\-\-json\fR]"
+Show whether the server is running, its uptime, version, voice calls, outbox, pending
+restart, and available update, and count the identities, devices, and communities in the
+database.
+.TP
+.B config check
+Check the settings file: errors that stop rerouted from starting, and likely mistakes, such
+as settings that aren't rerouted's.
+.TP
+.BR backup " [\fIDEST\fR]"
+Write the database, keys, files, and settings file to
+.IR rerouted\-backup\-NAME\-TIME.tar.gz ,
+mode 0600, in the directory
+.I DEST
+(default: the working directory), or to
+.I DEST
+if it ends in .tar.gz. Safe while the server runs.
+.TP
+.BR restore " \fIFILE\fR [\fB\-\-force\fR]"
+Restore a backup into the data directory. Refuses while the server runs, and over an
+existing database unless
+.B \-\-force
+is given, which first moves the current data to
+.I before\-restore\-TIME
+in the data directory.
+.TP
+.BR accounts " [\fIN\fR]"
+List the N newest identities whose chains this server stores (default 50).
+.TP
+.B communities
+List the community servers this server hosts, with member counts.
+.TP
+.BR reports " [\fIN\fR]"
+Print the N newest reports (default 20).
+.TP
+.BI remove\-media " ID " \-\-confirm
+Delete a reported file. Fetches of it then answer 410 removed.
+.TP
+.BI release\-handle " HANDLE " \-\-confirm
+Free a handle so a new identity can register it.
+.TP
+.BI keep\-handle " HANDLE"
+Keep a handle reserved after its 30-day hold ends.
+.TP
+.BR auto\-updates " on|off|status"
+Turn daily updates of the rerouted package on or off, through
+.BR rerouted\-update.timer ,
+or show their state. Only for package installs; not available on Arch Linux or Gentoo.
+.TP
+.B version
+Print the version, Go version, platform, database schema version, and wire versions.
+.TP
+.BR completion " bash|zsh|fish"
+Print a shell completion script.
+.TP
+.B help
+Print the commands.
+.SH SETTINGS FILE
+Without
+.BR \-env ,
+rerouted uses the first of these that exists:
+.I .env
+in the working directory, then
+.IR /etc/rerouted/rerouted.env .
+If neither exists, settings come from the environment only. Variables already set in the
+environment win over the file. Each line is
+.IR KEY = value ;
+lines starting with # are comments.
+.SH SIGNALS
+.TP
+.B SIGHUP
+Reload the settings file. Settings that need a restart are logged.
+.TP
+.B SIGUSR2
+Restart once no voice calls are active: rerouted exits with status 75, for the service
+manager to start it again.
+.TP
+.BR SIGINT ", " SIGTERM
+Shut down.
+.SH EXIT STATUS
+0 on success, 1 when a command or check fails, 2 for a usage or settings error, and 75 when
+the server exits to be restarted (SIGUSR2).
+.SH FILES
+.TP
+.I /etc/rerouted/rerouted.env
+The packages' settings file.
+.TP
+.I /etc/rerouted/NAME.env
+Settings for the instance
+.BR rerouted@NAME.service .
+.TP
+.I /var/lib/rerouted
+The packages' data directory.
+.TP
+.I DATA_DIR/rerouted\-v1.db
+The database, with its \-wal and \-shm files.
+.TP
+.I DATA_DIR/server\-key.json\fR, \fIDATA_DIR/server\-key\-v2.json
+The server's signing keys for wire versions 1 and 2.
+.TP
+.I DATA_DIR/media/
+Uploaded files, end-to-end encrypted.
+.TP
+.I DATA_DIR/turn\-secret
+The built-in call relay's secret.
+.TP
+.I DATA_DIR/status.json
+The running server's status, read by
+.BR "rerouted status" .
+.TP
+.I /etc/caddy/rerouted/
+The Caddy sites and on-demand TLS ask that
+.B rerouted init
+writes.
+.SH SEE ALSO
+.BR caddy (1),
+.BR systemctl (1).
+The guides in the source:
+.IR docs/run\-a\-homeserver.md ,
+.IR docs/administer\-a\-homeserver.md ,
+and
+.IR docs/settings.md .
