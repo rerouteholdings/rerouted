@@ -400,6 +400,11 @@ func TestV2EntryRules(t *testing.T) {
 			t.Fatalf("genesis adding a %s key: %v", name, err)
 		}
 	}
+	// A set-handle's handle is a non-empty string or null: "" and a missing handle are
+	// invalid (SPEC §6.4 rule 6). Op omits a nil handle, so the second has none.
+	empty := ""
+	bad("set-handle with an empty handle", w.next(w.devs[0], false, wire.Op{Op: wire.OpSetHandle, Handle: &empty}))
+	bad("set-handle without a handle", w.next(w.devs[0], false, wire.Op{Op: wire.OpSetHandle}))
 	// migrated-from appears only in genesis.
 	v1 := "tr:aaaaaaaaaaaaaaaaaaaaaaaa"
 	bad("migrated-from after genesis", w.next(w.devs[0], false, wire.Op{Op: wire.OpMigratedFrom, ID: &v1}))

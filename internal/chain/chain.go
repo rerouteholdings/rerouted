@@ -14,6 +14,7 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -122,7 +123,36 @@ func openEntry(v int, s wire.Signed) (wire.ChainEntry, error) {
 			return e, err
 		}
 	}
+	if v == wire.V2 {
+		if err := checkHandlesV2(s, e); err != nil {
+			return e, err
+		}
+	}
 	return e, nil
+}
+
+// checkHandlesV2 enforces that a set-handle's handle is a non-empty string or null: an
+// empty or missing handle is invalid (SPEC §6.4 rule 6). Op decodes a missing handle and
+// null alike, so this looks at the members themselves.
+func checkHandlesV2(s wire.Signed, e wire.ChainEntry) error {
+	var raw struct {
+		Ops []map[string]json.RawMessage `json:"ops"`
+	}
+	if err := json.Unmarshal([]byte(s.B), &raw); err != nil || len(raw.Ops) != len(e.Ops) {
+		return errors.New("ops don't decode")
+	}
+	for i, op := range e.Ops {
+		if op.Op != wire.OpSetHandle {
+			continue
+		}
+		if _, ok := raw.Ops[i]["handle"]; !ok {
+			return errors.New("set-handle without handle")
+		}
+		if op.Handle != nil && *op.Handle == "" {
+			return errors.New("set-handle with an empty handle")
+		}
+	}
+	return nil
 }
 
 // GenesisFor is Genesis under wire version v's rules.
