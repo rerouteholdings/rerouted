@@ -58,7 +58,7 @@ func (c *community) historyPut(w http.ResponseWriter, r *http.Request, sess cses
 		c.hs.unavailableRead(w, "reading history usage", err)
 		return
 	}
-	if used+int64(len(req.CT)) > c.hs.cfg.CommunityHistoryQuota {
+	if used+int64(len(req.CT)) > c.hs.cfg.Now().CommunityHistoryQuota {
 		writeError(w, http.StatusRequestEntityTooLarge, wire.ErrCodeOverQuota, "the community's history storage is full")
 		return
 	}
@@ -208,7 +208,7 @@ func (c *community) mediaUpload(w http.ResponseWriter, r *http.Request, sess cse
 		c.hs.unavailableRead(w, "reading file usage", err)
 		return
 	}
-	room := c.hs.cfg.CommunityFileQuota - used
+	room := c.hs.cfg.Now().CommunityFileQuota - used
 	if room <= 0 || (r.ContentLength > 0 && r.ContentLength > room) {
 		writeError(w, http.StatusRequestEntityTooLarge, wire.ErrCodeOverQuota, "the community's file storage is full")
 		return
@@ -414,7 +414,7 @@ func (s *Server) maintainCommunities(ctx context.Context) {
 		s.log.Error("pruning ratchet trees", "err", err)
 	}
 	for _, c := range s.comm.byName {
-		if days := s.cfg.CommunityFileDays; days > 0 {
+		if days := s.cfg.Now().CommunityFileDays; days > 0 {
 			if _, err := cs.ExpireMedia(ctx, c.name, t-int64(days)*24*3600); err != nil {
 				s.log.Error("expiring community files", "err", err)
 			}

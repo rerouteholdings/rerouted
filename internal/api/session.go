@@ -146,9 +146,10 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// Registration is by invite (SPEC §8.2). Open signups are a published code.
+	reg := s.cfg.Now()
 	switch {
-	case s.cfg.Registration == "invite" && subtle.ConstantTimeCompare([]byte(req.Invite), []byte(s.cfg.RegistrationCode)) == 1:
-	case s.cfg.Registration == "invite":
+	case reg.Registration == "invite" && subtle.ConstantTimeCompare([]byte(req.Invite), []byte(reg.RegistrationCode)) == 1:
+	case reg.Registration == "invite":
 		writeError(w, http.StatusForbidden, wire.ErrCodeBadInvite, "registration needs a valid invite code")
 		return
 	default:
@@ -453,7 +454,7 @@ func (s *Server) appendChain(w http.ResponseWriter, r *http.Request, sess sessio
 	}
 	// Moves paused by the operator: refuse a device-signed move before it's stored, so
 	// nothing changes, routing included. A recovery-signed entry still goes through.
-	if s.cfg.PauseMoves && st.Home != homeBefore && applied.Signer != chain.SignerRecovery {
+	if s.cfg.Now().PauseMoves && st.Home != homeBefore && applied.Signer != chain.SignerRecovery {
 		s.log.Info("move refused: moves are paused", "id", sess.id)
 		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, movesPausedMsg)
 		return
@@ -682,7 +683,7 @@ func (s *Server) registerMove(w http.ResponseWriter, r *http.Request, in []wire.
 	}
 	// Moves paused by the operator: a device-signed move isn't taken, or checked as if it
 	// would be. A recovery-signed one still is.
-	if s.cfg.PauseMoves {
+	if s.cfg.Now().PauseMoves {
 		if _, byRecovery, n := s.replay(raw); n == len(raw) && !byRecovery[n-1] {
 			s.log.Info("move refused: moves are paused", "id", st.ID, "check", check)
 			writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, movesPausedMsg)

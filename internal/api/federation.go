@@ -653,7 +653,7 @@ func (s *Server) s2sDeliver(w http.ResponseWriter, r *http.Request, from string,
 // random subdomains. Caddy: on_demand_tls { ask http://127.0.0.1:PORT/v0/tls-ask }
 func (s *Server) tlsAsk(w http.ResponseWriter, r *http.Request) {
 	domain := strings.ToLower(r.URL.Query().Get("domain"))
-	if domain == s.cfg.Name || slices.Contains(s.cfg.TLSAskAllow, domain) || (s.comm != nil && s.comm.byName[domain] != nil) {
+	if domain == s.cfg.Name || slices.Contains(s.cfg.Now().TLSAskAllow, domain) || (s.comm != nil && s.comm.byName[domain] != nil) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}

@@ -57,7 +57,7 @@ func (s *Server) storeMedia(w http.ResponseWriter, r *http.Request, sess session
 		s.unavailableRead(w, "reading file usage", err) // never let a failed check past the quota
 		return
 	}
-	if used >= s.cfg.MediaQuota {
+	if used >= s.cfg.Now().MediaQuota {
 		writeError(w, http.StatusRequestEntityTooLarge, wire.ErrCodeOverQuota, "")
 		return
 	}
@@ -74,7 +74,7 @@ func (s *Server) storeMedia(w http.ResponseWriter, r *http.Request, sess session
 		writeError(w, http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "")
 		return
 	}
-	if used+m.Size > s.cfg.MediaQuota {
+	if used+m.Size > s.cfg.Now().MediaQuota {
 		s.logged("removing a file over the quota", s.st.Media().Remove(ctx, id))
 		writeError(w, http.StatusRequestEntityTooLarge, wire.ErrCodeOverQuota, "")
 		return

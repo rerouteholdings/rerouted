@@ -463,8 +463,8 @@ func (c *community) preview(w http.ResponseWriter, r *http.Request) {
 		writeBody(w, http.StatusGone, map[string]any{"error": wire.ErrCodeExpired, "msg": "this community moved to " + st.Server})
 		return
 	}
-	files := map[string]any{"days": c.hs.cfg.CommunityFileDays}
-	if q := c.hs.cfg.CommunityFileQuota; q > 0 {
+	files := map[string]any{"days": c.hs.cfg.Now().CommunityFileDays}
+	if q := c.hs.cfg.Now().CommunityFileQuota; q > 0 {
 		files["quota"] = q
 	}
 	res := map[string]any{

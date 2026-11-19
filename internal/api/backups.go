@@ -42,7 +42,7 @@ func (s *Server) backupPut(w http.ResponseWriter, r *http.Request, sess session)
 	if req.Snapshot {
 		used = 0 // a snapshot replaces everything before it
 	}
-	if used+int64(len(req.CT)) > s.cfg.BackupQuota {
+	if used+int64(len(req.CT)) > s.cfg.Now().BackupQuota {
 		writeError(w, http.StatusRequestEntityTooLarge, wire.ErrCodeOverQuota, "the backup is full: compact it with a snapshot")
 		return
 	}

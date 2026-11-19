@@ -59,15 +59,15 @@ func (s *Server) serverDoc(w http.ResponseWriter, r *http.Request) {
 			EXP: s.key.V2.Created.Add(serverkey.Lifetime).Unix(),
 		}},
 		Handles:      s.cfg.Handles,
-		Registration: s.cfg.Registration,
+		Registration: s.cfg.Now().Registration,
 	}
 	// This name can also be a community server (SPEC §16.1), with the same keys.
 	if c := s.comm.byName[s.cfg.Name]; c != nil {
 		doc.Roles = append(doc.Roles, "community")
 		doc.APIs[1].Community = s.cfg.CommunityBase(c.conf)
 	}
-	if s.cfg.Registration == "invite" && s.cfg.RegistrationPublic {
-		doc.Invite = s.cfg.RegistrationCode // open signups are a public invite (SPEC §8.2)
+	if reg := s.cfg.Now(); reg.Registration == "invite" && reg.RegistrationPublic {
+		doc.Invite = reg.RegistrationCode // open signups are a public invite (SPEC §8.2)
 	}
 	w.Header().Set("Cache-Control", "max-age=3600")
 	writeBody(w, http.StatusOK, doc)

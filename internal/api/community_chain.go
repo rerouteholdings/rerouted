@@ -323,7 +323,7 @@ func (c *community) create(w http.ResponseWriter, r *http.Request, sess csess) {
 		return
 	}
 	// Who may create is the operator's choice: a creation code, or open (spec/api/community.md).
-	if code := c.hs.cfg.CommunityCode; code != "" && subtle.ConstantTimeCompare([]byte(req.Code), []byte(code)) != 1 {
+	if code := c.hs.cfg.Now().CommunityCode; code != "" && subtle.ConstantTimeCompare([]byte(req.Code), []byte(code)) != 1 {
 		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "creating a community here needs this server's creation code")
 		return
 	}

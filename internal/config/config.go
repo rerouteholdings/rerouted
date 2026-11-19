@@ -5,9 +5,12 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 // Config holds every setting. See .env.example for descriptions.
@@ -71,6 +74,30 @@ type Config struct {
 	// behind 1:1 NAT, comma-separated.
 	VoiceUDPPort   int
 	VoicePublicIPs []string
+
+	// REROUTED_LOG_LEVEL: debug, info (the default), warn, or error. REROUTED_LOG_FORMAT:
+	// text (the default) or json. See Logger.
+	LogLevel, LogFormat string
+	// REROUTED_METRICS_LISTEN: the address to serve Prometheus metrics on, such as
+	// 127.0.0.1:9101. Empty, the default: no metrics.
+	MetricsListen string
+	// REROUTED_TURN_LISTEN: the address the built-in call relay listens on, UDP and TCP, such
+	// as :3478. Empty, the default: no built-in relay. REROUTED_TURN_RELAY_PORTS (default
+	// 49160-49200): the UDP ports relayed media uses. REROUTED_TURN_PUBLIC_IP: the address
+	// clients reach relayed media at (default: the first of REROUTED_VOICE_PUBLIC_IPS).
+	TurnListen                 string
+	TurnRelayMin, TurnRelayMax int
+	TurnPublicIP               string
+	// REROUTED_UPDATE_CHECK: on checks once a day for a newer rerouted release. Off by default.
+	UpdateCheck bool
+	// REROUTED_RESTART_MAX_WAIT (default 6h): how long a restart asked for with SIGUSR2
+	// waits for voice calls to end.
+	RestartMaxWait time.Duration
+
+	envFile        string // the settings file Load read, for Reload
+	turnDerived    bool   // TurnURLs were made for the built-in relay
+	turnSecretFile bool   // TurnSecret came from the data directory
+	live           *live  // the reloadable settings' current values (reload.go)
 }
 
 // Community is one server name this process serves as a community server.
@@ -80,45 +107,84 @@ type Community struct {
 }
 
 // Load reads .env (if present, without overriding variables already set),
-// then the environment.
+// then the environment. Reload reads the same file again.
 func Load(envFile string) (*Config, error) {
-	if err := loadDotEnv(envFile); err != nil {
+	file, err := readDotEnv(envFile)
+	if err != nil {
 		return nil, err
 	}
+	fromFile.mu.Lock()
+	for k, v := range file {
+		if _, set := os.LookupEnv(k); !set {
+			os.Setenv(k, v) // for code that reads the environment itself
+			fromFile.keys[k] = true
+		}
+	}
+	fromFile.mu.Unlock()
+	c, err := parse(os.LookupEnv)
+	if err != nil {
+		return nil, err
+	}
+	c.envFile = envFile
+	return c, c.finish()
+}
+
+// fromFile records the variables Load set from the settings file, so Reload takes them from
+// the file again instead of from the environment, where Load put the old values.
+var fromFile = struct {
+	mu   sync.Mutex
+	keys map[string]bool
+}{keys: map[string]bool{}}
+
+// parse reads every setting through lookup, without checking how they fit together.
+func parse(lookup func(string) (string, bool)) (*Config, error) {
+	env := func(key string) string { v, _ := lookup(key); return v }
+	get := func(key, def string) string {
+		if v, ok := lookup(key); ok {
+			return v
+		}
+		return def
+	}
+	bytesSetting := func(key string, def int64) (int64, error) { return bytesValue(key, env(key), def) }
 	c := &Config{
-		Name:               os.Getenv("REROUTED_NAME"),
+		Name:               env("REROUTED_NAME"),
 		Listen:             get("REROUTED_LISTEN", "127.0.0.1:8080"),
 		DataDir:            get("REROUTED_DATA_DIR", "./data"),
-		PublicURL:          strings.TrimRight(os.Getenv("REROUTED_PUBLIC_URL"), "/"),
+		PublicURL:          strings.TrimRight(env("REROUTED_PUBLIC_URL"), "/"),
 		APIPath:            get("REROUTED_API_PATH", "/.well-known/tieroute/v1/"),
 		APIPathV2:          get("REROUTED_API_PATH_V2", "/.well-known/tieroute/v2/"),
-		Handles:            os.Getenv("REROUTED_HANDLES"),
+		Handles:            env("REROUTED_HANDLES"),
 		Registration:       get("REROUTED_REGISTRATION", "closed"),
 		Store:              get("REROUTED_STORE", "sqlite"),
 		Dev:                get("REROUTED_DEV", "off") == "on",
 		Peers:              map[string]string{},
-		RegistrationCode:   os.Getenv("REROUTED_REGISTRATION_CODE"),
+		RegistrationCode:   env("REROUTED_REGISTRATION_CODE"),
 		RegistrationPublic: get("REROUTED_REGISTRATION_PUBLIC", "off") == "on",
 		PublicFirehose:     get("REROUTED_PUBLIC_FIREHOSE", "off") == "on",
 		PauseMoves:         get("REROUTED_PAUSE_MOVES", "off") == "on",
+		LogLevel:           strings.ToLower(get("REROUTED_LOG_LEVEL", "info")),
+		LogFormat:          strings.ToLower(get("REROUTED_LOG_FORMAT", "text")),
+		MetricsListen:      env("REROUTED_METRICS_LISTEN"),
+		TurnListen:         env("REROUTED_TURN_LISTEN"),
+		TurnPublicIP:       env("REROUTED_TURN_PUBLIC_IP"),
+		UpdateCheck:        get("REROUTED_UPDATE_CHECK", "off") == "on",
 	}
-	c.Defaults()
-	for _, u := range strings.Split(os.Getenv("REROUTED_TLS_ASK_ALSO"), ",") {
+	for _, u := range strings.Split(env("REROUTED_TLS_ASK_ALSO"), ",") {
 		if u = strings.TrimRight(strings.TrimSpace(u), "/"); u != "" {
 			c.TLSAskAlso = append(c.TLSAskAlso, u)
 		}
 	}
-	for _, h := range strings.Split(os.Getenv("REROUTED_TLS_ASK_ALLOW"), ",") {
+	for _, h := range strings.Split(env("REROUTED_TLS_ASK_ALLOW"), ",") {
 		if h = strings.ToLower(strings.TrimSpace(h)); h != "" {
 			c.TLSAskAllow = append(c.TLSAskAllow, h)
 		}
 	}
-	for _, u := range strings.Split(os.Getenv("REROUTED_TURN_URLS"), ",") {
+	for _, u := range strings.Split(env("REROUTED_TURN_URLS"), ",") {
 		if u = strings.TrimSpace(u); u != "" {
 			c.TurnURLs = append(c.TurnURLs, u)
 		}
 	}
-	c.TurnSecret = os.Getenv("REROUTED_TURN_SECRET")
+	c.TurnSecret = env("REROUTED_TURN_SECRET")
 	var err error
 	if c.MediaQuota, err = bytesSetting("REROUTED_MEDIA_QUOTA", 1<<30); err != nil {
 		return nil, err
@@ -126,14 +192,14 @@ func Load(envFile string) (*Config, error) {
 	if c.BackupQuota, err = bytesSetting("REROUTED_BACKUP_QUOTA", 1<<30); err != nil {
 		return nil, err
 	}
-	for _, p := range strings.Split(os.Getenv("REROUTED_COMMUNITIES"), ",") {
+	for _, p := range strings.Split(env("REROUTED_COMMUNITIES"), ",") {
 		if p = strings.TrimSpace(p); p == "" {
 			continue
 		}
 		name, url, _ := strings.Cut(p, "=")
 		c.Communities = append(c.Communities, Community{Name: strings.ToLower(strings.TrimSpace(name)), URL: strings.TrimRight(strings.TrimSpace(url), "/")})
 	}
-	c.CommunityCode = os.Getenv("REROUTED_COMMUNITY_CODE")
+	c.CommunityCode = env("REROUTED_COMMUNITY_CODE")
 	c.CommunityOpen = get("REROUTED_COMMUNITY_OPEN", "off") == "on"
 	if c.CommunityFileDays, err = strconv.Atoi(get("REROUTED_COMMUNITY_FILE_DAYS", "30")); err != nil || c.CommunityFileDays < 0 {
 		return nil, errors.New("REROUTED_COMMUNITY_FILE_DAYS must be a whole number of days")
@@ -147,17 +213,52 @@ func Load(envFile string) (*Config, error) {
 	if c.VoiceUDPPort, err = strconv.Atoi(get("REROUTED_VOICE_UDP_PORT", "0")); err != nil || c.VoiceUDPPort < 0 || c.VoiceUDPPort > 65535 {
 		return nil, errors.New("REROUTED_VOICE_UDP_PORT must be a port number")
 	}
-	for _, ip := range strings.Split(os.Getenv("REROUTED_VOICE_PUBLIC_IPS"), ",") {
+	for _, ip := range strings.Split(env("REROUTED_VOICE_PUBLIC_IPS"), ",") {
 		if ip = strings.TrimSpace(ip); ip != "" {
 			c.VoicePublicIPs = append(c.VoicePublicIPs, ip)
 		}
 	}
-	for _, p := range strings.Split(os.Getenv("REROUTED_DEV_PEERS"), ",") {
+	for _, p := range strings.Split(env("REROUTED_DEV_PEERS"), ",") {
 		if name, url, ok := strings.Cut(strings.TrimSpace(p), "="); ok {
 			c.Peers[name] = strings.TrimRight(url, "/")
 		}
 	}
-	return c, c.validate()
+	if c.TurnRelayMin, c.TurnRelayMax, err = portRange(get("REROUTED_TURN_RELAY_PORTS", "49160-49200")); err != nil {
+		return nil, err
+	}
+	if c.RestartMaxWait, err = time.ParseDuration(get("REROUTED_RESTART_MAX_WAIT", "6h")); err != nil || c.RestartMaxWait < 0 {
+		return nil, errors.New("REROUTED_RESTART_MAX_WAIT must be a duration, like 6h or 90m")
+	}
+	return c, nil
+}
+
+// portRange reads "low-high", such as 49160-49200.
+func portRange(v string) (int, int, error) {
+	lo, hi, ok := strings.Cut(strings.TrimSpace(v), "-")
+	a, err1 := strconv.Atoi(strings.TrimSpace(lo))
+	b, err2 := strconv.Atoi(strings.TrimSpace(hi))
+	if !ok || err1 != nil || err2 != nil || a < 1024 || b > 65535 || a > b {
+		return 0, 0, errors.New("REROUTED_TURN_RELAY_PORTS must be a range of ports from 1024 to 65535, like 49160-49200")
+	}
+	return a, b, nil
+}
+
+// finish fills in what depends on other settings, and checks them all.
+func (c *Config) finish() error {
+	c.Defaults()
+	if c.TurnListen != "" {
+		if c.TurnSecret == "" {
+			secret, err := loadOrCreateTurnSecret(c.DataDir)
+			if err != nil {
+				return fmt.Errorf("REROUTED_TURN_LISTEN: the relay's secret: %w", err)
+			}
+			c.TurnSecret, c.turnSecretFile = secret, true
+		}
+		if len(c.TurnURLs) == 0 {
+			c.TurnURLs, c.turnDerived = c.builtinTurnURLs(), true
+		}
+	}
+	return c.validate()
 }
 
 func (c *Config) validate() error {
@@ -210,15 +311,41 @@ func (c *Config) validate() error {
 	if c.CommunityCode != "" && len(c.CommunityCode) < 10 {
 		return errors.New("REROUTED_COMMUNITY_CODE must be at least 10 characters")
 	}
+	switch c.LogLevel {
+	case "debug", "info", "warn", "error":
+	default:
+		return fmt.Errorf("REROUTED_LOG_LEVEL must be debug, info, warn, or error, not %q", c.LogLevel)
+	}
+	switch c.LogFormat {
+	case "text", "json":
+	default:
+		return fmt.Errorf("REROUTED_LOG_FORMAT must be text or json, not %q", c.LogFormat)
+	}
+	if c.MetricsListen != "" {
+		if _, _, err := net.SplitHostPort(c.MetricsListen); err != nil {
+			return errors.New("REROUTED_METRICS_LISTEN must be an address and port, like 127.0.0.1:9101")
+		}
+	}
+	if c.TurnListen != "" {
+		if _, port, err := net.SplitHostPort(c.TurnListen); err != nil || port == "" {
+			return errors.New("REROUTED_TURN_LISTEN must be an address and port, like :3478")
+		}
+	}
+	if c.TurnPublicIP != "" && net.ParseIP(c.TurnPublicIP) == nil {
+		return errors.New("REROUTED_TURN_PUBLIC_IP must be an IP address")
+	}
+	if c.TurnListen != "" && c.TurnRelayIP() == nil {
+		return errors.New("REROUTED_TURN_LISTEN needs REROUTED_TURN_PUBLIC_IP, the public address clients reach relayed media at")
+	}
 	if c.Registration == "invite" && len(c.RegistrationCode) < 10 {
 		return errors.New("REROUTED_REGISTRATION=invite needs REROUTED_REGISTRATION_CODE of at least 10 characters")
 	}
 	return nil
 }
 
-// bytesSetting reads a size in bytes, with an optional K, M, or G suffix (powers of 1024).
-func bytesSetting(key string, def int64) (int64, error) {
-	v := strings.TrimSpace(os.Getenv(key))
+// bytesValue reads a size in bytes, with an optional K, M, or G suffix (powers of 1024).
+func bytesValue(key, v string, def int64) (int64, error) {
+	v = strings.TrimSpace(v)
 	if v == "" {
 		return def, nil
 	}
@@ -238,20 +365,15 @@ func bytesSetting(key string, def int64) (int64, error) {
 	return n * mult, nil
 }
 
-func get(key, def string) string {
-	if v, ok := os.LookupEnv(key); ok {
-		return v
-	}
-	return def
-}
-
-func loadDotEnv(path string) error {
+// readDotEnv reads a settings file of KEY=value lines. A missing file reads as empty.
+func readDotEnv(path string) (map[string]string, error) {
+	out := map[string]string{}
 	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil
+		return out, nil
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer f.Close()
 	sc := bufio.NewScanner(f)
@@ -262,14 +384,30 @@ func loadDotEnv(path string) error {
 		}
 		k, v, ok := strings.Cut(line, "=")
 		if !ok {
-			return fmt.Errorf("%s:%d: expected KEY=value", path, n)
+			return nil, fmt.Errorf("%s:%d: expected KEY=value", path, n)
 		}
-		k, v = strings.TrimSpace(k), strings.Trim(strings.TrimSpace(v), `"'`)
-		if _, set := os.LookupEnv(k); !set {
-			os.Setenv(k, v)
+		out[strings.TrimSpace(k)] = strings.Trim(strings.TrimSpace(v), `"'`)
+	}
+	return out, sc.Err()
+}
+
+// TurnRelayIP is the public address of the built-in relay's media: REROUTED_TURN_PUBLIC_IP,
+// else the first of REROUTED_VOICE_PUBLIC_IPS, else the address REROUTED_TURN_LISTEN names
+// if it's a public one. It's nil if there's none.
+func (c *Config) TurnRelayIP() net.IP {
+	if ip := net.ParseIP(c.TurnPublicIP); ip != nil {
+		return ip
+	}
+	for _, s := range c.VoicePublicIPs {
+		if ip := net.ParseIP(s); ip != nil {
+			return ip
 		}
 	}
-	return sc.Err()
+	host, _, _ := net.SplitHostPort(c.TurnListen)
+	if ip := net.ParseIP(host); ip != nil && ip.IsGlobalUnicast() && !ip.IsPrivate() {
+		return ip
+	}
+	return nil
 }
 
 // ClientBase is the client API base URL published in the server document (SPEC §8.1).
@@ -291,6 +429,16 @@ func (c *Config) CommunityS2SBase(cm Community) string { return cm.URL + c.APIPa
 
 // Defaults fills in the public URL and API path when they're unset.
 func (c *Config) Defaults() {
+	if c.LogLevel == "" {
+		c.LogLevel = "info"
+	}
+	if c.LogFormat == "" {
+		c.LogFormat = "text"
+	}
+	if c.live == nil {
+		c.live = &live{}
+		c.live.level.Set(levelOf(c.LogLevel))
+	}
 	if c.MediaQuota == 0 {
 		c.MediaQuota = 1 << 30
 	}
