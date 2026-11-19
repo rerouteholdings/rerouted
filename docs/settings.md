@@ -4,6 +4,18 @@ rerouted reads its settings from environment variables, and from a settings file
 
 rerouted checks its settings when it starts, and exits with a message naming the problem if one is wrong.
 
+## Reload settings without a restart
+
+Send rerouted `SIGHUP` (with the packaged systemd unit, `sudo systemctl reload rerouted`; otherwise `kill -HUP PID`) to read the settings file and the environment again. A variable set in the environment still wins over the file. rerouted applies these settings at once:
+
+- Registration: `REROUTED_REGISTRATION`, `REROUTED_REGISTRATION_CODE`, `REROUTED_REGISTRATION_PUBLIC`, and `REROUTED_PAUSE_MOVES`.
+- Quotas: `REROUTED_MEDIA_QUOTA`, `REROUTED_BACKUP_QUOTA`, `REROUTED_COMMUNITY_FILE_DAYS`, `REROUTED_COMMUNITY_FILE_QUOTA`, and `REROUTED_COMMUNITY_HISTORY_QUOTA`.
+- The call relay's credentials: `REROUTED_TURN_URLS` and `REROUTED_TURN_SECRET`.
+- Community creation: `REROUTED_COMMUNITY_CODE` and `REROUTED_COMMUNITY_OPEN`.
+- `REROUTED_TLS_ASK_ALLOW`, `REROUTED_LOG_LEVEL`, `REROUTED_UPDATE_CHECK`, and `REROUTED_RESTART_MAX_WAIT`.
+
+Every other setting needs a restart. If one of them changed, rerouted logs a warning that names it, and keeps using its old value until the next restart. If the file has a mistake, rerouted logs the error and keeps all its current settings.
+
 ## Server
 
 | Setting | Default | What it does |
@@ -39,8 +51,11 @@ Sizes are a number of bytes, or a number with a `K`, `M`, or `G` suffix for KiB,
 
 | Setting | Default | What it does |
 |---|---|---|
-| `REROUTED_TURN_URLS` | None | The relay's `turn:` and `turns:` URLs, comma-separated (SPEC §15.1). Without them, `GET turn` answers `501`. |
-| `REROUTED_TURN_SECRET` | None | The secret shared with the relay (coturn's `static-auth-secret`), at least 16 characters. Required with `REROUTED_TURN_URLS`. |
+| `REROUTED_TURN_URLS` | None, or the built-in relay's | The relay's `turn:` and `turns:` URLs, comma-separated (SPEC §15.1). Without them, `GET turn` answers `501`. With the built-in relay on and this unset, rerouted gives out `turn:NAME:PORT?transport=udp` and `turn:NAME:PORT?transport=tcp`, where `NAME` is `REROUTED_NAME` and `PORT` is the relay's port. |
+| `REROUTED_TURN_SECRET` | None, or a generated one | The secret shared with the relay (coturn's `static-auth-secret`), at least 16 characters. Required with `REROUTED_TURN_URLS`. With the built-in relay on and this unset, rerouted makes a random secret and keeps it in `turn-secret` in `REROUTED_DATA_DIR`. |
+| `REROUTED_TURN_LISTEN` | None: off | The address the built-in relay listens on, over UDP and TCP, such as `:3478`. Empty turns the built-in relay off. It doesn't do TLS, so it has no `turns:` URL. |
+| `REROUTED_TURN_RELAY_PORTS` | `49160-49200` | The UDP ports the built-in relay sends and receives relayed media on, as `LOW-HIGH`. Each person in a relayed call uses about two. |
+| `REROUTED_TURN_PUBLIC_IP` | The first of `REROUTED_VOICE_PUBLIC_IPS` | The public IP address clients reach the built-in relay's media at. Required with `REROUTED_TURN_LISTEN` unless `REROUTED_VOICE_PUBLIC_IPS` is set, or `REROUTED_TURN_LISTEN` names a public address. |
 
 See [Run a call relay](run-a-call-relay.md).
 
@@ -75,6 +90,23 @@ A reverse proxy that gets certificates on demand, such as Caddy, can ask reroute
 | Setting | Default | What it does |
 |---|---|---|
 | `REROUTED_PUBLIC_FIREHOSE` | `off` | `on` serves a public feed of the metadata of every delivery stored here. See [Public firehose](public-firehose.md) before turning it on. |
+
+## Logging
+
+| Setting | Default | What it does |
+|---|---|---|
+| `REROUTED_LOG_LEVEL` | `info` | The least severe log messages to write: `debug`, `info`, `warn`, or `error`. |
+| `REROUTED_LOG_FORMAT` | `text` | `text` writes `key=value` lines. `json` writes one JSON object per line, for log collectors. |
+
+## Monitoring and upgrades
+
+See [Monitor a homeserver](monitoring.md).
+
+| Setting | Default | What it does |
+|---|---|---|
+| `REROUTED_METRICS_LISTEN` | None: off | The address to serve metrics on, in the Prometheus text format, at `/metrics`, such as `127.0.0.1:9101`. Keep it on a private address. |
+| `REROUTED_UPDATE_CHECK` | `off` | `on` checks once a day whether a newer rerouted has been released, and logs it if so. |
+| `REROUTED_RESTART_MAX_WAIT` | `6h` | How long a restart asked for with `SIGUSR2` waits for voice calls to end before it restarts anyway, as a duration such as `90m` or `6h`. |
 
 ## Development
 
