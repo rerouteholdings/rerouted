@@ -1,0 +1,2 @@
+# The system user rerouted runs as (installed as /usr/lib/sysusers.d/rerouted.conf).
+u rerouted - "rerouted Tieroute homeserver" /var/lib/rerouted /usr/sbin/nologin

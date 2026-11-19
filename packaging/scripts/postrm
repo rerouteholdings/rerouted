@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+# Settings in /etc/rerouted and data in /var/lib/rerouted stay, even on purge: they hold the
+# server's key and its users' identities. Delete them yourself if you mean to.
+if [ -d /run/systemd/system ]; then systemctl daemon-reload >/dev/null 2>&1 || true; fi

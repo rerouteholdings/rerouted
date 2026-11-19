@@ -1,0 +1,4 @@
+#!/bin/sh
+set -e
+# Only when it's removed: an upgrade leaves rerouted running until it restarts itself.
+if [ "$1" = remove ]; then /usr/lib/rerouted/package-hooks remove; fi

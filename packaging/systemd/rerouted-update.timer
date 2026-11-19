@@ -1,0 +1,13 @@
+# Checks for a new rerouted package once a day. Off until `rerouted auto-updates on`
+# (or systemctl enable --now rerouted-update.timer).
+[Unit]
+Description=Upgrade rerouted from the Reroute package repository daily
+Documentation=man:rerouted(1)
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=4h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

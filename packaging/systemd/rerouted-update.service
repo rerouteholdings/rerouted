@@ -1,0 +1,12 @@
+# Upgrades the rerouted package, and only that package, from the Reroute repository. Started
+# by rerouted-update.timer, which `rerouted auto-updates on` turns on. The package's own
+# scripts then restart rerouted on the new version once no voice calls are active.
+[Unit]
+Description=Upgrade rerouted from the Reroute package repository
+Documentation=man:rerouted(1)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/rerouted/update

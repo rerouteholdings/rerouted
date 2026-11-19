@@ -1,0 +1,30 @@
+#!/bin/sh
+# Upgrades the rerouted package, and nothing else, from the Reroute package repository.
+# Installed as /usr/lib/rerouted/update, and run by rerouted-update.service. The package's
+# own scripts then restart rerouted on the new version once no voice calls are active.
+#
+# apt: refreshes only the Reroute source list (a file in /etc/apt/sources.list.d that names
+# .../reroute/linux/apt), then upgrades rerouted, keeping any settings file you changed.
+# dnf: upgrades rerouted from the repository named reroute (reroute.repo).
+# pacman isn't supported: Arch Linux doesn't support upgrading one package on its own.
+set -eu
+
+if command -v apt-get >/dev/null 2>&1; then
+  list=$(grep -lsE '^[^#]*/reroute/linux/apt' /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources | head -n 1 || true)
+  if [ -z "$list" ]; then
+    echo "No apt source in /etc/apt/sources.list.d names the Reroute repository (.../reroute/linux/apt)" >&2
+    exit 1
+  fi
+  apt-get update -q \
+    -o Dir::Etc::sourcelist="$list" -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0
+  DEBIAN_FRONTEND=noninteractive apt-get install -q -y --only-upgrade \
+    -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold rerouted
+elif command -v dnf >/dev/null 2>&1; then
+  dnf upgrade -y --refresh --repo=reroute rerouted
+elif command -v pacman >/dev/null 2>&1; then
+  echo "On Arch Linux, upgrade rerouted with the rest of the system: sudo pacman -Syu" >&2
+  exit 1
+else
+  echo "No apt or dnf here, so rerouted can't upgrade itself" >&2
+  exit 1
+fi

@@ -1,0 +1,53 @@
+# rerouted, one instance for each extra homeserver on this host: rerouted@NAME reads
+# /etc/rerouted/NAME.env (sudo rerouted init writes it), and keeps its data in
+# /var/lib/rerouted-NAME. The first homeserver is usually rerouted.service.
+[Unit]
+Description=rerouted Tieroute homeserver (%i)
+Documentation=man:rerouted(1) https://github.com/rerouteholdings/rerouted
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/rerouted/%i.env
+
+[Service]
+User=rerouted
+Group=rerouted
+ExecStart=/usr/bin/rerouted -env /etc/rerouted/%i.env
+ExecReload=/bin/kill -HUP $MAINPID
+WorkingDirectory=/var/lib/rerouted-%i
+StateDirectory=rerouted-%i
+StateDirectoryMode=0700
+# After a package upgrade, SIGUSR2 asks rerouted to exit with code 75 once no voice calls are
+# active, and systemd starts the new binary.
+Restart=on-failure
+RestartSec=2
+# Code 75 is that planned restart, so it isn't counted as a failure.
+SuccessExitStatus=75
+RestartForceExitStatus=75
+LimitNOFILE=65536
+
+# Hardening: rerouted only needs its own data directory and the network. The built-in call
+# relay and the community voice SFU need nothing more, as long as their ports are 1024 or
+# above; for a lower port, add AmbientCapabilities=CAP_NET_BIND_SERVICE in a drop-in, and
+# remove CapabilityBoundingSet= there.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+# AF_NETLINK: the community voice SFU (Pion) lists the host's interfaces through netlink.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,107 @@
+# nfpm configuration for the rerouted .deb, .rpm, and Arch packages. scripts/release.sh runs
+# nfpm from the repository's top directory, with these set:
+#
+#   VERSION   the version, such as 0.2.0 or 0.2.0-rc.1
+#   ARCH      amd64 or arm64 (nfpm names them x86_64 and aarch64 for rpm and Arch)
+#   STAGE     the directory with the built binary and generated files
+#
+# release.sh appends the man page and shell completions to contents when the build has them.
+name: rerouted
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+release: "1"
+section: net
+priority: optional
+maintainer: Reroute Holdings LLC <releases@rerouteholdings.llc>
+vendor: Reroute Holdings LLC
+homepage: https://github.com/rerouteholdings/rerouted
+license: MIT
+description: |-
+  Reference homeserver for the Tieroute chat protocol
+  rerouted holds Tieroute identities and routes their end-to-end
+  encrypted messages, which it never needs to read. It can also host
+  community servers.
+suggests:
+  - caddy
+
+rpm:
+  summary: Reference homeserver for the Tieroute chat protocol
+  group: System Environment/Daemons
+  packager: Reroute Holdings LLC <releases@rerouteholdings.llc>
+  compression: zstd
+  buildhost: rerouted-release
+
+archlinux:
+  packager: Reroute Holdings LLC <releases@rerouteholdings.llc>
+  scripts:
+    postupgrade: packaging/scripts/arch-post-upgrade
+
+overrides:
+  deb:
+    scripts:
+      postinstall: packaging/scripts/deb-postinst
+      preremove: packaging/scripts/deb-prerm
+      postremove: packaging/scripts/postrm
+  rpm:
+    scripts:
+      postinstall: packaging/scripts/rpm-post
+      preremove: packaging/scripts/rpm-preun
+      postremove: packaging/scripts/postrm
+  archlinux:
+    scripts:
+      postinstall: packaging/scripts/arch-post-install
+      preremove: packaging/scripts/arch-pre-remove
+      postremove: packaging/scripts/postrm
+
+contents:
+  - src: ${STAGE}/rerouted-linux-${ARCH}
+    dst: /usr/bin/rerouted
+    expand: true
+    file_info: { mode: 0755 }
+  - src: packaging/systemd/rerouted.service
+    dst: /usr/lib/systemd/system/rerouted.service
+    file_info: { mode: 0644 }
+  - src: packaging/systemd/rerouted@.service
+    dst: /usr/lib/systemd/system/rerouted@.service
+    file_info: { mode: 0644 }
+  - src: packaging/systemd/rerouted-update.service
+    dst: /usr/lib/systemd/system/rerouted-update.service
+    file_info: { mode: 0644 }
+  - src: packaging/systemd/rerouted-update.timer
+    dst: /usr/lib/systemd/system/rerouted-update.timer
+    file_info: { mode: 0644 }
+  - src: packaging/rerouted.sysusers
+    dst: /usr/lib/sysusers.d/rerouted.conf
+    file_info: { mode: 0644 }
+  - src: packaging/scripts/package-hooks
+    dst: /usr/lib/rerouted/package-hooks
+    file_info: { mode: 0755 }
+  - src: packaging/scripts/update
+    dst: /usr/lib/rerouted/update
+    file_info: { mode: 0755 }
+  # Settings: only the example is packaged. Your rerouted.env is never part of the package,
+  # and a changed example is kept on upgrade.
+  - dst: /etc/rerouted
+    type: dir
+    file_info: { mode: 0750 }
+  - src: ${STAGE}/rerouted.env.example
+    dst: /etc/rerouted/rerouted.env.example
+    type: config|noreplace
+    expand: true
+    file_info: { mode: 0644 }
+  - src: README.md
+    dst: /usr/share/doc/rerouted/README.md
+    file_info: { mode: 0644 }
+  - src: LICENSE
+    dst: /usr/share/doc/rerouted/copyright
+    packager: deb
+    file_info: { mode: 0644 }
+  - src: LICENSE
+    dst: /usr/share/licenses/rerouted/LICENSE
+    packager: rpm
+    file_info: { mode: 0644 }
+  - src: LICENSE
+    dst: /usr/share/licenses/rerouted/LICENSE
+    packager: archlinux
+    file_info: { mode: 0644 }

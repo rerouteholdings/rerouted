@@ -1,0 +1,2 @@
+# $1 is how many versions are installed after this one: 1 for an install, 2 for an upgrade.
+if [ "$1" -ge 2 ]; then /usr/lib/rerouted/package-hooks upgrade; else /usr/lib/rerouted/package-hooks install; fi

@@ -1,0 +1,6 @@
+#!/bin/sh
+set -e
+# configure, with the version it replaces when it's an upgrade.
+if [ "$1" = configure ]; then
+  if [ -n "$2" ]; then /usr/lib/rerouted/package-hooks upgrade; else /usr/lib/rerouted/package-hooks install; fi
+fi

@@ -1,0 +1,82 @@
+#!/bin/sh
+# What the rerouted package does when it's installed, upgraded, or removed. Installed as
+# /usr/lib/rerouted/package-hooks, and called by the .deb, .rpm, and Arch package scripts:
+#
+#   package-hooks install   a fresh install: the rerouted user and /etc/rerouted
+#   package-hooks upgrade   the same, then asks every running rerouted to restart on the new
+#                           binary once no voice calls are active (SIGUSR2; it exits with code
+#                           75, and systemd starts it again)
+#   package-hooks remove    the package is being removed: stops and turns off its units
+#
+# It never enables or starts a service, and never touches settings or data.
+set -e
+
+systemd_running() { [ -d /run/systemd/system ]; }
+
+# The rerouted user: from sysusers.d where systemd has it, otherwise with useradd.
+add_user() {
+  if command -v systemd-sysusers >/dev/null 2>&1; then
+    systemd-sysusers rerouted.conf >/dev/null 2>&1 || true
+  fi
+  if ! getent passwd rerouted >/dev/null 2>&1; then
+    nologin=/usr/sbin/nologin
+    [ -x "$nologin" ] || nologin=/sbin/nologin
+    useradd --system --user-group --home-dir /var/lib/rerouted --no-create-home \
+      --shell "$nologin" --comment "rerouted Tieroute homeserver" rerouted
+  fi
+}
+
+# /etc/rerouted holds the settings files, which have the registration code: root writes them,
+# and rerouted reads them.
+config_dir() {
+  install -d -m 750 /etc/rerouted
+  chown root:rerouted /etc/rerouted
+  chmod 750 /etc/rerouted
+}
+
+# The units running now: rerouted.service and each rerouted@NAME.service.
+running_units() {
+  systemctl list-units --type=service --state=active --no-legend --plain \
+    'rerouted.service' 'rerouted@*.service' 2>/dev/null | awk '{ print $1 }'
+}
+
+case "$1" in
+install)
+  add_user
+  config_dir
+  if systemd_running; then systemctl daemon-reload || true; fi
+  if [ ! -f /etc/rerouted/rerouted.env ] && ! ls /etc/rerouted/*.env >/dev/null 2>&1; then
+    echo "rerouted is installed. To set it up, run: sudo rerouted init"
+  fi
+  ;;
+upgrade)
+  add_user
+  config_dir
+  if systemd_running; then
+    systemctl daemon-reload || true
+    for unit in $(running_units); do
+      pid=$(systemctl show --property=MainPID --value "$unit" 2>/dev/null || echo 0)
+      if [ -n "$pid" ] && [ "$pid" != 0 ]; then
+        kill -USR2 "$pid" 2>/dev/null && echo "$unit restarts on the new version once no calls are active" || true
+      fi
+    done
+  fi
+  ;;
+remove)
+  if systemd_running; then
+    units="rerouted-update.timer rerouted-update.service rerouted.service"
+    for link in /etc/systemd/system/*.wants/rerouted@*.service; do
+      [ -e "$link" ] || [ -L "$link" ] || continue
+      units="$units $(basename "$link")"
+    done
+    units="$units $(running_units)"
+    # shellcheck disable=SC2086
+    systemctl disable --now $(printf '%s\n' $units | sort -u) >/dev/null 2>&1 || true
+  fi
+  ;;
+*)
+  echo "usage: package-hooks install|upgrade|remove" >&2
+  exit 2
+  ;;
+esac
+exit 0
