@@ -9,14 +9,35 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rerouteholdings/rerouted/internal/store"
+	"github.com/rerouteholdings/rerouted/internal/config"
+	"github.com/rerouteholdings/rerouted/internal/store/sqlite"
 )
 
 // admin runs an operator command against the server's storage, and returns the exit code.
 // It works while the server runs: SQLite takes the second connection.
-func admin(st store.Store, args []string) int {
+func admin(cfg *config.Config, st *sqlite.Store, args []string) int {
 	ctx := context.Background()
 	switch args[0] {
+	case "accounts":
+		n := 50
+		if len(args) > 2 {
+			fmt.Fprintln(os.Stderr, "accounts [N]: N is how many to show")
+			return 2
+		}
+		if len(args) == 2 {
+			var err error
+			if n, err = strconv.Atoi(args[1]); err != nil || n < 1 {
+				fmt.Fprintln(os.Stderr, "accounts N: N is how many to show")
+				return 2
+			}
+		}
+		return listAccounts(ctx, cfg, st, n)
+	case "communities":
+		if len(args) != 1 {
+			fmt.Fprintln(os.Stderr, "communities takes no arguments")
+			return 2
+		}
+		return listCommunities(ctx, cfg, st)
 	case "reports":
 		n := 20
 		if len(args) > 1 {
@@ -97,6 +118,6 @@ func admin(st store.Store, args []string) int {
 		fmt.Printf("kept %s for %s: nobody else can register it. release-handle frees it\n", handle, id)
 		return 0
 	}
-	fmt.Fprintf(os.Stderr, "unknown command %q: use reports, remove-media, release-handle, or keep-handle\n", args[0])
+	fmt.Fprintf(os.Stderr, "unknown command %q: see rerouted help\n", args[0])
 	return 2
 }
