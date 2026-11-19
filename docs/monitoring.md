@@ -75,7 +75,7 @@ A restart ends every community voice call on the server. So that an upgrade does
 1. Send rerouted `SIGUSR2`. The package's post-install script does this after an upgrade.
 2. rerouted logs that a restart is pending, and sets `restart_pending` in the status file. It keeps serving as usual.
 3. Every 15 seconds, it checks for active voice calls. Once there are none, it shuts down cleanly and exits with code 75.
-4. The service manager starts it again, on the new binary. The packaged systemd units restart rerouted on any exit code other than 0 (`Restart=on-failure`).
+4. The service manager starts it again, on the new binary. The packaged systemd units always restart rerouted after exit code 75, and count it as a clean exit rather than a failure (`RestartForceExitStatus=75`, `SuccessExitStatus=75`).
 
 If calls are still going after `REROUTED_RESTART_MAX_WAIT` (6 hours by default), rerouted logs a warning and restarts anyway. Sending `SIGUSR2` again while a restart is pending changes nothing. `SIGTERM`, which `systemctl stop` and `systemctl restart` send, still stops rerouted at once.
 
