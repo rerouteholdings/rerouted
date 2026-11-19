@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -121,7 +122,15 @@ func open(path, sync string) (*Store, error) {
 	}
 	if v > SchemaVersion {
 		db.Close()
-		return nil, errors.New("database was created by a newer rerouted; refusing to open it")
+		return nil, fmt.Errorf("database %s was created by a newer rerouted: it has schema version %d, and this rerouted supports up to %d. Refusing to open it. Install the newer rerouted again, or restore the %s.pre-v* snapshot made before the upgrade", path, v, SchemaVersion, filepath.Base(path))
+	}
+	// Before migrating, keep a consistent copy of the database as it was, so going back to
+	// the older rerouted stays possible.
+	if v > 0 && v < SchemaVersion {
+		if err := snapshotBeforeMigration(db, path, v); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("database %s: copying it before the upgrade from schema version %d failed, so it wasn't upgraded: %w", path, v, err)
+		}
 	}
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
