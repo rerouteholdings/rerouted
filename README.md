@@ -6,6 +6,19 @@ A *homeserver* holds its users' identities, and stores their messages until thei
 
 rerouted is alpha software, maintained by Reroute Holdings LLC, and it runs the public alpha homeservers. It speaks Tieroute wire versions 1 and 2 side by side, each under its own API base. Wire version 2 comes from the current spec, version 2.0, which adds post-quantum signatures, a migration from wire version 1, and community servers. rerouted implements every wire version 2 endpoint in the spec's Appendix A, including the migration and community servers.
 
+## Install
+
+rerouted is packaged for Debian, Ubuntu, Fedora, and Arch Linux, on amd64 and arm64, in the same signed repository as the Reroute app. On Debian or Ubuntu:
+
+```sh
+sudo curl -fsSLo /usr/share/keyrings/reroute-archive-keyring.gpg https://rerouteholdings.llc/reroute/linux/reroute-archive-keyring.gpg
+echo 'deb [signed-by=/usr/share/keyrings/reroute-archive-keyring.gpg] https://rerouteholdings.llc/reroute/linux/apt stable main' | sudo tee /etc/apt/sources.list.d/reroute.list
+sudo apt update && sudo apt install rerouted
+sudo rerouted init
+```
+
+On Fedora, add the repository with `sudo rpm --import https://rerouteholdings.llc/reroute/linux/reroute-archive-keyring.asc` and `sudo curl -fsSLo /etc/yum.repos.d/reroute.repo https://rerouteholdings.llc/reroute/linux/rpm/reroute.repo`, then run `sudo dnf install rerouted`. For Arch Linux, and the key's fingerprint, see [Install Reroute on Linux](https://rerouteholdings.llc/install/linux), and install `rerouted`. Signed release tarballs are in `https://rerouteholdings.llc/reroute/linux/rerouted/`. [Run a homeserver](docs/run-a-homeserver.md) has the whole setup.
+
 ## Documentation
 
 - [Run a homeserver](docs/run-a-homeserver.md): from a fresh Linux server to people signing up.
@@ -94,7 +107,9 @@ Tests run against real SQLite databases in temporary directories, and the federa
 | `internal/wire/` | JSON encoding, signed envelopes, identifiers, chain entries, and error codes |
 | `internal/ws/` | The server side of the WebSocket protocol (RFC 6455), on the standard library |
 | `internal/config/`, `internal/serverkey/` | Settings, and the server's signing key |
-| `deploy/` | Example systemd, Caddy, and coturn configurations |
+| `packaging/` | The systemd units, and the configuration and scripts for the packages |
+| `scripts/release.sh` | Builds a release: tarballs and packages for Linux |
+| `deploy/` | Example Caddy and coturn configurations |
 | `docs/` | Guides and reference for operators |
 
 Before you send a change, read [CONTRIBUTING.md](CONTRIBUTING.md). To report a vulnerability, follow [SECURITY.md](SECURITY.md), and don't open a public issue.
