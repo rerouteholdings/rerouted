@@ -385,12 +385,14 @@ func (s *Server) sendItem(ctx context.Context, it store.OutboxItem) {
 	case isStatus && st.Status/100 == 4 && !retryable(st.Status):
 		// A refusal: the server is up, but won't take this one. Don't retry.
 		s.retry.ok(it.Dest)
+		s.sendFailures.Add(1)
 		s.log.Warn("s2s refused", "dest", it.Dest, "path", it.Path, "err", err)
 		s.logged("marking an outbox item done", s.st.Outbox().Done(ctx, it.ID))
 		s.deliveryFailed(ctx, it, st.Code, st.IDs)
 	case ctx.Err() != nil:
 		// Shutting down: the item stays due, for the next start.
 	default:
+		s.sendFailures.Add(1)
 		var hint int64
 		if isStatus {
 			hint = st.RetryAfter

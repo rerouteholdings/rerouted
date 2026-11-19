@@ -16,6 +16,7 @@ import (
 	"mime"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/rerouteholdings/rerouted/internal/config"
@@ -53,6 +54,8 @@ type Server struct {
 	v2        *Server      // on the version 1 Server, its version 2 sibling (wireversion.go)
 	v1        *Server      // on the version 2 Server, its version 1 sibling, for migrations (migrate.go)
 	comm      *communities // on the version 1 Server: the community servers it runs (community.go)
+
+	sendFailures atomic.Int64 // S2S requests that failed or were refused, for Stats
 }
 
 // New makes the server for both wire versions: the version 1 Server, which serves
