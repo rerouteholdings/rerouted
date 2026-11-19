@@ -34,6 +34,7 @@ var commands []command
 
 func init() {
 	commands = []command{
+		{"checkup", "checkup [--peer NAME] [--handle H]", "check the configuration, DNS, certificates, clock, and call relay", runCheckup},
 		{"status", "status [--json]", "show whether the server is running, and what it holds", runStatus},
 		{"config", "config check", "check the settings file for mistakes", runConfig},
 		{"backup", "backup [DEST]", "back up the database, keys, and files to one archive, while the server runs", runBackup},
