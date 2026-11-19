@@ -23,7 +23,8 @@ func (s *Server) optAuthed(h func(http.ResponseWriter, *http.Request, session)) 
 	}
 }
 
-// ---- GET servers/{name}: another server's document, for checking hub receipts ----
+// ---- GET servers/{name}: another server's document, as served, for checking hub
+// receipts and finding a community server's API (spec/api/client-public.md) ----
 
 func (s *Server) serverInfo(w http.ResponseWriter, r *http.Request, _ session) {
 	name := r.PathValue("name")
@@ -36,7 +37,7 @@ func (s *Server) serverInfo(w http.ResponseWriter, r *http.Request, _ session) {
 		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, err.Error())
 		return
 	}
-	writeBody(w, http.StatusOK, d)
+	writeRaw(w, http.StatusOK, d.Raw)
 }
 
 // ---- POST recover (spec/api/client-stage3.md) ----

@@ -76,8 +76,10 @@ type cachedDoc struct {
 	fetched time.Time
 }
 
-// Doc is the part of a server document (SPEC §5.1) federation uses.
+// Doc is the part of a server document (SPEC §5.1) federation uses. Raw is the
+// document as the server served it, members federation doesn't read included.
 type Doc struct {
+	Raw  []byte `json:"-"`
 	Name string `json:"name"`
 	APIs []struct {
 		V      uint   `json:"v"`
@@ -259,6 +261,7 @@ func (f *Fed) fetchDoc(ctx context.Context, name string) (Doc, error) {
 	if d.Name != name {
 		return Doc{}, fmt.Errorf("server document for %s names %q", name, d.Name)
 	}
+	d.Raw = b
 	f.mu.Lock()
 	if f.docs == nil {
 		f.docs = map[string]cachedDoc{}
