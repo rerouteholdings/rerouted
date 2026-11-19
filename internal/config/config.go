@@ -3,6 +3,7 @@ package config
 
 import (
 	"bufio"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"net"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rerouteholdings/rerouted/internal/apns"
 )
 
 // Config holds every setting. See .env.example for descriptions.
@@ -94,10 +97,19 @@ type Config struct {
 	// waits for voice calls to end.
 	RestartMaxWait time.Duration
 
-	envFile        string // the settings file Load read, for Reload
-	turnDerived    bool   // TurnURLs were made for the built-in relay
-	turnSecretFile bool   // TurnSecret came from the data directory
-	live           *live  // the reloadable settings' current values (reload.go)
+	// Push notifications for the Reroute iPhone app, through Apple's push notification
+	// service (APNs): a rerouted feature, outside the Tieroute spec. REROUTED_APNS_KEY_FILE:
+	// the .p8 token-signing key from the Apple developer account; empty, the default, turns
+	// push off. REROUTED_APNS_KEY_ID and REROUTED_APNS_TEAM_ID: the key's ID and the team's,
+	// 10 characters each. REROUTED_APNS_TOPIC: the app's bundle ID (default
+	// llc.rerouteholdings.reroute). Only a restart changes them.
+	APNSKeyFile, APNSKeyID, APNSTeamID, APNSTopic string
+
+	apnsKey        *ecdsa.PrivateKey // read from APNSKeyFile by finish
+	envFile        string            // the settings file Load read, for Reload
+	turnDerived    bool              // TurnURLs were made for the built-in relay
+	turnSecretFile bool              // TurnSecret came from the data directory
+	live           *live             // the reloadable settings' current values (reload.go)
 }
 
 // Community is one server name this process serves as a community server.
@@ -168,6 +180,10 @@ func parse(lookup func(string) (string, bool)) (*Config, error) {
 		TurnListen:         env("REROUTED_TURN_LISTEN"),
 		TurnPublicIP:       env("REROUTED_TURN_PUBLIC_IP"),
 		UpdateCheck:        get("REROUTED_UPDATE_CHECK", "off") == "on",
+		APNSKeyFile:        env("REROUTED_APNS_KEY_FILE"),
+		APNSKeyID:          strings.TrimSpace(env("REROUTED_APNS_KEY_ID")),
+		APNSTeamID:         strings.TrimSpace(env("REROUTED_APNS_TEAM_ID")),
+		APNSTopic:          strings.TrimSpace(get("REROUTED_APNS_TOPIC", DefaultAPNSTopic)),
 	}
 	for _, u := range strings.Split(env("REROUTED_TLS_ASK_ALSO"), ",") {
 		if u = strings.TrimRight(strings.TrimSpace(u), "/"); u != "" {
@@ -258,7 +274,37 @@ func (c *Config) finish() error {
 			c.TurnURLs, c.turnDerived = c.builtinTurnURLs(), true
 		}
 	}
+	if c.APNSKeyFile != "" {
+		k, err := apns.LoadKey(c.APNSKeyFile)
+		if err != nil {
+			return fmt.Errorf("REROUTED_APNS_KEY_FILE: %w", err)
+		}
+		c.apnsKey = k
+	}
 	return c.validate()
+}
+
+// DefaultAPNSTopic is the Reroute app's bundle ID.
+const DefaultAPNSTopic = "llc.rerouteholdings.reroute"
+
+// APNSKey is the push notification key REROUTED_APNS_KEY_FILE names, read at the start, or
+// nil when push is off.
+func (c *Config) APNSKey() *ecdsa.PrivateKey { return c.apnsKey }
+
+// SetAPNSKey sets the push notification key, for tests that build a Config by hand.
+func (c *Config) SetAPNSKey(k *ecdsa.PrivateKey) { c.apnsKey = k }
+
+// appleID reports whether s looks like an Apple key or team ID: 10 letters and digits.
+func appleID(s string) bool {
+	if len(s) != 10 {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Config) validate() error {
@@ -336,6 +382,16 @@ func (c *Config) validate() error {
 	}
 	if c.TurnListen != "" && c.TurnRelayIP() == nil {
 		return errors.New("REROUTED_TURN_LISTEN needs REROUTED_TURN_PUBLIC_IP, the public address clients reach relayed media at")
+	}
+	if c.APNSKeyFile != "" {
+		switch {
+		case !appleID(c.APNSKeyID):
+			return errors.New("REROUTED_APNS_KEY_FILE needs REROUTED_APNS_KEY_ID, the key's 10-character ID from the Apple developer account")
+		case !appleID(c.APNSTeamID):
+			return errors.New("REROUTED_APNS_KEY_FILE needs REROUTED_APNS_TEAM_ID, the 10-character team ID the app is published under")
+		case c.APNSTopic == "" || strings.ContainsAny(c.APNSTopic, " \t/"):
+			return errors.New("REROUTED_APNS_TOPIC must be the app's bundle ID, like " + DefaultAPNSTopic)
+		}
 	}
 	if c.Registration == "invite" && len(c.RegistrationCode) < 10 {
 		return errors.New("REROUTED_REGISTRATION=invite needs REROUTED_REGISTRATION_CODE of at least 10 characters")

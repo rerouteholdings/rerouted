@@ -114,6 +114,10 @@ var restartOnly = map[string]string{
 	"TurnRelayMin":   "REROUTED_TURN_RELAY_PORTS",
 	"TurnRelayMax":   "REROUTED_TURN_RELAY_PORTS",
 	"TurnPublicIP":   "REROUTED_TURN_PUBLIC_IP",
+	"APNSKeyFile":    "REROUTED_APNS_KEY_FILE",
+	"APNSKeyID":      "REROUTED_APNS_KEY_ID",
+	"APNSTeamID":     "REROUTED_APNS_TEAM_ID",
+	"APNSTopic":      "REROUTED_APNS_TOPIC",
 }
 
 // Reload reads the settings file Load read again, with the environment, and applies the
