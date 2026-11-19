@@ -217,6 +217,12 @@ func open(path, sync string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	// Push notification tokens, in a new table like the community ones: created for every
+	// database, new or upgraded, with no schema version change (push.go).
+	if _, err := db.Exec(pushSchema); err != nil {
+		db.Close()
+		return nil, err
+	}
 	// Indexes on columns that older databases only have after the migrations above.
 	if _, err := db.Exec(indexes); err != nil {
 		db.Close()
@@ -336,6 +342,7 @@ func (s *Store) Media() store.Media             { return media{s.db, s.mediaDir}
 func (s *Store) Account() store.Account         { return account{s.db, s.wire} }
 func (s *Store) Backups() store.Backups         { return backups{s.db} }
 func (s *Store) Reports() store.Reports         { return reports{s.db} }
+func (s *Store) Push() store.Push               { return push{s.db, s.rdb} }
 func (s *Store) Communities() store.Communities {
 	return communities{s.db, s.rdb, filepath.Join(s.mediaDir, "community")}
 }

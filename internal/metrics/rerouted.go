@@ -38,6 +38,8 @@ func Collect(ctx context.Context, src Sources) []Metric {
 		Gauge("rerouted_voice_rooms", "Community voice channels with anyone in them.", float64(stats.VoiceRooms)),
 		Gauge("rerouted_voice_participants", "Devices in community voice channels.", float64(stats.VoiceParticipants)),
 		Counter("rerouted_s2s_send_failures_total", "S2S requests that failed or were refused, since the start.", float64(stats.SendFailures)),
+		Counter("rerouted_push_sent_total", "Push notifications Apple's push service accepted, since the start.", float64(stats.PushesSent)),
+		Counter("rerouted_push_failed_total", "Push notifications that failed, were refused, or were dropped, since the start.", float64(stats.PushesFailed)),
 	}
 	if src.Requests != nil {
 		ms = append(ms, src.Requests.Metric())

@@ -132,6 +132,18 @@ func (ss *streams) of(id string) []*stream {
 	return out
 }
 
+// deviceOpen reports whether one of id's devices has a stream open.
+func (ss *streams) deviceOpen(id string, device []byte) bool {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+	for st := range ss.m[id] {
+		if bytes.Equal(st.device, device) {
+			return true
+		}
+	}
+	return false
+}
+
 func (ss *streams) connected(id string) bool {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()

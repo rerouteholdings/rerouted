@@ -639,6 +639,9 @@ func (s *Server) deliverLocal(ctx context.Context, d delivery, origin string) er
 		it.Cursor = cur
 		s.pushItem(ds[i].Owner, it)
 		s.fire.publish(ds[i].Owner, it)
+		if pushWorthy(d, ds[i].Owner) {
+			s.pushNotify(ds[i].Owner)
+		}
 	}
 	return first
 }

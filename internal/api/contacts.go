@@ -75,6 +75,9 @@ func (s *Server) notify(ctx context.Context, owner string, notice map[string]any
 	}
 	it.Cursor = cur
 	s.pushItem(owner, it)
+	if notice["t"] == "contact-request" {
+		s.pushNotify(owner) // the only notice worth a push notification (push.go)
+	}
 	return nil
 }
 

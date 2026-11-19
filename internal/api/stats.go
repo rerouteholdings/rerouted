@@ -7,12 +7,17 @@ type Stats struct {
 	VoiceRooms        int   // community voice channels with anyone in them
 	VoiceParticipants int   // devices in those channels
 	SendFailures      int64 // S2S requests that failed or were refused since the start
+	PushesSent        int64 // push notifications APNs accepted since the start
+	PushesFailed      int64 // push notifications that failed, were refused, or were dropped
 }
 
 // Stats counts what's going on now, across both wire versions and every community. Call it
 // on the Server New returned.
 func (s *Server) Stats() Stats {
 	var st Stats
+	if s.pushes != nil {
+		st.PushesSent, st.PushesFailed = s.pushes.sent.Load(), s.pushes.failed.Load()
+	}
 	for _, srv := range []*Server{s, s.v2} {
 		if srv == nil {
 			continue

@@ -85,6 +85,9 @@ func serve(cfg *config.Config, key serverkey.Key, log *slog.Logger, st *sqlite.S
 	if cfg.Dev {
 		log.Warn("dev mode: S2S to these peers uses plain http", "peers", cfg.Peers)
 	}
+	if cfg.APNSKey() != nil {
+		log.Info("push notifications on", "topic", cfg.APNSTopic, "key_id", cfg.APNSKeyID)
+	}
 	if cfg.PauseMoves {
 		log.Warn("moves are paused (REROUTED_PAUSE_MOVES=on): device-signed moves to and from this server are refused")
 	}

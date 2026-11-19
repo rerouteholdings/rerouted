@@ -65,6 +65,9 @@ func (s *Server) revokeRemoved(ctx context.Context, id string, before, after map
 			if err := s.st.Sessions().RevokeDevice(ctx, id, unhex(k)); err != nil {
 				return nil, err
 			}
+			if err := s.st.Push().DropAPNSDevice(ctx, id, unhex(k)); err != nil {
+				return nil, err
+			}
 			removed = append(removed, unhex(k))
 		}
 	}
@@ -491,6 +494,9 @@ func (s *Server) appendChain(w http.ResponseWriter, r *http.Request, sess sessio
 	}
 	for _, dev := range removed {
 		s.closeDevice(sess.id, dev)
+	}
+	if st.Home != s.cfg.Name {
+		s.dropPush(r.Context(), sess.id) // moved away: its new home sends its notifications
 	}
 	// Alerts (SPEC §6.4.1).
 	if lvl := chain.Alert(applied); lvl != chain.AlertNone {

@@ -54,6 +54,7 @@ type Server struct {
 	v2        *Server      // on the version 1 Server, its version 2 sibling (wireversion.go)
 	v1        *Server      // on the version 2 Server, its version 1 sibling, for migrations (migrate.go)
 	comm      *communities // on the version 1 Server: the community servers it runs (community.go)
+	pushes    *pusher      // shared by both wire versions; nil when push notifications are off (push.go)
 
 	sendFailures atomic.Int64 // S2S requests that failed or were refused, for Stats
 }
@@ -74,10 +75,11 @@ func New(cfg *config.Config, key serverkey.Key, log *slog.Logger, st store.Store
 	if cfg.PublicFirehose {
 		s.fire = newFirehose(s)
 	}
+	s.pushes = newPusher(cfg, st.Push(), log)
 	// Wire version 2 shares the mux, the database (its own view of it), the rate limits,
 	// and the invite code key, so codes made on either API hash alike.
 	s.v2 = newServer(cfg, key, log.With("wire", 2), st.ForWire(wire.V2), wire.V2, s.limits)
-	s.v2.mux, s.v2.inviteKey, s.v2.v1 = s.mux, s.inviteKey, s
+	s.v2.mux, s.v2.inviteKey, s.v2.v1, s.v2.pushes = s.mux, s.inviteKey, s, s.pushes
 	s.routes()
 	s.v2.apiRoutes()
 	s.initCommunities()
@@ -213,6 +215,10 @@ func (s *Server) routes() {
 	if s.fire != nil {
 		s.mux.HandleFunc("GET /v0/dev/firehose", s.firehoseStream)
 	}
+	// Push notifications for the Reroute iPhone app (push.go): rerouted's own, not
+	// protocol. Routed when they're off too, to answer 501.
+	s.mux.Handle("POST /v0/push/apns", pushJSON(s.anyAuthed(s.pushRegister)))
+	s.mux.Handle("DELETE /v0/push/apns", pushJSON(s.anyAuthed(s.pushUnregister)))
 	s.apiRoutes()
 }
 

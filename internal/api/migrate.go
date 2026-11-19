@@ -219,6 +219,7 @@ func (s *Server) appendMigrate(w http.ResponseWriter, r *http.Request, sess sess
 		return
 	}
 	s.log.Info("migrated to wire version 2", "id", sess.id, "to", st2.ID, "handle", st2.Handle)
+	s.dropPush(ctx, sess.id) // the app registers its token again for the version 2 identity
 	// A device-signed migrate hands the identity over: an alarm, like a move (SPEC §6.4.1).
 	if lvl := chain.Alert(applied); lvl != chain.AlertNone {
 		s.logged("sending a chain alert", s.notify(ctx, sess.id, map[string]any{"t": "chain-alert", "level": "alarm", "entry": wire.Raw(enc)}))

@@ -45,6 +45,9 @@ type Store interface {
 	// Communities is what this server keeps as a community server (SPEC §16). It's the
 	// same in every wire version's view: communities are wire version 2 only.
 	Communities() Communities
+	// Push keeps devices' push notification tokens. It's the same in every wire version's
+	// view.
+	Push() Push
 	// ForWire is a view of the same storage for wire version v's identities (SPEC §6.8):
 	// local chains, cached remote chains, session tokens, and queued S2S requests are kept
 	// apart by version, and each view sees only its own. Everything else is keyed by
@@ -518,4 +521,31 @@ type Report struct {
 type Reports interface {
 	Add(ctx context.Context, r Report) error
 	List(ctx context.Context, limit int) ([]Report, error)
+}
+
+// APNSToken is a device's Apple push notification service (APNs) device token: push
+// notifications are a rerouted feature for the Reroute app, outside the Tieroute spec.
+type APNSToken struct {
+	ID      string // the identity
+	Device  []byte // its device key
+	Token   string // lowercase hex
+	Env     string // "sandbox" or "production"
+	Updated int64
+}
+
+// Push stores APNs device tokens: at most one per device, and each token for one device.
+type Push interface {
+	// PutAPNS registers t.Token for t.ID's device t.Device, replacing the device's other
+	// token, and taking the token from any device it was registered for before.
+	PutAPNS(ctx context.Context, t APNSToken) error
+	// DeleteAPNS removes a token id registered. Removing one it doesn't have is no error.
+	DeleteAPNS(ctx context.Context, id, token string) error
+	// DropAPNSToken removes a token whoever registered it, once APNs says it's gone.
+	DropAPNSToken(ctx context.Context, token string) error
+	// DropAPNSDevice removes a device's token, when the device is removed.
+	DropAPNSDevice(ctx context.Context, id string, device []byte) error
+	// DropAPNSIdentity removes every token of an identity, when it leaves this server.
+	DropAPNSIdentity(ctx context.Context, id string) error
+	// APNS lists an identity's tokens.
+	APNS(ctx context.Context, id string) ([]APNSToken, error)
 }
