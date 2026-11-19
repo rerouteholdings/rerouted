@@ -23,6 +23,8 @@ Every metric is an aggregate count. No metric or label names an identity, a hand
 | `rerouted_communities` | gauge | Communities on this server's community server names. |
 | `rerouted_outbox_requests` | gauge | Server-to-server (S2S) requests waiting to be sent to other servers. |
 | `rerouted_s2s_send_failures_total` | counter | S2S requests that failed or that the other server refused, since the start. Failed requests are retried for up to 72 hours. |
+| `rerouted_push_sent_total` | counter | Push notifications to the Reroute iPhone app that Apple's push service accepted, since the start. See [Send push notifications to the Reroute iPhone app](push-notifications.md). |
+| `rerouted_push_failed_total` | counter | Push notifications that failed, that Apple's push service refused, or that were dropped because too many were waiting, since the start. |
 | `rerouted_streams` | gauge | Open `GET stream` connections (WebSockets), on both wire versions and every community. |
 | `rerouted_voice_rooms` | gauge | Community voice channels with anyone in them. |
 | `rerouted_voice_participants` | gauge | Devices in community voice channels. |

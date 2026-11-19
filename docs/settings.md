@@ -59,6 +59,19 @@ Sizes are a number of bytes, or a number with a `K`, `M`, or `G` suffix for KiB,
 
 See [Run a call relay](run-a-call-relay.md).
 
+## Push notifications
+
+Notifications for the Reroute iPhone app, through Apple's push notification service (APNs). They're a rerouted feature, outside the Tieroute spec, and only a restart changes these settings.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `REROUTED_APNS_KEY_FILE` | None: off | The path to the `.p8` APNs authentication key from the Apple developer account of the team that publishes the app. Empty turns push notifications off. It must be a PKCS #8 EC P-256 key that rerouted can read. |
+| `REROUTED_APNS_KEY_ID` | None | The key's 10-character key ID. Required with `REROUTED_APNS_KEY_FILE`. |
+| `REROUTED_APNS_TEAM_ID` | None | The team's 10-character team ID. Required with `REROUTED_APNS_KEY_FILE`. |
+| `REROUTED_APNS_TOPIC` | `llc.rerouteholdings.reroute` | The app's bundle ID. Change it only for your own build of the app. |
+
+See [Send push notifications to the Reroute iPhone app](push-notifications.md).
+
 ## Community servers
 
 Beside its homeserver, rerouted can serve any number of server names as community servers (SPEC §16), each hosting one community. Each name answers as its own server, with its own server document listing the `community` role, its own composite server key (`community-key-NAME.json` in the data directory), and its own API base. A name equal to `REROUTED_NAME` is also the homeserver: one document lists both roles, with the homeserver's keys.

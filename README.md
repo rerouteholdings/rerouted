@@ -25,6 +25,7 @@ On Fedora, add the repository with `sudo rpm --import https://rerouteholdings.ll
 - [Run a call relay](docs/run-a-call-relay.md): relay your users' calls, so they don't show each other their IP addresses.
 - [Administer a homeserver](docs/administer-a-homeserver.md): back up, control registration, and handle reports.
 - [Settings](docs/settings.md): every setting, its default, and what it does.
+- [Send push notifications to the Reroute iPhone app](docs/push-notifications.md): an optional feature outside the Tieroute spec, with content-free notifications.
 - [Public firehose](docs/public-firehose.md): an optional public feed of delivery metadata, for development servers.
 - [How rerouted stores moves and recovery wraps](docs/moves-and-recovery-wraps.md): how the multi-record changes stay consistent.
 
