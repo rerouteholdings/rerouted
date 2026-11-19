@@ -1,0 +1,56 @@
+{
+  "account_key_hex": "606162636465666768696a6b6c6d6e6f",
+  "backup_key_hex": "2337c5e0a50f476a8b44ff0482dddc04",
+  "backup_prk_hex": "ace2a0410e7fea10eec02d3f645c1c3bcdb92c9e891b5b9a84c42dd75ec35316",
+  "description": "The backup passphrase's wrap of the account key, the backup key, and two backup segments (SPEC §7.4, §7.5). wrapping key = Argon2id(password = the passphrase's UTF-8 bytes, salt, t = 3, m = 65,536 KiB, p = 1, version 0x13, no secret or associated data, 16 bytes). The wrap's ct = nonce || AES-128-GCM(wrapping key, account key, associated data JCS([\"tieroute account key\", identifier, \"passphrase\"])). backup key = HKDF-Expand(HKDF-Extract(salt = \"tieroute backup\", ikm = account key), \"segments\", 16). A segment's ct = nonce || AES-128-GCM(backup key, plaintext, associated data JCS([\"tieroute backup\", identifier, seq])). The identifier is identity_id from chain.json. The second segment repeats the chat line, as later segments may.",
+  "identifier": "tr:cnshscx3enbgf6r7zjmj5w2z",
+  "notice": "Test vectors for Tieroute wire version 2 (SPEC version 2.0, draft). These keys are public: never use them for anything real.",
+  "passphrase": {
+    "argon2": {
+      "m": 65536,
+      "p": 1,
+      "salt": "EBESExQVFhcYGRobHB0eHw",
+      "t": 3
+    },
+    "argon2id": {
+      "length": 16,
+      "version": 19
+    },
+    "passphrase": "orchid lantern gravel tundra wicker signal",
+    "passphrase_note": "single spaces, so whitespace normalization doesn't change it",
+    "salt_hex": "101112131415161718191a1b1c1d1e1f",
+    "wrapped_key": {
+      "argon2": {
+        "m": 65536,
+        "p": 1,
+        "salt": "EBESExQVFhcYGRobHB0eHw",
+        "t": 3
+      },
+      "associated_data": "[\"tieroute account key\",\"tr:cnshscx3enbgf6r7zjmj5w2z\",\"passphrase\"]",
+      "ct": "sLGys7S1tre4ubq7Npt0csUwwwExuSFkuLa-8VsPb_M6r0ZoF7lMnaqTrps",
+      "ct_hex": "b0b1b2b3b4b5b6b7b8b9babb369b7472c530c30131b92164b8b6bef15b0f6ff33aaf466817b94c9daa93ae9b",
+      "nonce_hex": "b0b1b2b3b4b5b6b7b8b9babb",
+      "via": "passphrase"
+    },
+    "wrapping_key_hex": "6cee1a83adbb7bdb845671313289ef8c"
+  },
+  "segments": [
+    {
+      "associated_data": "[\"tieroute backup\",\"tr:cnshscx3enbgf6r7zjmj5w2z\",0]",
+      "ct": "wMHCw8TFxsfIycrLDal7iTTCKzbOCYpXWQw0uAVQGrZF4swbWBLRjIgB0z3W-Ni2bqVUoVqjCWbQZUb7lWQ_hv5XUS8Ku_fTPQnhTyzqYwrRNbVZL30zuK_HI0MMdGFRGAQZyUgx0f3cNlMAvbEJ2W3KkFkiAF5V-HyBjrODBv7MEzKjw_Z7VyqlRU4WERlQhApPYS02sKGU4vcMSkCDZIvERditUeFZwg",
+      "ct_hex": "c0c1c2c3c4c5c6c7c8c9cacb0da97b8934c22b36ce098a57590c34b805501ab645e2cc1b5812d18c8801d33dd6f8d8b66ea554a15aa30966d06546fb95643f86fe57512f0abbf7d33d09e14f2cea630ad135b5592f7d33b8afc723430c746151180419c94831d1fddc365300bdb109d96dca905922005e55f87c818eb38306fecc1332a3c3f67b572aa5454e16111950840a4f612d36b0a194e2f70c4a4083648bc445d8ad51e159c2",
+      "nonce_hex": "c0c1c2c3c4c5c6c7c8c9cacb",
+      "plaintext": "{\"id\":\"tr:cnshscx3enbgf6r7zjmj5w2z\",\"made\":1794700800,\"t\":\"history\",\"v\":2}\n{\"chat\":\"tr:aaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"direct\",\"t\":\"chat\"}\n",
+      "seq": 0,
+      "snapshot": true
+    },
+    {
+      "associated_data": "[\"tieroute backup\",\"tr:cnshscx3enbgf6r7zjmj5w2z\",1]",
+      "ct": "0NHS09TV1tfY2drb5OZxsnMrRoKkf9LPqtHoyzQdi5sSkGJoJMmhM15bsDmneHa5wXMvYl4WokYNofTxGFZ2HFe36WUNQr66oX1SQGP-b3CA8gzbn5SID7-NvRBuyA",
+      "ct_hex": "d0d1d2d3d4d5d6d7d8d9dadbe4e671b2732b4682a47fd2cfaad1e8cb341d8b9b1290626824c9a1335e5bb039a77876b9c1732f625e16a2460da1f4f11856761c57b7e9650d42bebaa17d524063fe6f7080f20cdb9f94880fbf8dbd106ec8",
+      "nonce_hex": "d0d1d2d3d4d5d6d7d8d9dadb",
+      "plaintext": "{\"chat\":\"tr:aaaaaaaaaaaaaaaaaaaaaaaa\",\"kind\":\"direct\",\"t\":\"chat\"}\n",
+      "seq": 1
+    }
+  ]
+}
