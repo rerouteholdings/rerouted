@@ -462,6 +462,13 @@ func TestV2Genesis(t *testing.T) {
 	if err := gen(base()[:3], w.devs[0], false); err == nil {
 		t.Fatal("genesis without set-recovery")
 	}
+	// A genesis carries no remove-device, even of a device it adds, its signer or another.
+	for i := range 2 {
+		ops := append(base(), addOp(w.devs[1], ""), wire.Op{Op: wire.OpRemoveDevice, Key: ed(w.devs[i])})
+		if err := gen(ops, w.devs[0], false); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("genesis removing device %d: %v", i, err)
+		}
+	}
 	v1 := "tr:aaaaaaaaaaaaaaaaaaaaaaaa"
 	if err := gen(append(base(), wire.Op{Op: wire.OpMigratedFrom, ID: &v1}), w.devs[0], false); err != nil {
 		t.Fatalf("genesis with migrated-from: %v", err)

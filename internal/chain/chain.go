@@ -162,6 +162,10 @@ func genesisV2(s wire.Signed) (*State, *Applied, error) {
 			sawHandle = true
 		case wire.OpSetRecovery:
 			sawRecovery = true
+		case wire.OpRemoveDevice:
+			// Nothing comes before genesis to remove, and removing a device it adds could
+			// leave out its signer, or every device (SPEC §6.4 rule 6).
+			return nil, nil, invalid("genesis can't carry remove-device")
 		case wire.OpMigratedFrom:
 			// One version 1 identity at most: two would make the pair ambiguous (SPEC §6.8).
 			if sawMigrated {
