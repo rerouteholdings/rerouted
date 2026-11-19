@@ -149,7 +149,12 @@ func mustOpen(t *testing.T, s wire.Signed) wire.ChainEntry {
 }
 
 // fork.json: the fork rule with no time limit, each case both ways round where it says.
-func TestVectorForkV2(t *testing.T) {
+func TestVectorForkV2(t *testing.T) { runForkCasesV2(t, "fork.json") }
+
+// chain-rules.json: single-entry validity (SPEC §6.4 rules 4 and 6), in fork.json's format.
+func TestVectorChainRulesV2(t *testing.T) { runForkCasesV2(t, "chain-rules.json") }
+
+func runForkCasesV2(t *testing.T, file string) {
 	var v struct {
 		Cases []struct {
 			Name      string   `json:"name"`
@@ -163,7 +168,7 @@ func TestVectorForkV2(t *testing.T) {
 			Signed v2Signed `json:"signed"`
 		} `json:"entries"`
 	}
-	readV2(t, "fork.json", &v)
+	readV2(t, file, &v)
 	if len(v.Cases) == 0 {
 		t.Fatal("no cases")
 	}
