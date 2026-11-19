@@ -34,6 +34,7 @@ var commands []command
 
 func init() {
 	commands = []command{
+		{"init", "init [flags]", "set up a new homeserver: settings file, data directory, keys, Caddy, DNS records", runInit},
 		{"checkup", "checkup [--peer NAME] [--handle H]", "check the configuration, DNS, certificates, clock, and call relay", runCheckup},
 		{"status", "status [--json]", "show whether the server is running, and what it holds", runStatus},
 		{"config", "config check", "check the settings file for mistakes", runConfig},
@@ -45,6 +46,7 @@ func init() {
 		{"remove-media", "remove-media ID --confirm", "delete a reported file: fetches then answer 410 removed", dbCommand},
 		{"release-handle", "release-handle HANDLE --confirm", "free a handle so a new identity can register it", dbCommand},
 		{"keep-handle", "keep-handle HANDLE", "keep a handle reserved after its 30-day hold", dbCommand},
+		{"auto-updates", "auto-updates on|off|status", "turn daily package updates of rerouted on or off", runAutoUpdates},
 		{"version", "version", "print the version, Go version, platform, schema, and wire versions", runVersion},
 		{"completion", "completion bash|zsh|fish", "print a shell completion script", runCompletion},
 		{"help", "help", "show this help", func(*globals, []string) int { usage(os.Stdout); return 0 }},
@@ -105,6 +107,10 @@ func run(args []string) int {
 		}
 		if len(rest) == 1 && (rest[0] == "-h" || rest[0] == "--help") {
 			fmt.Printf("Usage: rerouted [-env FILE] %s\n\n%s.\n", c.usage, capitalize(c.summary))
+			if c.name == "init" {
+				fmt.Println()
+				initFlags(new(initOptions)).PrintDefaults()
+			}
 			return 0
 		}
 		return c.run(g, fs.Args())
