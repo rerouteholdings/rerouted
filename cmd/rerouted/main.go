@@ -34,7 +34,10 @@ var commands []command
 
 func init() {
 	commands = []command{
+		{"status", "status [--json]", "show whether the server is running, and what it holds", runStatus},
 		{"config", "config check", "check the settings file for mistakes", runConfig},
+		{"backup", "backup [DEST]", "back up the database, keys, and files to one archive, while the server runs", runBackup},
+		{"restore", "restore FILE [--force]", "restore a backup into the data directory, with the server stopped", runRestore},
 		{"accounts", "accounts [N]", "list the N newest identities here (default 50)", dbCommand},
 		{"communities", "communities", "list the communities this server hosts, with member counts", dbCommand},
 		{"reports", "reports [N]", "print the N newest reports (default 20)", dbCommand},

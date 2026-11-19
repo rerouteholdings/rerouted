@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"os/exec"
@@ -9,6 +11,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/rerouteholdings/rerouted/internal/store/sqlite"
 )
 
 // capture runs f with stdout and stderr redirected, and returns what it printed.
@@ -178,6 +183,196 @@ func TestEditDistance(t *testing.T) {
 	}
 	if s := closestKey("REROUTED_COMPLETELY_ELSE"); s != "" {
 		t.Fatalf("suggested %s for something unlike any setting", s)
+	}
+}
+
+func TestBackupRestoreRoundTrip(t *testing.T) {
+	clearRerouted(t)
+	ctx := context.Background()
+	dir := t.TempDir()
+	env := writeEnv(t, dir)
+	data := filepath.Join(dir, "data")
+	os.MkdirAll(filepath.Join(data, "media", "community", "c.example", "media"), 0o700)
+	st, err := sqlite.Open(filepath.Join(data, dbName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	addVectorChain(t, st)
+	os.WriteFile(filepath.Join(data, "server-key.json"), []byte(`{"k":1}`), 0o600)
+	os.WriteFile(filepath.Join(data, "server-key-v2.json"), []byte(`{"k":2}`), 0o600)
+	os.WriteFile(filepath.Join(data, "media", "abcd"), []byte("file bytes"), 0o600)
+	os.WriteFile(filepath.Join(data, "media", "community", "c.example", "media", "ef"), []byte("community file"), 0o600)
+	os.WriteFile(filepath.Join(data, "limits.json"), []byte("{}"), 0o600)
+
+	// Backed up while the store is open, as it is while the server runs.
+	dest := filepath.Join(dir, "backups")
+	os.Mkdir(dest, 0o700)
+	code, out := capture(t, func() int { return run([]string{"-env", env, "backup", dest}) })
+	st.Close()
+	if code != 0 {
+		t.Fatalf("backup: %d %s", code, out)
+	}
+	archives, _ := filepath.Glob(filepath.Join(dest, "rerouted-backup-chat.example-*.tar.gz"))
+	if len(archives) != 1 {
+		t.Fatalf("archives: %v", archives)
+	}
+	if fi, _ := os.Stat(archives[0]); fi.Mode().Perm() != 0o600 {
+		t.Fatalf("archive mode %v", fi.Mode().Perm())
+	}
+	if left, _ := filepath.Glob(filepath.Join(dest, ".*")); len(left) != 0 {
+		t.Fatalf("temporary files left: %v", left)
+	}
+
+	// Into a new, empty data directory.
+	clearRerouted(t)
+	dir2 := t.TempDir()
+	env2 := writeEnv(t, dir2)
+	data2 := filepath.Join(dir2, "data")
+	code, out = capture(t, func() int { return run([]string{"-env", env2, "restore", archives[0]}) })
+	if code != 0 {
+		t.Fatalf("restore: %d %s", code, out)
+	}
+	for rel, want := range map[string]string{
+		"server-key.json":                    `{"k":1}`,
+		"server-key-v2.json":                 `{"k":2}`,
+		"media/abcd":                         "file bytes",
+		"media/community/c.example/media/ef": "community file",
+	} {
+		if b, err := os.ReadFile(filepath.Join(data2, rel)); err != nil || string(b) != want {
+			t.Errorf("%s: %q %v", rel, b, err)
+		}
+	}
+	for _, gone := range []string{"limits.json", settingsName, manifestName} {
+		if _, err := os.Stat(filepath.Join(data2, gone)); err == nil {
+			t.Errorf("%s was restored into the data directory", gone)
+		}
+	}
+	ro, err := sqlite.OpenReadOnly(filepath.Join(data2, dbName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	accounts, err := loadAccounts(ctx, ro)
+	ro.Close()
+	if err != nil || len(accounts) != 1 || accounts[0].Handle != "kat.chat.example" || accounts[0].Devices != 1 {
+		t.Fatalf("restored accounts %+v %v", accounts, err)
+	}
+
+	// Again: there's a database now.
+	code, out = capture(t, func() int { return run([]string{"-env", env2, "restore", archives[0]}) })
+	if code == 0 || !strings.Contains(out, "--force") {
+		t.Fatalf("restore over a database: %d %s", code, out)
+	}
+
+	// Not while the server runs.
+	writeStatus(t, data2, time.Now(), 0)
+	code, out = capture(t, func() int { return run([]string{"-env", env2, "restore", "--force", archives[0]}) })
+	if code == 0 || !strings.Contains(out, "running") {
+		t.Fatalf("restore while running: %d %s", code, out)
+	}
+
+	// --force moves the current data aside first.
+	writeStatus(t, data2, time.Now().Add(-time.Hour), 0)
+	os.WriteFile(filepath.Join(data2, "server-key.json"), []byte("newer"), 0o600)
+	code, out = capture(t, func() int { return run([]string{"-env", env2, "restore", archives[0], "--force"}) })
+	if code != 0 {
+		t.Fatalf("restore --force: %d %s", code, out)
+	}
+	aside, _ := filepath.Glob(filepath.Join(data2, asidePrefix+"*", "server-key.json"))
+	if len(aside) != 1 {
+		t.Fatal("current data not moved aside")
+	}
+	if b, _ := os.ReadFile(aside[0]); string(b) != "newer" {
+		t.Fatal("moved-aside key differs")
+	}
+	if b, _ := os.ReadFile(filepath.Join(data2, "server-key.json")); string(b) != `{"k":1}` {
+		t.Fatal("key not restored")
+	}
+
+	// A later backup leaves the moved-aside data out.
+	code, _ = capture(t, func() int { return run([]string{"-env", env2, "backup", filepath.Join(dir2, "again.tar.gz")}) })
+	if code != 0 {
+		t.Fatal("second backup failed")
+	}
+	tarList, _ := exec.Command("tar", "-tzf", filepath.Join(dir2, "again.tar.gz")).Output()
+	if strings.Contains(string(tarList), asidePrefix) || strings.Contains(string(tarList), "status.json") {
+		t.Fatalf("second backup holds:\n%s", tarList)
+	}
+}
+
+func TestRestoreRefusesEscapes(t *testing.T) {
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "evil.tar.gz")
+	// A tar holding ../escape, made with Go's own writer.
+	if err := writeTestArchive(archive, map[string]string{manifestName: `{"format":1}`, "../escape": "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := restore(archive, filepath.Join(dir, "data"), "chat.example", false, time.Now()); err == nil {
+		t.Fatal("restored an archive with ../")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "escape")); err == nil {
+		t.Fatal("wrote outside the data directory")
+	}
+}
+
+func writeStatus(t *testing.T, dataDir string, updated time.Time, pid int) {
+	t.Helper()
+	b, _ := json.Marshal(map[string]any{"version": "0.0.1", "pid": pid, "started": updated.Add(-time.Hour).Unix(), "updated": updated.Format(time.RFC3339), "name": "chat.example"})
+	if err := os.WriteFile(filepath.Join(dataDir, "status.json"), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRunning(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now()
+	if yes, _, _ := running(dir, now); yes {
+		t.Fatal("running without status.json")
+	}
+	writeStatus(t, dir, now.Add(-10*time.Second), 0)
+	if yes, s, _ := running(dir, now); !yes || s.Version != "0.0.1" || s.Started.IsZero() {
+		t.Fatalf("fresh status: %v %+v", yes, s)
+	}
+	writeStatus(t, dir, now.Add(-5*time.Minute), 0)
+	if yes, _, _ := running(dir, now); yes {
+		t.Fatal("stale status counted as running")
+	}
+	writeStatus(t, dir, now.Add(-5*time.Minute), os.Getpid())
+	if yes, _, why := running(dir, now); !yes || !strings.Contains(why, "alive") {
+		t.Fatal("a live process not noticed")
+	}
+}
+
+func TestStatusAndAccounts(t *testing.T) {
+	clearRerouted(t)
+	dir := t.TempDir()
+	env := writeEnv(t, dir, "REROUTED_COMMUNITIES=talk.example", "REROUTED_COMMUNITY_CODE=0123456789")
+	data := filepath.Join(dir, "data")
+	os.MkdirAll(data, 0o700)
+	st, err := sqlite.Open(filepath.Join(data, dbName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	addVectorChain(t, st)
+	st.Close()
+	writeStatus(t, data, time.Now(), os.Getpid())
+
+	code, out := capture(t, func() int { return run([]string{"-env", env, "status"}) })
+	if code != 0 || !strings.Contains(out, "running:          yes") || !strings.Contains(out, "restart rerouted to run it") ||
+		!strings.Contains(out, "identities:       1, with 1 devices") {
+		t.Fatalf("status: %d\n%s", code, out)
+	}
+	code, out = capture(t, func() int { return run([]string{"-env", env, "status", "--json"}) })
+	var r statusReport
+	if code != 0 || json.Unmarshal([]byte(out), &r) != nil || !r.Running || !r.RestartDue || r.Database.Accounts != 1 {
+		t.Fatalf("status --json: %d\n%s", code, out)
+	}
+	code, out = capture(t, func() int { return run([]string{"-env", env, "accounts"}) })
+	if code != 0 || !strings.Contains(out, "@kat.chat.example") || !strings.Contains(out, "tr:") {
+		t.Fatalf("accounts: %d\n%s", code, out)
+	}
+	code, out = capture(t, func() int { return run([]string{"-env", env, "communities"}) })
+	if code != 0 || !strings.Contains(out, "talk.example") || !strings.Contains(out, "not created yet") {
+		t.Fatalf("communities: %d\n%s", code, out)
 	}
 }
 

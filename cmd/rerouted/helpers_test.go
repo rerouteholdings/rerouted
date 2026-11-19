@@ -1,6 +1,8 @@
 package main
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"os"
@@ -39,6 +41,41 @@ func addVectorChain(t *testing.T, st *sqlite.Store) {
 			t.Fatalf("entry %d: %v", i, err)
 		}
 	}
+}
+
+// writeTestArchive writes a .tar.gz holding files, in map order after backup.json.
+func writeTestArchive(path string, files map[string]string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	zw := gzip.NewWriter(f)
+	tw := tar.NewWriter(zw)
+	write := func(name, body string) error {
+		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0o600, Size: int64(len(body)), Typeflag: tar.TypeReg}); err != nil {
+			return err
+		}
+		_, err := tw.Write([]byte(body))
+		return err
+	}
+	if m, ok := files[manifestName]; ok {
+		if err := write(manifestName, m); err != nil {
+			return err
+		}
+	}
+	for name, body := range files {
+		if name == manifestName {
+			continue
+		}
+		if err := write(name, body); err != nil {
+			return err
+		}
+	}
+	if err := tw.Close(); err != nil {
+		return err
+	}
+	return zw.Close()
 }
 
 func writeFile(t *testing.T, path, s string) {

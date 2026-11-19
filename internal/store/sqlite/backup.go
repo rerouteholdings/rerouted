@@ -10,9 +10,10 @@ import (
 
 // BackupTo writes a consistent copy of the database to path with VACUUM INTO. It's safe
 // while the server runs: the copy is one read transaction, so it sees every write committed
-// before it started and none after. path must not exist yet.
+// before it started and none after. path must not exist yet, or be an empty file: create
+// it first to choose its mode.
 func (s *Store) BackupTo(path string) error {
-	if _, err := os.Stat(path); err == nil {
+	if fi, err := os.Stat(path); err == nil && fi.Size() > 0 {
 		return errors.New("backup: " + path + " already exists")
 	}
 	// Through the writer connection: VACUUM INTO counts as a write for query_only, which
