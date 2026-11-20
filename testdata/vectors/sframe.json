@@ -1,6 +1,6 @@
 {
   "cipher_suite": 4,
-  "description": "SFrame for calls (SPEC §15.2, RFC 9605), cipher suite AES_128_GCM_SHA256_128 (0x0004). rfc9605: the RFC's own Appendix C.3 case for this suite. headers: KID and CTR encodings (§4.3). tieroute: KID = (leaf_index \u003c\u003c 4) + (epoch % 16), keys from base_key, empty metadata. base_key stands in for MLS-Exporter(\"SFrame 1.0 Tieroute call\", call, 16).",
+  "description": "SFrame for calls and voice channels (SPEC §15.2, §16.4, RFC 9605), cipher suite AES_128_GCM_SHA256_128 (0x0004). rfc9605: the RFC's own Appendix C.3 case for this suite. headers: KID and CTR encodings (§4.3). tieroute: KID = (leaf_index \u003c\u003c 4) + (epoch % 16), keys from base_key, empty metadata. base_key stands in for MLS-Exporter(\"SFrame 1.0 Tieroute call\", call, 16). voice: a visit's base key, and KID = (visit \u003c\u003c 16) | (generation \u003c\u003c 8) | stream, with stream 0 for the voice, 1 for a cast's audio, and 2 for a cast's video; empty metadata.",
   "headers": [
     {
       "ctr": 0,
@@ -93,5 +93,75 @@
       }
     ],
     "exporter_label": "SFrame 1.0 Tieroute call"
+  },
+  "voice": {
+    "base_key_hex": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+    "cases": [
+      {
+        "ciphertext_hex": "d05a17c0de0000111b1592970042f2f59f53f772146c36157eab659be2f9f19da9b31d4853eb41adaf9313e9398782ee341d4ce1f7236e",
+        "ctr": 0,
+        "generation": 0,
+        "header_hex": "d05a17c0de0000",
+        "kid": 99058066522112,
+        "plaintext": "an Opus frame of someone's voice",
+        "sframe_key_hex": "213bba8e68fcca87eb413836850e28a6",
+        "sframe_salt_hex": "13e1797867f594cb181b94a6",
+        "stream": 0,
+        "stream_is": "voice",
+        "visit": 1511506142
+      },
+      {
+        "ciphertext_hex": "d05a17c0de00019d667a8efdfd79669341afbc6b1f007657c279347119eab4804cef879859606018bfaeb2cfdfa11ebc23017b71ed97",
+        "ctr": 0,
+        "generation": 0,
+        "header_hex": "d05a17c0de0001",
+        "kid": 99058066522113,
+        "plaintext": "an Opus frame of a cast's audio",
+        "sframe_key_hex": "d204a768ab598b999cd675d25b68ade1",
+        "sframe_salt_hex": "22c646ab3225767b916e4fcb",
+        "stream": 1,
+        "stream_is": "cast audio",
+        "visit": 1511506142
+      },
+      {
+        "ciphertext_hex": "d35a17c0de0002091a993d2964ee9cf1866aa7cd880a5a2613aa16f460d8e9adc549f41b533a6f99cf47726dc95a4a1efa2105a6299aeb",
+        "ctr": 3,
+        "generation": 0,
+        "header_hex": "d35a17c0de0002",
+        "kid": 99058066522114,
+        "plaintext": "an H.264 frame of a cast's video",
+        "sframe_key_hex": "033ada3ec71dfdc0b0a71df73150d40c",
+        "sframe_salt_hex": "d9bf953f0c63e31027d48af7",
+        "stream": 2,
+        "stream_is": "cast video",
+        "visit": 1511506142
+      },
+      {
+        "ciphertext_hex": "d85a17c0de01000c7161e33f11c5a8ac5b802b19a2091f18b9f57f91662eddfa8a45c15ef8447012cfdb4d3d94d41f1e50b9c2",
+        "ctr": 12,
+        "generation": 1,
+        "header_hex": "d85a17c0de01000c",
+        "kid": 99058066522368,
+        "plaintext": "an Opus frame after a rekey",
+        "sframe_key_hex": "6394d88363f47526f2a121777db31b9a",
+        "sframe_salt_hex": "cd16782079a2feaaf697038c",
+        "stream": 0,
+        "stream_is": "voice, after one new base key",
+        "visit": 1511506142
+      },
+      {
+        "ciphertext_hex": "a901ff0003e802332b82b5023b3c48da04a8a39e3cdbff30ed48c6e6a4cb8480c0b98cddd1d75f91ebbc603a6db4223c720aa5e5d7",
+        "ctr": 1000,
+        "generation": 255,
+        "header_hex": "a901ff0003e8",
+        "kid": 130816,
+        "plaintext": "an Opus frame at generation 255",
+        "sframe_key_hex": "ffed523b17cde30679ccda9394655ca4",
+        "sframe_salt_hex": "28165dfbee15603d50bbfc26",
+        "stream": 0,
+        "stream_is": "voice, last generation",
+        "visit": 1
+      }
+    ]
   }
 }
