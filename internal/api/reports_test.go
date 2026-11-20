@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/rerouteholdings/rerouted/internal/fed"
 	"github.com/rerouteholdings/rerouted/internal/wire"
 )
 
@@ -97,5 +99,16 @@ forwarded:
 	report["evidence"] = []any{}
 	if c := call2(t, a, "POST", "report", kat.token, map[string]any{"report": report}, nil); c != 202 {
 		t.Fatalf("a report without evidence: %d", c)
+	}
+	// The receiving homeserver checks a forwarded report's reason too: 2,000 code points
+	// pass, 2,001 don't.
+	for n, want := range map[int]int{2000: 0, 2001: 400} {
+		report["reason"] = strings.Repeat("é", n)
+		body, _ := wire.Marshal(map[string]any{"report": report})
+		_, err := sa.V2().fed.Call(context.Background(), "b.test", "report", body)
+		var st *fed.ErrStatus
+		if want == 0 && err != nil || want != 0 && (!errors.As(err, &st) || st.Status != want || st.Code != wire.ErrCodeBadRequest) {
+			t.Errorf("forwarded reason of %d characters: %v", n, err)
+		}
 	}
 }

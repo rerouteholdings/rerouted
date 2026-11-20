@@ -89,7 +89,7 @@ func (s *Server) s2sReport(w http.ResponseWriter, r *http.Request, from string, 
 		Report wire.Raw `json:"report"`
 	}
 	var rep reportBody
-	if wire.Unmarshal(body, &req) != nil || wire.Unmarshal(req.Report, &rep) != nil || !s.evidenceOK(rep.Evidence) {
+	if wire.Unmarshal(body, &req) != nil || wire.Unmarshal(req.Report, &rep) != nil || utf8.RuneCountInString(rep.Reason) > 2000 || !s.evidenceOK(rep.Evidence) {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "")
 		return
 	}
