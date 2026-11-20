@@ -1,0 +1,223 @@
+{
+  "description": "Padding app-messages (SPEC §12). L is the length in bytes of JCS(signed) for the app-message without `pad`. The target is Padmé(max(256, L + 13)), where Padmé(x): E = floor(log2 x), S = floor(log2 E) + 1, mask = 2^(E-S) - 1, result = (x + mask) \u0026 ~mask. The sender adds `pad`, a string of (target - L - 13) ASCII \"0\" characters, to the body; the member adds 13 bytes beyond its characters (`,\\\"pad\\\":\\\"` and `\\\"` inside the escaped `b`), so JCS(signed) of the padded message is exactly the target. `targets` maps unpadded lengths to targets and pad lengths; `padme` gives the rounding alone; `messages` are complete app-messages, each signed by message key 1 of msgkey.json, unpadded and padded.",
+  "floor": 256,
+  "member": 13,
+  "messages": [
+    {
+      "note": "a short text, \"ok\"",
+      "pad": 11,
+      "padded": {
+        "body": "{\"c\":{\"body\":\"ok\",\"id\":\"cXFxcXFxcXFxcXFxcXFxcQ\",\"t\":\"text\",\"ts\":1794701300},\"group\":\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\",\"id\":\"tr:cnshscx3enbgf6r7zjmj5w2z\",\"pad\":\"00000000000\",\"ts\":1794701300}",
+        "sig_input": "[\"tieroute/v2\",\"app-message\",\"{\\\"c\\\":{\\\"body\\\":\\\"ok\\\",\\\"id\\\":\\\"cXFxcXFxcXFxcXFxcXFxcQ\\\",\\\"t\\\":\\\"text\\\",\\\"ts\\\":1794701300},\\\"group\\\":\\\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\\\",\\\"id\\\":\\\"tr:cnshscx3enbgf6r7zjmj5w2z\\\",\\\"pad\\\":\\\"00000000000\\\",\\\"ts\\\":1794701300}\"]",
+        "signature_hex": "52f55321a73adcfce3abe2ed8eccf084fa083b42833b2c470184fd21d01524b48870c190857c85fe12b45951f06d049b45184591e16e3b4c92e9f1775f001e02",
+        "signed": "{\"b\":\"{\\\"c\\\":{\\\"body\\\":\\\"ok\\\",\\\"id\\\":\\\"cXFxcXFxcXFxcXFxcXFxcQ\\\",\\\"t\\\":\\\"text\\\",\\\"ts\\\":1794701300},\\\"group\\\":\\\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\\\",\\\"id\\\":\\\"tr:cnshscx3enbgf6r7zjmj5w2z\\\",\\\"pad\\\":\\\"00000000000\\\",\\\"ts\\\":1794701300}\",\"k\":\"cl_1hP7APzBWMa-Aej40njTIIUVnoTGG-MukiwLBcn8\",\"s\":\"UvVTIac63Pzjq-LtjszwhPoIO0KDOyxHAYT9IdAVJLSIcMGQhXyF_hK0WVHwbQSbRRhFkeFuO0yS6fF3XwAeAg\",\"t\":\"app-message\"}",
+        "signed_sha256": "a4d3afbe98a55539a81c4973e942e109c92cebc84dced6ed7fbefe6d1b072cd9",
+        "type": "app-message"
+      },
+      "padded_length": 400,
+      "target": 400,
+      "unpadded": 376,
+      "unpadded_body": "{\"c\":{\"body\":\"ok\",\"id\":\"cXFxcXFxcXFxcXFxcXFxcQ\",\"t\":\"text\",\"ts\":1794701300},\"group\":\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\",\"id\":\"tr:cnshscx3enbgf6r7zjmj5w2z\",\"ts\":1794701300}",
+      "unpadded_signed": "{\"b\":\"{\\\"c\\\":{\\\"body\\\":\\\"ok\\\",\\\"id\\\":\\\"cXFxcXFxcXFxcXFxcXFxcQ\\\",\\\"t\\\":\\\"text\\\",\\\"ts\\\":1794701300},\\\"group\\\":\\\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\\\",\\\"id\\\":\\\"tr:cnshscx3enbgf6r7zjmj5w2z\\\",\\\"ts\\\":1794701300}\",\"k\":\"cl_1hP7APzBWMa-Aej40njTIIUVnoTGG-MukiwLBcn8\",\"s\":\"9EArqBSpMSsMGNF3SsIGmy6WXowPHfGcZjmBdWPGGh-LmKXnExSaDXsRjUOF5qKeb4BZPGCoItDzv_ATI0BoBA\",\"t\":\"app-message\"}"
+    },
+    {
+      "note": "a typing indicator",
+      "pad": 15,
+      "padded": {
+        "body": "{\"c\":{\"on\":true,\"t\":\"typing\",\"ts\":1794701301},\"group\":\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\",\"id\":\"tr:cnshscx3enbgf6r7zjmj5w2z\",\"pad\":\"000000000000000\",\"ts\":1794701301}",
+        "sig_input": "[\"tieroute/v2\",\"app-message\",\"{\\\"c\\\":{\\\"on\\\":true,\\\"t\\\":\\\"typing\\\",\\\"ts\\\":1794701301},\\\"group\\\":\\\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\\\",\\\"id\\\":\\\"tr:cnshscx3enbgf6r7zjmj5w2z\\\",\\\"pad\\\":\\\"000000000000000\\\",\\\"ts\\\":1794701301}\"]",
+        "signature_hex": "0ec88c428840351dc55ab6c5899f5cf2eec5041fcb91f673a07de1715b450f5c2288a66759d24c630f4651bd3ab313dd44dc5632efd325c5598a438ee5adde0b",
+        "signed": "{\"b\":\"{\\\"c\\\":{\\\"on\\\":true,\\\"t\\\":\\\"typing\\\",\\\"ts\\\":1794701301},\\\"group\\\":\\\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\\\",\\\"id\\\":\\\"tr:cnshscx3enbgf6r7zjmj5w2z\\\",\\\"pad\\\":\\\"000000000000000\\\",\\\"ts\\\":1794701301}\",\"k\":\"cl_1hP7APzBWMa-Aej40njTIIUVnoTGG-MukiwLBcn8\",\"s\":\"DsiMQohANR3FWrbFiZ9c8u7FBB_LkfZzoH3hcVtFD1wiiKZnWdJMYw9GUb06sxPdRNxWMu_TJcVZikOO5a3eCw\",\"t\":\"app-message\"}",
+        "signed_sha256": "0adb6f53c515f4d8dfcd2a7784fcfee7a0ade604bb480a37104252b14c244a79",
+        "type": "app-message"
+      },
+      "padded_length": 368,
+      "target": 368,
+      "unpadded": 340,
+      "unpadded_body": "{\"c\":{\"on\":true,\"t\":\"typing\",\"ts\":1794701301},\"group\":\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\",\"id\":\"tr:cnshscx3enbgf6r7zjmj5w2z\",\"ts\":1794701301}",
+      "unpadded_signed": "{\"b\":\"{\\\"c\\\":{\\\"on\\\":true,\\\"t\\\":\\\"typing\\\",\\\"ts\\\":1794701301},\\\"group\\\":\\\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\\\",\\\"id\\\":\\\"tr:cnshscx3enbgf6r7zjmj5w2z\\\",\\\"ts\\\":1794701301}\",\"k\":\"cl_1hP7APzBWMa-Aej40njTIIUVnoTGG-MukiwLBcn8\",\"s\":\"Y3yy-6o9mkRhBK0YgxMFYQbmYMdRA-jVADAnPCRnLZrRnwDt7kWFNGnbn80axzBv6MKILkg3lnp10XeIWGHBDQ\",\"t\":\"app-message\"}"
+    },
+    {
+      "note": "a text with quotes, a backslash, a newline, and non-ASCII characters: each counts as the bytes it takes in JCS(signed), escaped twice",
+      "pad": 0,
+      "padded": {
+        "body": "{\"c\":{\"body\":\"Ravi said \\\"see C:\\\\temp\\\"\\nCafé 👋\",\"id\":\"cnJycnJycnJycnJycnJycg\",\"t\":\"text\",\"ts\":1794701302},\"group\":\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\",\"id\":\"tr:cnshscx3enbgf6r7zjmj5w2z\",\"pad\":\"\",\"ts\":1794701302}",
+        "sig_input": "[\"tieroute/v2\",\"app-message\",\"{\\\"c\\\":{\\\"body\\\":\\\"Ravi said \\\\\\\"see C:\\\\\\\\temp\\\\\\\"\\\\nCafé 👋\\\",\\\"id\\\":\\\"cnJycnJycnJycnJycnJycg\\\",\\\"t\\\":\\\"text\\\",\\\"ts\\\":1794701302},\\\"group\\\":\\\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\\\",\\\"id\\\":\\\"tr:cnshscx3enbgf6r7zjmj5w2z\\\",\\\"pad\\\":\\\"\\\",\\\"ts\\\":1794701302}\"]",
+        "signature_hex": "6dbf5791188551913fd2ebbe203377b577f1d68964faa852744ba151086ce9752c0121dcb379fdbc4ea22234c8a757cb3fac633c395550ae0eb2bd227aa35008",
+        "signed": "{\"b\":\"{\\\"c\\\":{\\\"body\\\":\\\"Ravi said \\\\\\\"see C:\\\\\\\\temp\\\\\\\"\\\\nCafé 👋\\\",\\\"id\\\":\\\"cnJycnJycnJycnJycnJycg\\\",\\\"t\\\":\\\"text\\\",\\\"ts\\\":1794701302},\\\"group\\\":\\\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\\\",\\\"id\\\":\\\"tr:cnshscx3enbgf6r7zjmj5w2z\\\",\\\"pad\\\":\\\"\\\",\\\"ts\\\":1794701302}\",\"k\":\"cl_1hP7APzBWMa-Aej40njTIIUVnoTGG-MukiwLBcn8\",\"s\":\"bb9XkRiFUZE_0uu-IDN3tXfx1olk-qhSdEuhUQhs6XUsASHcs3n9vE6iIjTIp1fLP6xjPDlVUK4Osr0ieqNQCA\",\"t\":\"app-message\"}",
+        "signed_sha256": "a2838912d50a76ef2c5848a2e6a27271cd10c6c792d4496e8fa656e527275e52",
+        "type": "app-message"
+      },
+      "padded_length": 432,
+      "target": 432,
+      "unpadded": 419,
+      "unpadded_body": "{\"c\":{\"body\":\"Ravi said \\\"see C:\\\\temp\\\"\\nCafé 👋\",\"id\":\"cnJycnJycnJycnJycnJycg\",\"t\":\"text\",\"ts\":1794701302},\"group\":\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\",\"id\":\"tr:cnshscx3enbgf6r7zjmj5w2z\",\"ts\":1794701302}",
+      "unpadded_signed": "{\"b\":\"{\\\"c\\\":{\\\"body\\\":\\\"Ravi said \\\\\\\"see C:\\\\\\\\temp\\\\\\\"\\\\nCafé 👋\\\",\\\"id\\\":\\\"cnJycnJycnJycnJycnJycg\\\",\\\"t\\\":\\\"text\\\",\\\"ts\\\":1794701302},\\\"group\\\":\\\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\\\",\\\"id\\\":\\\"tr:cnshscx3enbgf6r7zjmj5w2z\\\",\\\"ts\\\":1794701302}\",\"k\":\"cl_1hP7APzBWMa-Aej40njTIIUVnoTGG-MukiwLBcn8\",\"s\":\"LR27UUDPNkhasBC3xpOPO9hJPQug7aolfmQTIeiViIkPH9QEHAjYv8k_KtKz_B13zRW0jxNMWd8C1Zg-JemXCQ\",\"t\":\"app-message\"}"
+    },
+    {
+      "note": "a community channel message: `channel` sorts before `group`, and `pad` between `id` and `ts`",
+      "pad": 9,
+      "padded": {
+        "body": "{\"c\":{\"body\":\"Is the meetup still on for Saturday? I can bring the projector if nobody else has one.\",\"id\":\"c3Nzc3Nzc3Nzc3Nzc3Nzcw\",\"t\":\"text\",\"ts\":1794701303},\"channel\":3,\"group\":\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\",\"id\":\"tr:cnshscx3enbgf6r7zjmj5w2z\",\"pad\":\"000000000\",\"ts\":1794701303}",
+        "sig_input": "[\"tieroute/v2\",\"app-message\",\"{\\\"c\\\":{\\\"body\\\":\\\"Is the meetup still on for Saturday? I can bring the projector if nobody else has one.\\\",\\\"id\\\":\\\"c3Nzc3Nzc3Nzc3Nzc3Nzcw\\\",\\\"t\\\":\\\"text\\\",\\\"ts\\\":1794701303},\\\"channel\\\":3,\\\"group\\\":\\\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\\\",\\\"id\\\":\\\"tr:cnshscx3enbgf6r7zjmj5w2z\\\",\\\"pad\\\":\\\"000000000\\\",\\\"ts\\\":1794701303}\"]",
+        "signature_hex": "e8055d59ca715aa50edc90711f23990c6e110f96618f485e07c5cd76b84fccca3abde63c780dc98978e308e9a61d78b30e7116a71bcef2a7ca0e722ca5d7ba0c",
+        "signed": "{\"b\":\"{\\\"c\\\":{\\\"body\\\":\\\"Is the meetup still on for Saturday? I can bring the projector if nobody else has one.\\\",\\\"id\\\":\\\"c3Nzc3Nzc3Nzc3Nzc3Nzcw\\\",\\\"t\\\":\\\"text\\\",\\\"ts\\\":1794701303},\\\"channel\\\":3,\\\"group\\\":\\\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\\\",\\\"id\\\":\\\"tr:cnshscx3enbgf6r7zjmj5w2z\\\",\\\"pad\\\":\\\"000000000\\\",\\\"ts\\\":1794701303}\",\"k\":\"cl_1hP7APzBWMa-Aej40njTIIUVnoTGG-MukiwLBcn8\",\"s\":\"6AVdWcpxWqUO3JBxHyOZDG4RD5Zhj0heB8XNdrhPzMo6veY8eA3JiXjjCOmmHXizDnEWpxvO8qfKDnIspde6DA\",\"t\":\"app-message\"}",
+        "signed_sha256": "d56e7e3a520abaf37bbf5ad5e5e38082d4ede7f283be7b818b38e70379b80e28",
+        "type": "app-message"
+      },
+      "padded_length": 496,
+      "target": 496,
+      "unpadded": 474,
+      "unpadded_body": "{\"c\":{\"body\":\"Is the meetup still on for Saturday? I can bring the projector if nobody else has one.\",\"id\":\"c3Nzc3Nzc3Nzc3Nzc3Nzcw\",\"t\":\"text\",\"ts\":1794701303},\"channel\":3,\"group\":\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\",\"id\":\"tr:cnshscx3enbgf6r7zjmj5w2z\",\"ts\":1794701303}",
+      "unpadded_signed": "{\"b\":\"{\\\"c\\\":{\\\"body\\\":\\\"Is the meetup still on for Saturday? I can bring the projector if nobody else has one.\\\",\\\"id\\\":\\\"c3Nzc3Nzc3Nzc3Nzc3Nzcw\\\",\\\"t\\\":\\\"text\\\",\\\"ts\\\":1794701303},\\\"channel\\\":3,\\\"group\\\":\\\"Z2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2dnZ2c\\\",\\\"id\\\":\\\"tr:cnshscx3enbgf6r7zjmj5w2z\\\",\\\"ts\\\":1794701303}\",\"k\":\"cl_1hP7APzBWMa-Aej40njTIIUVnoTGG-MukiwLBcn8\",\"s\":\"sdwAWJAZLSKGZuD0IPUdB7CupX1fLfVO5XzPRMBxOAhpbwt1moo9xHXwsszviZzr-BWzNe8F4codpYHC3uRQCw\",\"t\":\"app-message\"}"
+    }
+  ],
+  "notice": "Test vectors for Tieroute wire version 2 (SPEC version 2.0, draft). These keys are public: never use them for anything real.",
+  "padme": [
+    {
+      "padme": 256,
+      "x": 256
+    },
+    {
+      "padme": 272,
+      "x": 257
+    },
+    {
+      "padme": 272,
+      "x": 271
+    },
+    {
+      "padme": 272,
+      "x": 272
+    },
+    {
+      "padme": 288,
+      "x": 273
+    },
+    {
+      "padme": 512,
+      "x": 511
+    },
+    {
+      "padme": 512,
+      "x": 512
+    },
+    {
+      "padme": 544,
+      "x": 513
+    },
+    {
+      "padme": 1024,
+      "x": 1000
+    },
+    {
+      "padme": 4352,
+      "x": 4097
+    },
+    {
+      "padme": 67584,
+      "x": 65537
+    },
+    {
+      "padme": 1015808,
+      "x": 1000000
+    }
+  ],
+  "targets": [
+    {
+      "note": "the floor",
+      "pad": 243,
+      "target": 256,
+      "unpadded": 0
+    },
+    {
+      "note": "the floor",
+      "pad": 43,
+      "target": 256,
+      "unpadded": 200
+    },
+    {
+      "note": "the floor exactly: L + 13 = 256",
+      "pad": 0,
+      "target": 256,
+      "unpadded": 243
+    },
+    {
+      "note": "one byte past the floor: the next target, 272",
+      "pad": 15,
+      "target": 272,
+      "unpadded": 244
+    },
+    {
+      "note": "L + 13 = 272, a target: an empty pad",
+      "pad": 0,
+      "target": 272,
+      "unpadded": 259
+    },
+    {
+      "note": "one byte past 272",
+      "pad": 15,
+      "target": 288,
+      "unpadded": 260
+    },
+    {
+      "note": "L is a target, but the member doesn't fit: the next target, 288",
+      "pad": 3,
+      "target": 288,
+      "unpadded": 272
+    },
+    {
+      "note": "within 13 bytes below 288: the member doesn't fit, so 304",
+      "pad": 11,
+      "target": 304,
+      "unpadded": 280
+    },
+    {
+      "note": "L + 13 = 512, a power of two",
+      "pad": 0,
+      "target": 512,
+      "unpadded": 499
+    },
+    {
+      "note": "past 512, where targets are multiples of 32",
+      "pad": 31,
+      "target": 544,
+      "unpadded": 500
+    },
+    {
+      "pad": 11,
+      "target": 1024,
+      "unpadded": 1000
+    },
+    {
+      "note": "L + 13 = 4,096",
+      "pad": 0,
+      "target": 4096,
+      "unpadded": 4083
+    },
+    {
+      "note": "past 4,096, where targets are multiples of 256",
+      "pad": 255,
+      "target": 4352,
+      "unpadded": 4084
+    },
+    {
+      "note": "L + 13 = 65,536",
+      "pad": 0,
+      "target": 65536,
+      "unpadded": 65523
+    },
+    {
+      "note": "past 65,536, where targets are multiples of 2,048",
+      "pad": 2047,
+      "target": 67584,
+      "unpadded": 65524
+    },
+    {
+      "note": "about the size of a group-meta with a 256 KiB picture",
+      "pad": 2243,
+      "target": 352256,
+      "unpadded": 350000
+    }
+  ]
+}
