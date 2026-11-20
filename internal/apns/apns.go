@@ -103,13 +103,14 @@ type Client struct {
 	tokAt time.Time
 }
 
-// New makes a client. Requests time out after 15 seconds.
+// New makes a client. Requests time out after 15 seconds, and go through the proxy that
+// HTTPS_PROXY names, if any.
 func New(key *ecdsa.PrivateKey, keyID, teamID, topic string) *Client {
 	return &Client{
 		key: key, keyID: keyID, teamID: teamID, topic: topic, hosts: appleHosts,
 		http: &http.Client{
 			Timeout:   15 * time.Second,
-			Transport: &http.Transport{ForceAttemptHTTP2: true, MaxIdleConnsPerHost: 4, IdleConnTimeout: 5 * time.Minute, TLSHandshakeTimeout: 10 * time.Second},
+			Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, ForceAttemptHTTP2: true, MaxIdleConnsPerHost: 4, IdleConnTimeout: 5 * time.Minute, TLSHandshakeTimeout: 10 * time.Second},
 		},
 	}
 }

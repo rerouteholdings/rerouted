@@ -145,6 +145,18 @@ func TestKnownKeys(t *testing.T) {
 	}
 }
 
+func TestConfigCheckProxyKeys(t *testing.T) {
+	clearRerouted(t)
+	t.Setenv("HTTPS_PROXY", "http://proxy.example:3128")
+	t.Setenv("NO_PROXY", "chat.example")
+	dir := t.TempDir()
+	env := writeEnv(t, dir, "HTTPS_PROXY=http://proxy.example:3128", "NO_PROXY=chat.example", "HTTPS_PROXI=x")
+	code, out := capture(t, func() int { return run([]string{"-env", env, "config", "check"}) })
+	if code != 0 || strings.Contains(out, "HTTPS_PROXY isn't") || strings.Contains(out, "NO_PROXY isn't") || !strings.Contains(out, "HTTPS_PROXI isn't") {
+		t.Fatalf("%d %s", code, out)
+	}
+}
+
 func TestConfigCheck(t *testing.T) {
 	clearRerouted(t)
 	dir := t.TempDir()

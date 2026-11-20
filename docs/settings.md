@@ -104,6 +104,18 @@ A reverse proxy that gets certificates on demand, such as Caddy, can ask reroute
 |---|---|---|
 | `REROUTED_PUBLIC_FIREHOSE` | `off` | `on` serves a public feed of the metadata of every delivery stored here. See [Public firehose](public-firehose.md) before turning it on. |
 
+## Outbound proxy
+
+rerouted can send its outbound HTTP through a proxy. It reads the standard variables, not `REROUTED_` ones: federation with other servers, server and handle document fetches, push notifications to Apple, and the update check all honor them. A restart applies changes.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `HTTPS_PROXY` | None: direct | The proxy for `https://` requests, such as `http://proxy.example.com:3128` or `socks5://proxy.example.com:1080`. |
+| `HTTP_PROXY` | None: direct | The proxy for plain `http://` requests, used only in development. |
+| `NO_PROXY` | None | Hosts to reach directly, comma-separated, such as `example.org,.internal.example.com`. Requests to `localhost` and loopback addresses never use a proxy. |
+
+The proxy only carries outbound requests. The call relay and community voice channels use UDP, and stay direct. `rerouted checkup` also connects directly, since it checks how other servers reach this one.
+
 ## Logging
 
 | Setting | Default | What it does |

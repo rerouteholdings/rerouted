@@ -32,7 +32,7 @@ type Checker struct {
 	URL       string       // default URL
 	Current   string       // this binary's version
 	UserAgent string       // sent as User-Agent
-	Client    *http.Client // default: a client with a 30 s timeout
+	Client    *http.Client // default: a client with a 30 s timeout, through HTTPS_PROXY if set
 	Log       *slog.Logger
 	// Enabled is asked before each check, so a reload can turn checks on or off.
 	Enabled func() bool

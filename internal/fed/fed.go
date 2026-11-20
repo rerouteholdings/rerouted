@@ -163,8 +163,11 @@ func New(name string, key serverkey.Key, peers map[string]string) *Fed {
 // default (90 s, 2 per host): under the 5 minutes common reverse proxies keep idle
 // connections, so ours usually close first. HTTP/2 connections are checked with a ping
 // after 30 s without a frame, so a dead one is noticed before a request waits on it.
+// Requests go through the proxy that HTTPS_PROXY or HTTP_PROXY names, unless NO_PROXY
+// excludes the host.
 func newTransport() *http.Transport {
 	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.Proxy = http.ProxyFromEnvironment
 	t.ForceAttemptHTTP2 = true
 	t.MaxIdleConns = 256
 	t.MaxIdleConnsPerHost = 16

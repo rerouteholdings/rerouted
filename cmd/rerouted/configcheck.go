@@ -32,6 +32,12 @@ var knownKeys = []string{
 	"REROUTED_APNS_KEY_FILE", "REROUTED_APNS_KEY_ID", "REROUTED_APNS_TEAM_ID", "REROUTED_APNS_TOPIC",
 }
 
+// proxyKeys are the standard proxy variables, which rerouted's outbound HTTP honors.
+var proxyKeys = map[string]bool{
+	"HTTPS_PROXY": true, "HTTP_PROXY": true, "NO_PROXY": true,
+	"https_proxy": true, "http_proxy": true, "no_proxy": true,
+}
+
 // problem is one finding of config check or checkup.
 type problem struct {
 	fatal bool // an error: rerouted won't start, or would misbehave
@@ -134,7 +140,7 @@ func checkConfig(path string) (*config.Config, []problem) {
 				msg += "; did you mean " + s + "?"
 			}
 			add(false, "%s", msg)
-		} else if !strings.HasPrefix(e.key, "REROUTED_") {
+		} else if !strings.HasPrefix(e.key, "REROUTED_") && !proxyKeys[e.key] {
 			add(false, "%s:%d: %s isn't a rerouted setting (they all start with REROUTED_)", path, e.line, e.key)
 		}
 		if v, set := os.LookupEnv(e.key); set && v != e.value {
