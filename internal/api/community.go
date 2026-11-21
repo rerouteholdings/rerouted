@@ -42,7 +42,7 @@ const memberCap = 1000
 type community struct {
 	name string
 	conf config.Community
-	key  serverkey.CompositeKey
+	keys *serverkey.Slot // this name's composite key (SPEC §16.1)
 	// srv is a wire version 2 Server answering as this name: its Fed signs S2S requests as
 	// this name with this name's key, and it finds and caches identity chains (SPEC §6.5).
 	srv *Server
@@ -92,19 +92,17 @@ func (s *Server) initCommunities() {
 	for _, cm := range s.cfg.Communities {
 		c := &community{name: cm.Name, conf: cm, hs: s.v2, st: s.st.Communities()}
 		if cm.Name == s.cfg.Name {
-			c.key, c.srv = s.key.V2, s.v2
+			c.keys, c.srv = s.keys.V2, s.v2
 		} else {
 			key, err := serverkey.LoadOrCreateComposite(s.cfg.DataDir, "community-key-"+cm.Name+".json")
 			if err != nil {
 				s.log.Error("community key", "name", cm.Name, "err", err)
 				continue
 			}
-			c.key = key
+			c.keys = key
 			cfg := *s.cfg
 			cfg.Name = cm.Name
-			k := s.key
-			k.V2 = key
-			c.srv = newServer(&cfg, k, s.log.With("community", cm.Name), s.st.ForWire(wire.V2), wire.V2, s.limits)
+			c.srv = newServer(&cfg, s.keys.WithV2(key), s.log.With("community", cm.Name), s.st.ForWire(wire.V2), wire.V2, s.limits)
 			c.srv.v1 = s
 			c.srv.fed.UseNonce = s.st.Sessions().UseNonce
 			c.mux = http.NewServeMux()
@@ -203,11 +201,6 @@ func (s *Server) CommunityListeners() []CommunityListener {
 	return out
 }
 
-// communityDoc is the community part of a server document's version 2 entry.
-func (c *community) keyDoc() serverKeyDoc {
-	return serverKeyDoc{KID: c.key.KID, Pub: wire.Bytes(c.key.Priv.Public().Bytes()), NBF: c.key.Created.Unix(), EXP: c.key.Created.Add(serverkey.Lifetime).Unix()}
-}
-
 // serverDoc is the server document of a name that's only a community server (SPEC §5.1).
 func (c *community) serverDoc(w http.ResponseWriter, r *http.Request) {
 	cfg := c.hs.cfg
@@ -215,7 +208,7 @@ func (c *community) serverDoc(w http.ResponseWriter, r *http.Request) {
 		Name:  c.name,
 		Roles: []string{"community"},
 		APIs:  []apiBase{{V: wire.V2, S2S: cfg.CommunityS2SBase(c.conf), Community: cfg.CommunityBase(c.conf)}},
-		Keys:  []serverKeyDoc{c.keyDoc()},
+		Keys:  c.keys.Published(time.Now()),
 	}
 	w.Header().Set("Cache-Control", "max-age=3600")
 	writeBody(w, http.StatusOK, doc)

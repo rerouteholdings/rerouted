@@ -40,6 +40,7 @@ func init() {
 		{"config", "config check", "check the settings file for mistakes", runConfig},
 		{"backup", "backup [DEST]", "back up the database, keys, and files to one archive, while the server runs", runBackup},
 		{"restore", "restore FILE [--force]", "restore a backup into the data directory, with the server stopped", runRestore},
+		{"keys", "keys [rotate [--revoke]]", "list the server keys, or replace them now; --revoke for a key that may have leaked", runKeys},
 		{"accounts", "accounts [N]", "list the N newest identities here (default 50)", dbCommand},
 		{"communities", "communities", "list the communities this server hosts, with member counts", dbCommand},
 		{"reports", "reports [N]", "print the N newest reports (default 20)", dbCommand},

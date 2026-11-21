@@ -60,10 +60,10 @@ func checkReceipt(t *testing.T, raw []byte, hub *Server, group []byte, epoch uin
 	if err != nil {
 		t.Fatalf("receipt: %v", err)
 	}
-	if sig.KID != hub.key.V2.KID || len(sig.K) != 0 {
-		t.Fatalf("receipt names key %q, want the hub's composite key %q", sig.KID, hub.key.V2.KID)
+	if sig.KID != hub.key().V2.KID || len(sig.K) != 0 {
+		t.Fatalf("receipt names key %q, want the hub's composite key %q", sig.KID, hub.key().V2.KID)
 	}
-	if err := sig.VerifyComposite("commit-receipt", hub.key.V2.Priv.Public()); err != nil {
+	if err := sig.VerifyComposite("commit-receipt", hub.key().V2.Priv.Public()); err != nil {
 		t.Fatalf("receipt signature: %v", err)
 	}
 	var b struct {

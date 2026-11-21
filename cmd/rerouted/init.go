@@ -236,7 +236,7 @@ func initServer(o initOptions, d *initDeps) int {
 		fmt.Fprintln(d.errw, "init: server key:", err)
 		return 1
 	}
-	fmt.Fprintf(d.out, "Created %s, with the server's keys (%s and %s).\n", o.dataDir, key.KID, key.V2.KID)
+	fmt.Fprintf(d.out, "Created %s, with the server's keys (%s and %s).\n", o.dataDir, key.Current().KID, key.Current().V2.KID)
 	if d.root {
 		if u, err := user.Lookup("rerouted"); err == nil {
 			uid, _ := strconv.Atoi(u.Uid)

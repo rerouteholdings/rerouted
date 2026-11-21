@@ -157,7 +157,7 @@ func TestVerifyChecksKeyAndSignatureBeforeNonce(t *testing.T) {
 		w.Write(b)
 	}))
 	defer doc.Close()
-	f := New("b.test", serverkey.Key{}, map[string]string{"a.test": doc.URL})
+	f := New("b.test", nil, map[string]string{"a.test": doc.URL})
 	f.HTTP = doc.Client()
 	nonce := make([]byte, 16)
 	nonce[0] = 7
@@ -206,7 +206,7 @@ func TestReplayRefusedAcrossRestart(t *testing.T) {
 	}
 	defer st.Close()
 	start := func() *Fed {
-		f := New("b.test", serverkey.Key{}, map[string]string{"a.test": doc.URL})
+		f := New("b.test", nil, map[string]string{"a.test": doc.URL})
 		f.HTTP = doc.Client()
 		f.UseNonce = st.Sessions().UseNonce
 		return f
@@ -225,7 +225,7 @@ func TestReplayRefusedAcrossRestart(t *testing.T) {
 	}
 
 	doc.Close() // the sender's server document can't be fetched now
-	f := New("b.test", serverkey.Key{}, map[string]string{"a.test": doc.URL})
+	f := New("b.test", nil, map[string]string{"a.test": doc.URL})
 	sig, _ = wire.SignKID("s2s", s2sRequest{From: "a.test", To: "b.test", Path: "ping", TS: now, Nonce: []byte("another nonce 16"), Body: wire.Raw(`{}`)}, priv, "k")
 	req, _ = sig.Encode()
 	if _, _, err := f.Verify(ctx, req, "ping"); !errors.As(err, new(*UnavailableError)) {
@@ -246,7 +246,7 @@ func TestServerDocRefreshedInBackground(t *testing.T) {
 		w.Write(b)
 	}))
 	defer doc.Close()
-	f := New("b.test", serverkey.Key{}, map[string]string{"a.test": doc.URL})
+	f := New("b.test", nil, map[string]string{"a.test": doc.URL})
 	ctx := context.Background()
 	if _, err := f.ServerDoc(ctx, "a.test"); err != nil {
 		t.Fatal(err)
@@ -319,7 +319,7 @@ func TestVectorS2SV2(t *testing.T) {
 	}))
 	defer doc.Close()
 	clock := func() int64 { return v.Clock }
-	f := New(v.Receiver, serverkey.Key{}, map[string]string{"a.example": doc.URL})
+	f := New(v.Receiver, nil, map[string]string{"a.example": doc.URL})
 	f.HTTP, f.V, f.Now = doc.Client(), wire.V2, clock
 	from, body, err := f.Verify(context.Background(), []byte(v.Request.Signed), v.Path)
 	if err != nil || from != "a.example" {
@@ -334,7 +334,7 @@ func TestVectorS2SV2(t *testing.T) {
 		t.Fatal("replayed")
 	}
 	// Wire version 1 doesn't take it, even with the clock and a fresh nonce cache.
-	f1 := New(v.Receiver, serverkey.Key{}, map[string]string{"a.example": doc.URL})
+	f1 := New(v.Receiver, nil, map[string]string{"a.example": doc.URL})
 	f1.HTTP, f1.Now = doc.Client(), clock
 	if _, _, err := f1.Verify(context.Background(), []byte(v.Request.Signed), v.Path); err == nil {
 		t.Fatal("a version 1 Fed took a version 2 request")
@@ -347,7 +347,7 @@ func TestVectorS2SV2(t *testing.T) {
 		w.Write(b)
 	}))
 	defer doc1.Close()
-	f2 := New("b.example", serverkey.Key{}, map[string]string{"a.example": doc1.URL})
+	f2 := New("b.example", nil, map[string]string{"a.example": doc1.URL})
 	f2.HTTP, f2.V = doc1.Client(), wire.V2
 	f2.Now = func() int64 {
 		s, _ := wire.DecodeSigned([]byte(v1.Request.Signed))
@@ -363,10 +363,11 @@ func TestVectorS2SV2(t *testing.T) {
 // A version 2 Fed signs with the composite key, which a version 2 Fed verifies.
 func TestSignV2RoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	key, err := serverkey.LoadOrCreate(dir)
+	keys, err := serverkey.LoadOrCreate(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
+	key := keys.Current()
 	now := time.Now().Unix()
 	doc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := wire.Marshal(map[string]any{"name": "a.test", "keys": []any{
@@ -376,14 +377,14 @@ func TestSignV2RoundTrip(t *testing.T) {
 		w.Write(b)
 	}))
 	defer doc.Close()
-	sender := New("a.test", key, nil)
+	sender := New("a.test", keys, nil)
 	sender.V = wire.V2
 	sig, err := sender.SignKID("s2s", s2sRequest{From: "a.test", To: "b.test", Path: "ping", TS: now, Nonce: make([]byte, 16), Body: wire.Raw(`{}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	enc, _ := sig.Encode()
-	recv := New("b.test", serverkey.Key{}, map[string]string{"a.test": doc.URL})
+	recv := New("b.test", nil, map[string]string{"a.test": doc.URL})
 	recv.HTTP, recv.V = doc.Client(), wire.V2
 	if from, _, err := recv.Verify(context.Background(), enc, "ping"); err != nil || from != "a.test" {
 		t.Fatalf("%q %v", from, err)
@@ -392,8 +393,12 @@ func TestSignV2RoundTrip(t *testing.T) {
 		t.Fatal("not signed with the composite key")
 	}
 	// The key files load back the same keys.
-	again, err := serverkey.LoadOrCreate(dir)
-	if err != nil || again.KID != key.KID || again.V2.KID != key.V2.KID || !again.V2.Priv.Public().Equal(key.V2.Priv.Public()) {
+	againKeys, err := serverkey.LoadOrCreate(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again := againKeys.Current()
+	if again.KID != key.KID || again.V2.KID != key.V2.KID || !again.V2.Priv.Public().Equal(key.V2.Priv.Public()) {
 		t.Fatalf("keys reloaded differently: %v", err)
 	}
 }

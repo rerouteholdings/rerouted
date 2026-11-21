@@ -119,6 +119,8 @@ Everything lives in the data directory (`REROUTED_DATA_DIR`):
 | `media/` | Files your users uploaded, end-to-end encrypted, and their profile pictures | Yes |
 | `server-key.json` | The server's signing key for wire version 1 | Yes |
 | `server-key-v2.json` | The server's composite signing key for wire version 2 | Yes |
+| `*-next.json`, `*-old.json` | Beside each key file: the key that signs next, and the keys it replaced, while they're published (below) | Yes |
+| `invite-key.json` | The secret invite codes are keyed with | Yes |
 | `turn-secret` | The built-in call relay's secret, if `REROUTED_TURN_LISTEN` is set and `REROUTED_TURN_SECRET` isn't | Yes |
 | `limits.json` | Rate-limit counts, saved every 10 minutes and on shutdown | No: losing it only resets the counts |
 | `status.json` | The running server's status, for `rerouted status` | No: the server rewrites it |
@@ -139,7 +141,21 @@ The archive is `rerouted-backup-NAME-TIME.tar.gz`, readable only by the user who
 
 > Warning: **The archive holds the server's private keys and settings.** Keep it as safe as the server itself.
 
-Keep backups of both key files. If you lose one, rerouted makes a new key, and other servers pick it up from the server document. Losing `server-key.json` also breaks every invite code your users made, because codes are keyed with a secret derived from that key (SPEC §9.1).
+Keep backups of the key files. If you lose one, rerouted makes a new key, and other servers pick it up from the server document. Losing `invite-key.json` breaks every invite code your users made, because codes are keyed with it (SPEC §9.1). It's made from `server-key.json` the first time this version of rerouted starts, so codes made before then keep working.
+
+## Server keys
+
+Each server key is published for 365 days, and rerouted replaces it on its own (SPEC §5.1). When a key is 300 days old, rerouted makes its successor and publishes it beside it. A week later the successor starts signing, so every other server and app has it in its copy of the server document by then. The key it replaced stays published until it expires, so receipts it signed still verify. A key that's already close to its end when rerouted is upgraded is replaced at once. Nothing needs doing by hand, and each community server name's key rotates the same way.
+
+`rerouted keys` lists the keys: the one signing, the next one if it's been made, and the replaced ones.
+
+If a key may have leaked, for example because a backup was lost, replace it at once:
+
+```sh
+sudo -u rerouted rerouted keys rotate --revoke
+```
+
+`--revoke` marks the replaced keys revoked from now, so other servers refuse anything they sign from now on. A running rerouted picks up the new keys within 10 minutes. For up to an hour, servers that cached your old document, and run a rerouted older than 0.2.0-rc.3, may refuse your requests; they retry.
 
 To restore a backup, stop rerouted, then run `restore` as the user rerouted runs as:
 

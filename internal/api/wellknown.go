@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/rerouteholdings/rerouted/internal/serverkey"
 	"github.com/rerouteholdings/rerouted/internal/wire"
@@ -15,12 +16,10 @@ import (
 // the version 2 composite key, under different key IDs. A reader picks the key a signature
 // names by kid, and each version's verifier takes only its own kind of key (32 or 1,984
 // bytes), so a version 1 reader that looks keys up by kid isn't confused by the other.
-type serverKeyDoc struct {
-	KID string     `json:"kid"`
-	Pub wire.Bytes `json:"pub"`
-	NBF int64      `json:"nbf"`
-	EXP int64      `json:"exp"`
-}
+//
+// Each version's list holds its current key, the key that signs next once one has been made,
+// and the keys rotation replaced, until each one's exp (serverkey).
+type serverKeyDoc = serverkey.Published
 
 type apiBase struct {
 	V         int    `json:"v"`
@@ -47,17 +46,7 @@ func (s *Server) serverDoc(w http.ResponseWriter, r *http.Request) {
 			{V: wire.V1, Client: s.cfg.ClientBase(), S2S: s.cfg.S2SBase()},
 			{V: wire.V2, Client: s.cfg.ClientBaseV2(), S2S: s.cfg.S2SBaseV2()},
 		},
-		Keys: []serverKeyDoc{{
-			KID: s.key.KID,
-			Pub: wire.Bytes(s.key.Public()),
-			NBF: s.key.Created.Unix(),
-			EXP: s.key.Created.Add(serverkey.Lifetime).Unix(),
-		}, {
-			KID: s.key.V2.KID,
-			Pub: wire.Bytes(s.key.V2.Priv.Public().Bytes()),
-			NBF: s.key.V2.Created.Unix(),
-			EXP: s.key.V2.Created.Add(serverkey.Lifetime).Unix(),
-		}},
+		Keys:         append(s.keys.V1.Published(time.Now()), s.keys.V2.Published(time.Now())...),
 		Handles:      s.cfg.Handles,
 		Registration: s.cfg.Now().Registration,
 	}

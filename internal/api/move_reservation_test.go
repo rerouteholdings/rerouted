@@ -147,10 +147,10 @@ func TestMoveReservationIssued(t *testing.T) {
 		Entry  wire.Bytes `json:"entry"`
 		Exp    int64      `json:"exp"`
 	}
-	if kid, ok := sig.KeyID(); sig.T != "move-reservation" || !ok || kid != sb.key.KID || sig.OpenClosed(&body) != nil {
+	if kid, ok := sig.KeyID(); sig.T != "move-reservation" || !ok || kid != sb.key().KID || sig.OpenClosed(&body) != nil {
 		t.Fatalf("not a move-reservation signed by b.test's key: %+v", sig)
 	}
-	if err := sig.Verify("move-reservation", sb.key.Public()); err != nil {
+	if err := sig.Verify("move-reservation", sb.key().Public()); err != nil {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(entry)
@@ -197,7 +197,7 @@ func TestMoveReservationRefusals(t *testing.T) {
 	_, stranger, _ := ed25519.GenerateKey(rand.Reader)
 	otherEntry := kat.moveEntry(entries, "b.test", "kat2.b.test")
 	otherSum := sha256.Sum256(otherEntry)
-	ackRes, _ := wire.SignKID("commit-receipt", body(kat.id, "b.test", sum[:], exp), sb.key.Priv, sb.key.KID)
+	ackRes, _ := wire.SignKID("commit-receipt", body(kat.id, "b.test", sum[:], exp), sb.key().Priv, sb.key().KID)
 	ack, _ := ackRes.Encode()
 	for _, tc := range []struct {
 		name   string
@@ -206,15 +206,15 @@ func TestMoveReservationRefusals(t *testing.T) {
 		code   string
 	}{
 		{"bad signature", tamperedRaw, 400, wire.ErrCodeBadSignature},
-		{"signed by a stranger under b's key id", forge(stranger, sb.key.KID, body(kat.id, "b.test", sum[:], exp)), 400, wire.ErrCodeBadSignature},
-		{"signed by the old home", forge(sa.key.Priv, sa.key.KID, body(kat.id, "b.test", sum[:], exp)), 400, wire.ErrCodeBadSignature},
-		{"expired", forge(sb.key.Priv, sb.key.KID, body(kat.id, "b.test", sum[:], time.Now().Unix()-1)), 403, wire.ErrCodeNotAllowed},
-		{"wrong entry", forge(sb.key.Priv, sb.key.KID, body(kat.id, "b.test", otherSum[:], exp)), 403, wire.ErrCodeNotAllowed},
-		{"wrong server", forge(sb.key.Priv, sb.key.KID, body(kat.id, "a.test", sum[:], exp)), 403, wire.ErrCodeNotAllowed},
-		{"wrong identity", forge(sb.key.Priv, sb.key.KID, body(ravi.id, "b.test", sum[:], exp)), 403, wire.ErrCodeNotAllowed},
+		{"signed by a stranger under b's key id", forge(stranger, sb.key().KID, body(kat.id, "b.test", sum[:], exp)), 400, wire.ErrCodeBadSignature},
+		{"signed by the old home", forge(sa.key().Priv, sa.key().KID, body(kat.id, "b.test", sum[:], exp)), 400, wire.ErrCodeBadSignature},
+		{"expired", forge(sb.key().Priv, sb.key().KID, body(kat.id, "b.test", sum[:], time.Now().Unix()-1)), 403, wire.ErrCodeNotAllowed},
+		{"wrong entry", forge(sb.key().Priv, sb.key().KID, body(kat.id, "b.test", otherSum[:], exp)), 403, wire.ErrCodeNotAllowed},
+		{"wrong server", forge(sb.key().Priv, sb.key().KID, body(kat.id, "a.test", sum[:], exp)), 403, wire.ErrCodeNotAllowed},
+		{"wrong identity", forge(sb.key().Priv, sb.key().KID, body(ravi.id, "b.test", sum[:], exp)), 403, wire.ErrCodeNotAllowed},
 		{"another signed type", ack, 403, wire.ErrCodeNotAllowed},
-		{"an extra member", forge(sb.key.Priv, sb.key.KID, map[string]any{"id": kat.id, "server": "b.test", "entry": sum[:], "exp": exp, "x": 1}), 403, wire.ErrCodeNotAllowed},
-		{"signed with an embedded key", signed(t, "move-reservation", body(kat.id, "b.test", sum[:], exp), sb.key.Priv), 403, wire.ErrCodeNotAllowed},
+		{"an extra member", forge(sb.key().Priv, sb.key().KID, map[string]any{"id": kat.id, "server": "b.test", "entry": sum[:], "exp": exp, "x": 1}), 403, wire.ErrCodeNotAllowed},
+		{"signed with an embedded key", signed(t, "move-reservation", body(kat.id, "b.test", sum[:], exp), sb.key().Priv), 403, wire.ErrCodeNotAllowed},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, e := kat.appendMove(a, entry, tc.res)

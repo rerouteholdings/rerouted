@@ -37,7 +37,8 @@ const (
 // version's server key, and it accepts only that version's signatures (SPEC §5.1).
 type Fed struct {
 	Name string
-	Key  serverkey.Key
+	// Keys signs this server's requests, with whichever key is current (SPEC §5.1).
+	Keys *serverkey.Keys
 	V    int // wire version: wire.V1 (the zero value counts as 1) or wire.V2
 	// Peers maps a server name to a base URL, overriding https://{name}.
 	// Dev mode only: it lets servers federate over http on localhost (SPEC §5.1).
@@ -150,9 +151,9 @@ func (f *Fed) Speaks(ctx context.Context, name string) (bool, error) {
 }
 
 // New makes a Fed for wire version 1. Set V for version 2.
-func New(name string, key serverkey.Key, peers map[string]string) *Fed {
+func New(name string, keys *serverkey.Keys, peers map[string]string) *Fed {
 	return &Fed{
-		Name: name, Key: key, Peers: peers, V: wire.V1,
+		Name: name, Keys: keys, Peers: peers, V: wire.V1,
 		HTTP: &http.Client{Timeout: 15 * time.Second, Transport: newTransport()},
 		docs: map[string]cachedDoc{}, nonces: map[string]int64{},
 	}
@@ -339,13 +340,17 @@ func (f *Fed) VerifyServerSigned(ctx context.Context, server string, sig wire.Si
 // SignKID signs an object with this server's key for the Fed's wire version, naming it by
 // key ID (SPEC §4.3): S2S requests, commit receipts, and move reservations.
 func (f *Fed) SignKID(t string, body any) (wire.Signed, error) {
+	k := f.Keys.Current()
 	if f.version() == wire.V2 {
-		if f.Key.V2.Priv == nil {
+		if k.V2.Priv == nil {
 			return wire.Signed{}, errors.New("fed: no wire version 2 server key")
 		}
-		return wire.SignCompositeKID(t, body, f.Key.V2.Priv, f.Key.V2.KID)
+		return wire.SignCompositeKID(t, body, k.V2.Priv, k.V2.KID)
 	}
-	return wire.SignKID(t, body, f.Key.Priv, f.Key.KID)
+	if k.Priv == nil {
+		return wire.Signed{}, errors.New("fed: no wire version 1 server key")
+	}
+	return wire.SignKID(t, body, k.Priv, k.KID)
 }
 
 // s2sRequest is the signed body of every S2S call (SPEC §8.3).

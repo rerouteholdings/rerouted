@@ -737,9 +737,9 @@ func TestV2S2SSignatures(t *testing.T) {
 		var s wire.Signed
 		var err error
 		if v == wire.V2 {
-			s, err = wire.SignCompositeKID("s2s", req, sa.key.V2.Priv, sa.key.V2.KID)
+			s, err = wire.SignCompositeKID("s2s", req, sa.key().V2.Priv, sa.key().V2.KID)
 		} else {
-			s, err = wire.SignKID("s2s", req, sa.key.Priv, sa.key.KID)
+			s, err = wire.SignKID("s2s", req, sa.key().Priv, sa.key().KID)
 		}
 		if err != nil {
 			t.Fatal(err)
@@ -842,14 +842,14 @@ func TestV2Move(t *testing.T) {
 		t.Fatalf("check: %d", c)
 	}
 	res, err := wire.DecodeSignedV2(check.Reservation)
-	if err != nil || len(res.S) != wire.CompositeSignatureSize || res.KID != sb.key.V2.KID {
+	if err != nil || len(res.S) != wire.CompositeSignatureSize || res.KID != sb.key().V2.KID {
 		t.Fatalf("the reservation isn't signed with the composite key: %v", err)
 	}
 	// A reservation with the same body, signed with b.test's version 1 key: refused, and
 	// nothing appended.
 	var body map[string]any
 	res.Open(&body)
-	v1res, _ := wire.SignKID("move-reservation", body, sb.key.Priv, sb.key.KID)
+	v1res, _ := wire.SignKID("move-reservation", body, sb.key().Priv, sb.key().KID)
 	v1enc, _ := v1res.Encode()
 	var e wire.Error
 	if c := call2(t, a, "POST", "chain/append", kat.token, map[string]any{"entry": entry, "reservation": wire.Raw(v1enc)}, &e); c/100 != 4 {

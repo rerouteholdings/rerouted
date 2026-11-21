@@ -8,8 +8,6 @@ package api
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	"io"
 
 	"log/slog"
@@ -32,7 +30,7 @@ const MaxBody = 1 << 20
 // Server holds what the handlers need.
 type Server struct {
 	cfg       *config.Config
-	key       serverkey.Key
+	keys      *serverkey.Keys // this name's rotating server keys (SPEC §5.1)
 	log       *slog.Logger
 	st        store.Store
 	fed       *fed.Fed
@@ -61,12 +59,10 @@ type Server struct {
 
 // New makes the server for both wire versions: the version 1 Server, which serves
 // discovery and holds its version 2 sibling. Handler serves both.
-func New(cfg *config.Config, key serverkey.Key, log *slog.Logger, st store.Store) *Server {
+func New(cfg *config.Config, key *serverkey.Keys, log *slog.Logger, st store.Store) *Server {
 	cfg.Defaults()
 	s := newServer(cfg, key, log, st, wire.V1, &limiter{m: map[string][]int64{}})
-	ik := hmac.New(sha256.New, key.Priv.Seed())
-	ik.Write([]byte("tieroute invite codes"))
-	s.inviteKey = ik.Sum(nil)
+	s.inviteKey = key.InviteKey()
 	if p := s.limitsPath(); p != "" {
 		if err := s.limits.load(p); err != nil {
 			log.Warn("rate limits from the last run couldn't be read; starting fresh", "err", err)
@@ -89,10 +85,10 @@ func New(cfg *config.Config, key serverkey.Key, log *slog.Logger, st store.Store
 	return s
 }
 
-func newServer(cfg *config.Config, key serverkey.Key, log *slog.Logger, st store.Store, v int, limits *limiter) *Server {
+func newServer(cfg *config.Config, key *serverkey.Keys, log *slog.Logger, st store.Store, v int, limits *limiter) *Server {
 	s := &Server{
 		cfg:      cfg,
-		key:      key,
+		keys:     key,
 		log:      log,
 		st:       st,
 		mux:      http.NewServeMux(),
@@ -115,6 +111,9 @@ func newServer(cfg *config.Config, key serverkey.Key, log *slog.Logger, st store
 	s.fed.UseNonce = st.Sessions().UseNonce
 	return s
 }
+
+// key is the server's current signing keys.
+func (s *Server) key() serverkey.Key { return s.keys.Current() }
 
 // V2 is the wire version 2 sibling of the version 1 Server New returns.
 func (s *Server) V2() *Server { return s.v2 }

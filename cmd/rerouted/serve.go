@@ -37,7 +37,7 @@ const (
 // serve runs the server until SIGINT or SIGTERM, or until a restart asked for with SIGUSR2
 // can go ahead, and returns the exit code: 0, or idlerestart.ExitCode for that restart.
 // SIGHUP reloads the settings.
-func serve(cfg *config.Config, key serverkey.Key, log *slog.Logger, st *sqlite.Store) int {
+func serve(cfg *config.Config, key *serverkey.Keys, log *slog.Logger, st *sqlite.Store) int {
 	started := time.Now()
 	server := api.New(cfg, key, log, st)
 	var requests metrics.Requests
@@ -61,8 +61,8 @@ func serve(cfg *config.Config, key serverkey.Key, log *slog.Logger, st *sqlite.S
 	}()
 
 	log.Info("rerouted starting", "version", version.Number, "name", cfg.Name, "listen", cfg.Listen,
-		"client", cfg.ClientBase(), "s2s", cfg.S2SBase(), "kid", key.KID,
-		"client_v2", cfg.ClientBaseV2(), "s2s_v2", cfg.S2SBaseV2(), "kid_v2", key.V2.KID)
+		"client", cfg.ClientBase(), "s2s", cfg.S2SBase(), "kid", key.Current().KID,
+		"client_v2", cfg.ClientBaseV2(), "s2s_v2", cfg.S2SBaseV2(), "kid_v2", key.Current().V2.KID)
 	go server.RunOutbox(ctx)
 	go server.RunMaintenance(ctx)
 	go server.RunCommunityVoice(ctx)
