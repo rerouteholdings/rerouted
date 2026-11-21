@@ -530,13 +530,19 @@ func (s *Server) sequence(ctx context.Context, commit wire.Raw, data, group []by
 		return wire.Signed{}, wire.ErrCodeBadSignature
 	}
 	// Signed with this server's key for the wire version: composite in version 2.
+	t := now()
+	if o.Epoch > 0 {
+		if cs, err := s.st.Hub().Commits(ctx, o.Group, o.Epoch-1); err == nil && len(cs) > 0 && cs[0].Epoch == o.Epoch-1 {
+			t = receiptTS(cs[0].TS)
+		}
+	}
 	receipt, err := s.fed.SignKID("commit-receipt", map[string]any{
-		"hub": s.cfg.Name, "group": o.Group, "epoch": o.Epoch, "hash": sum[:], "ts": now(),
+		"hub": s.cfg.Name, "group": o.Group, "epoch": o.Epoch, "hash": sum[:], "ts": t,
 	})
 	if err != nil {
 		return wire.Signed{}, wire.ErrCodeUnavailable
 	}
-	err = s.st.Hub().Accept(ctx, o.Group, o.Epoch, key, awaiting, store.Commit{Epoch: o.Epoch, Data: o.Data, Receipt: receipt, TS: now(), Request: commit})
+	err = s.st.Hub().Accept(ctx, o.Group, o.Epoch, key, awaiting, store.Commit{Epoch: o.Epoch, Data: o.Data, Receipt: receipt, TS: t, Request: commit})
 	if errors.Is(err, store.ErrConflict) {
 		return s.retried(ctx, o.Group, o.Epoch, commit)
 	}
@@ -545,6 +551,11 @@ func (s *Server) sequence(ctx context.Context, commit wire.Raw, data, group []by
 	}
 	return receipt, ""
 }
+
+// receiptTS is a new commit receipt's ts: now, or the previous epoch's receipt time if the
+// clock has gone back since, so this hub's receipts never go back in time. Members warn
+// about a receipt earlier than the one before it (SPEC §11.8, Receipt times).
+func receiptTS(prev int64) int64 { return max(now(), prev) }
 
 // retried answers a commit request for an epoch the hub has moved past. If it's the very
 // request the hub accepted for that epoch, the reply was lost and this is a retry: it gets

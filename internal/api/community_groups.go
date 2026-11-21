@@ -822,6 +822,11 @@ func (c *community) hubStep(ctx context.Context, in hubIn) (wire.Signed, string)
 	}
 	sum := sha256.Sum256(in.data)
 	t := now()
+	if in.epoch > 0 {
+		if cs, err := c.st.Commits(ctx, in.group, in.epoch-1); err == nil && len(cs) > 0 && cs[0].Epoch == in.epoch-1 {
+			t = receiptTS(cs[0].TS)
+		}
+	}
 	receipt, err := c.srv.fed.SignKID("commit-receipt", map[string]any{
 		"hub": c.name, "group": wire.Bytes(in.group), "epoch": in.epoch, "hash": wire.Bytes(sum[:]), "ts": t,
 	})

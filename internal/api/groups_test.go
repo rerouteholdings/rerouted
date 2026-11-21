@@ -98,3 +98,13 @@ func TestHubHandoffRegistersRemotely(t *testing.T) {
 }
 
 func b64(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
+
+// A hub's receipts never go back in time, even if its clock does (SPEC §11.8).
+func TestReceiptTSNeverGoesBack(t *testing.T) {
+	if got := receiptTS(now() + 3600); got != now()+3600 {
+		t.Fatalf("after a clock step back: %d", got)
+	}
+	if got := receiptTS(now() - 60); got < now()-1 {
+		t.Fatalf("normally: %d", got)
+	}
+}
