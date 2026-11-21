@@ -72,6 +72,10 @@ func (s *Server) recoverAccount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "")
 		return
 	}
+	if s.wv == wire.V2 && s.migrationUndone(r.Context(), st) {
+		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, undoneMsg)
+		return
+	}
 	if chain.CheckClock(e.TS, uint64(now()), true) != nil {
 		s.writeClockSkew(w, int64(e.TS), chain.MaxSkew)
 		return
@@ -118,7 +122,12 @@ func (s *Server) recoverAccount(w http.ResponseWriter, r *http.Request) {
 			s.unavailableRead(w, "revoking a removed device's sessions", err)
 			return
 		}
-		if names, _, _, _ := s.handleChange(handleBefore, homeBefore, next, true); names != nil {
+		if st.Closed() && !bytes.Equal(next.MigratedTo, st.MigratedTo) {
+			// R overrides a device-signed migrate: the migration is undone (SPEC §6.8).
+			if !s.unmigrate(w, r.Context(), st, next, at, enc) {
+				return
+			}
+		} else if names, _, _, _ := s.handleChange(handleBefore, homeBefore, next, true); names != nil {
 			err = s.st.Chains().ForkHandle(r.Context(), e.ID, at, st.Seq, [][]byte{enc}, *names)
 		} else {
 			err = s.st.Chains().Fork(r.Context(), e.ID, at, st.Seq, [][]byte{enc})

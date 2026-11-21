@@ -207,13 +207,13 @@ func TestMigrateOneServer(t *testing.T) {
 	if c := call(t, ts, "POST", "chain/append", kat.token, map[string]any{"entry": after}, &e); c != 400 || e.Code != wire.ErrCodeInvalidChain {
 		t.Fatalf("an entry after migrate: %d %+v", c, e)
 	}
-	// Nor can the version 1 recovery code fork it away: the migration is final.
-	g := sha256.Sum256(entries[0])
+	// Nor can a recovery-signed entry follow it. (One that forks from the migrate's position
+	// undoes the migration instead: unmigrate_test.go.)
 	next := sha256.Sum256(randBytes(32))
-	fork := signed(t, "chain-entry", map[string]any{"id": kat.id, "seq": 1, "prev": g[:], "ts": time.Now().Unix(),
+	onTop := signed(t, "chain-entry", map[string]any{"id": kat.id, "seq": len(entries), "prev": head[:], "ts": time.Now().Unix(),
 		"ops": []any{map[string]any{"op": "set-recovery", "next": next[:]}}}, kat.rec)
-	if c := call(t, ts, "POST", "recover", "", map[string]any{"entry": fork}, &e); c != 400 || e.Code != wire.ErrCodeInvalidChain {
-		t.Fatalf("a recovery fork over migrate: %d %+v", c, e)
+	if c := call(t, ts, "POST", "recover", "", map[string]any{"entry": onTop}, &e); c != 400 || e.Code != wire.ErrCodeInvalidChain {
+		t.Fatalf("a recovery entry after migrate: %d %+v", c, e)
 	}
 
 	// Handles: version 1 no longer resolves it, version 2 resolves the version 2 identity.

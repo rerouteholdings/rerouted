@@ -223,6 +223,10 @@ func (s *Server) authChallenge(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "not a current device")
 		return
 	}
+	if s.wv == wire.V2 && s.migrationUndone(r.Context(), st) {
+		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, undoneMsg)
+		return
+	}
 	nonce := make([]byte, 16)
 	rand.Read(nonce)
 	t := now()
@@ -271,7 +275,7 @@ func (s *Server) authSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	st, _, err := s.identity(r.Context(), body.ID)
-	if err != nil || !st.HasDevice(key) {
+	if err != nil || !st.HasDevice(key) || s.wv == wire.V2 && s.migrationUndone(r.Context(), st) {
 		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "")
 		return
 	}

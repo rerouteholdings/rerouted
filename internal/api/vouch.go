@@ -210,6 +210,9 @@ func (s *Server) acceptChain(ctx context.Context, id string, raw [][]byte, from 
 	if err := s.st.Remote().Put(ctx, id, ast.Home, accepted); err != nil {
 		return nil, nil, false, fmt.Errorf("%w: %w", errStorage, err)
 	}
+	if cst, err := s.decodeChain(cached); err == nil && cst.Closed() && !bytes.Equal(cst.MigratedTo, ast.MigratedTo) {
+		s.onUnmigrated(ctx, id, cst.MigratedID()) // a recovery entry overrode its migrate (SPEC §6.8)
+	}
 	if ast.Closed() {
 		s.onMigrated(ctx, ast) // SPEC §6.8
 	}

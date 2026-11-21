@@ -740,6 +740,65 @@ func (c chains) Migrate(ctx context.Context, m store.Migration) error {
 	return tx.Commit()
 }
 
+func (c chains) Unmigrate(ctx context.Context, u store.Unmigration) ([]string, error) {
+	if c.wire != wire.V1 {
+		return nil, errors.New("store: Unmigrate is for the version 1 view")
+	}
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var head sql.NullInt64
+	if err := tx.QueryRowContext(ctx, "SELECT MAX(seq) FROM chains WHERE id = ? AND wire = ?", u.From, wire.V1).Scan(&head); err != nil {
+		return nil, err
+	}
+	if !head.Valid {
+		return nil, store.ErrNotFound
+	}
+	if uint64(head.Int64) != u.HeadSeq || u.At == 0 || u.At > u.HeadSeq {
+		return nil, store.ErrConflict
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM chains WHERE id = ? AND seq >= ?", u.From, u.At); err != nil {
+		return nil, err
+	}
+	for i, e := range u.Entries {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO chains (id, seq, entry, wire) VALUES (?, ?, ?, ?)", u.From, u.At+uint64(i), e, wire.V1); err != nil {
+			return nil, err
+		}
+	}
+	// The handle: back to the version 1 identity while the version 2 one still uses it,
+	// and free if it has renamed since, so it's only held for it (SPEC §5.3).
+	if u.Handle != "" {
+		var hold int64
+		switch err := tx.QueryRowContext(ctx, "SELECT hold FROM handles WHERE handle = ? AND id = ?", u.Handle, u.To).Scan(&hold); {
+		case errors.Is(err, sql.ErrNoRows):
+		case err != nil:
+			return nil, err
+		case hold == 0:
+			if _, err := tx.ExecContext(ctx, "UPDATE handles SET id = ? WHERE handle = ?", u.From, u.Handle); err != nil {
+				return nil, err
+			}
+		default:
+			if _, err := tx.ExecContext(ctx, "DELETE FROM handles WHERE handle = ?", u.Handle); err != nil {
+				return nil, err
+			}
+		}
+	}
+	// The version 2 identity is closed: its sessions end, and the allowlists it was given
+	// go (SPEC §6.8).
+	for _, q := range []string{"DELETE FROM tokens WHERE id = ?", "DELETE FROM contacts WHERE owner = ?", "DELETE FROM groups_allowed WHERE owner = ?"} {
+		if _, err := tx.ExecContext(ctx, q, u.To); err != nil {
+			return nil, err
+		}
+	}
+	owners, err := rewriteMigrated(ctx, tx, u.To, u.From)
+	if err != nil {
+		return nil, err
+	}
+	return owners, tx.Commit()
+}
+
 // rewriteMigrated is Contacts.RewriteMigrated inside a transaction.
 func rewriteMigrated(ctx context.Context, tx *sql.Tx, from, to string) ([]string, error) {
 	const v2Owners = "owner IN (SELECT id FROM chains WHERE seq = 0 AND wire = 2)"

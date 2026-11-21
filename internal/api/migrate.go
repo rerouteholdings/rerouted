@@ -45,6 +45,11 @@ import (
 // API, and resolves to the version 2 identity on the version 2 API. Its devices keep their
 // version 1 sessions, to read what's left in the version 1 inbox, but can't send.
 //
+// The recovery code outranks a device-signed migrate: a recovery-signed entry that forks
+// from the migrate's position or before overrides it, and POST recover undoes the
+// migration in one step (unmigrate). The version 2 identity is then closed, here and, once
+// they hold the new chain, at its contacts' servers (onUnmigrated).
+//
 // Contacts carry over once both sides have migrated: the version 2 identity's contact list
 // starts as the version 1 one's, and an entry for a version 1 identity becomes its version
 // 2 identity when both links check out (chain.Linked): at the migration, when another
@@ -54,6 +59,7 @@ import (
 const (
 	migratedMsg     = "this identity moved to Tieroute wire version 2: update the app to reach it"
 	migratedSelfMsg = "this identity moved to Tieroute wire version 2: sign in with the version 2 identity"
+	undoneMsg       = "the migration to this identity was undone with the version 1 identity's recovery code"
 )
 
 var errNotMigrated = errors.New("not a migrated version 1 identity")
@@ -224,10 +230,71 @@ func (s *Server) appendMigrate(w http.ResponseWriter, r *http.Request, sess sess
 	if lvl := chain.Alert(applied); lvl != chain.AlertNone {
 		s.chainAlarm(ctx, sess.id, "alarm", enc)
 	}
-	s.dropPush(ctx, sess.id) // the app registers its token again for the version 2 identity
+	s.dropPush(ctx, sess.id)  // the app registers its token again for the version 2 identity
 	s.pushChain(ctx, sess.id) // contacts' servers learn the chain is closed
 	s.tellMigrated(ctx, st2.ID)
 	writeBody(w, http.StatusOK, map[string]any{"seq": st.Seq, "head": st.Head, "id": st2.ID})
+}
+
+// unmigrate undoes a migration on the version 1 Server, in one step (SPEC §6.8, Undoing a
+// migration): a recovery-signed entry, at seq at, overrides the device-signed migrate that
+// st, the chain before it, ends in. It forks the version 1 chain, gives the handle back,
+// closes the version 2 identity, ending its sessions and dropping the allowlists it was
+// given, and names the version 1 identity again in the contact lists that had been moved
+// over to the version 2 one. It writes any error itself.
+func (s *Server) unmigrate(w http.ResponseWriter, ctx context.Context, st, next *chain.State, at uint64, enc []byte) bool {
+	id2 := st.MigratedID()
+	owners, err := s.st.Chains().Unmigrate(ctx, store.Unmigration{From: st.ID, To: id2, At: at, HeadSeq: st.Seq, Entries: [][]byte{enc}, Handle: next.Handle})
+	if err != nil {
+		writeChainWriteError(w, s, err)
+		return false
+	}
+	s.log.Warn("migration undone by the recovery code", "id", st.ID, "v2", id2)
+	v2 := s.modern()
+	if st2, _, err := v2.identity(ctx, id2); err == nil {
+		for k := range st2.Devices {
+			v2.closeDevice(id2, unhex(k))
+		}
+	}
+	v2.dropPush(ctx, id2)
+	s.tellUnmigrated(ctx, st.ID, id2, owners)
+	return true
+}
+
+// tellUnmigrated tells the local version 2 identities that listed id2, or whose entry for
+// it now names id1 again, that the migration was undone: a chain-update for each.
+func (s *Server) tellUnmigrated(ctx context.Context, id1, id2 string, owners []string) {
+	v2 := s.modern()
+	listing, err := v2.st.Contacts().Owners(ctx, id2)
+	s.logged("listing who to tell about an undone migration", err)
+	for _, o := range append(owners, listing...) {
+		v2.logged("telling a contact about an undone migration", v2.notify(ctx, o, map[string]any{"t": "chain-update", "id": id1}))
+		v2.logged("telling a contact about an undone migration", v2.notify(ctx, o, map[string]any{"t": "chain-update", "id": id2}))
+	}
+}
+
+// onUnmigrated runs on the version 1 Server when a remote version 1 chain we held as
+// migrated to id2 no longer is: a recovery-signed entry overrode its migrate (SPEC §6.8).
+// Local identities whose entry for the identity had become id2 name id1 again.
+func (s *Server) onUnmigrated(ctx context.Context, id1, id2 string) {
+	owners, err := s.st.Contacts().RewriteMigrated(ctx, id2, id1)
+	if err != nil {
+		s.logged("rewriting contacts after an undone migration", err)
+		return
+	}
+	s.tellUnmigrated(ctx, id1, id2, owners)
+}
+
+// migrationUndone reports whether st2 is a version 2 identity whose migration was undone
+// here (SPEC §6.8): its genesis names a version 1 identity of this server whose chain no
+// longer names it. The genesis is only ever registered with the migrate that names it, so
+// that can only be an undone migration. Such an identity is closed: everything from it is refused.
+func (s *Server) migrationUndone(ctx context.Context, st2 *chain.State) bool {
+	if st2 == nil || st2.MigratedFrom == "" {
+		return false
+	}
+	st1, _, err := s.legacy().identity(ctx, st2.MigratedFrom)
+	return err == nil && !chain.Linked(st1, st2)
 }
 
 // tellMigrated tells the local version 2 identities that list id2 as a contact that its

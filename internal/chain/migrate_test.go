@@ -1,11 +1,11 @@
 package chain
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/rerouteholdings/rerouted/internal/wire"
@@ -165,16 +165,39 @@ func TestMigrateClosesTheChain(t *testing.T) {
 	if _, err := st.Clone().Apply(rec); err == nil {
 		t.Fatal("a recovery entry after migrate")
 	}
-	// And the recovery code can't fork it away either: a migrate is final.
+	// But the recovery code outranks a device-signed migrate (SPEC §6.8): a recovery fork
+	// from its position overrides it, whatever its age, whichever branch arrived first.
 	sum := sha256.Sum256(w.enc[0])
+	w.ts += 100 * 3600 // past version 1's 72-hour window for other device entries
 	fork := w.next(w.rec[0], 1, sum[:], map[string]any{"op": "set-recovery", "next": w.commit(1)})
 	fenc, _ := fork.Encode()
-	if _, _, _, err := ResolveFor(wire.V1, w.enc, [][]byte{w.enc[0], fenc}); !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "migrates the identity") {
-		t.Fatalf("a recovery fork over migrate: %v", err)
+	if st, out, at, err := ResolveFor(wire.V1, w.enc, [][]byte{w.enc[0], fenc}); err != nil || out != Fork || at != 1 || st.Closed() {
+		t.Fatalf("a recovery fork over a device-signed migrate: %v %v %d", err, out, at)
 	}
-	// Whichever branch arrived first: with the recovery fork cached, the migrate replaces it.
-	if st, out, at, err := ResolveFor(wire.V1, [][]byte{w.enc[0], fenc}, w.enc); err != nil || out != Fork || at != 1 || !st.Closed() {
-		t.Fatalf("migrate over a cached recovery fork: %v %v %d", err, out, at)
+	if st, out, err := resolveOut(wire.V1, [][]byte{w.enc[0], fenc}, w.enc); err != nil || out != Same || st.Closed() {
+		t.Fatalf("a device-signed migrate over a cached recovery fork: %v %v", err, out)
+	}
+	// Two branches ending in migrate: the recovery-signed one beats the device-signed one,
+	// in either order.
+	other := make([]byte, 32)
+	rand.Read(other)
+	rm := w.next(w.rec[0], 1, sum[:], map[string]any{"op": "migrate", "to": other}, map[string]any{"op": "set-recovery", "next": w.commit(1)})
+	rmenc, _ := rm.Encode()
+	if st, out, _, err := ResolveFor(wire.V1, w.enc, [][]byte{w.enc[0], rmenc}); err != nil || out != Fork || !bytes.Equal(st.MigratedTo, other) {
+		t.Fatalf("a recovery-signed migrate over a device-signed one: %v %v", err, out)
+	}
+	if st, out, err := resolveOut(wire.V1, [][]byte{w.enc[0], rmenc}, w.enc); err != nil || out != Same || !bytes.Equal(st.MigratedTo, other) {
+		t.Fatalf("a device-signed migrate over a cached recovery-signed one: %v %v", err, out)
+	}
+	// Two device-signed ones: the first seen stays.
+	dm := w.next(w.dev, 1, sum[:], map[string]any{"op": "migrate", "to": other})
+	dmenc, _ := dm.Encode()
+	if _, _, _, err := ResolveFor(wire.V1, w.enc, [][]byte{w.enc[0], dmenc}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("a second device-signed migrate replaced the first: %v", err)
+	}
+	// A recovery-signed migrate is final: a recovery fork can't reach behind it.
+	if _, _, _, err := ResolveFor(wire.V1, [][]byte{w.enc[0], rmenc}, [][]byte{w.enc[0], fenc}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("a recovery fork over a recovery-signed migrate: %v", err)
 	}
 	// Version 2 doesn't know migrate.
 	st2 := &State{V: wire.V2, Devices: map[string]string{}, Pubs: map[string]*wire.CompositePublicKey{}}
@@ -209,4 +232,20 @@ func TestMigrateByRecovery(t *testing.T) {
 	if err != nil || a.Signer != SignerRecovery || !st.Closed() {
 		t.Fatalf("recovery-signed migrate: %v", err)
 	}
+}
+
+// resolveOut is ResolveFor, for a cached chain and a candidate that loses to it: the state
+// kept, and how the candidate related to it (a refusal counts as Same: the cache stays).
+func resolveOut(v int, cached, candidate [][]byte) (*State, Outcome, error) {
+	st, out, _, err := ResolveFor(v, cached, candidate)
+	if errors.Is(err, ErrInvalid) {
+		kept, err := ValidateFor(v, mustDecode(v, cached))
+		return kept, Same, err
+	}
+	return st, out, err
+}
+
+func mustDecode(v int, raw [][]byte) []wire.Signed {
+	out, _ := decodeAll(v, raw)
+	return out
 }

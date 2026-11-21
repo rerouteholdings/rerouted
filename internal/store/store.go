@@ -109,6 +109,11 @@ type Chains interface {
 	// isn't m.PrevSeq anymore, ErrExists if m.To already has a chain, ErrHandleTaken if
 	// m.Handle is held for anyone but m.From or m.To.
 	Migrate(ctx context.Context, m Migration) error
+	// Unmigrate undoes a migration whose device-signed migrate a recovery-signed entry
+	// overrode (SPEC §6.8, Undoing a migration), in one transaction, on the version 1 view:
+	// see Unmigration. It returns the local identities whose contact entry for u.To now
+	// names u.From again. ErrConflict if the version 1 head isn't u.HeadSeq anymore.
+	Unmigrate(ctx context.Context, u Unmigration) ([]string, error)
 }
 
 // Migration is a wire version 1 identity becoming a version 2 one (SPEC §6.8). Committing
@@ -129,6 +134,17 @@ type Migration struct {
 	Handle   string // the handle the genesis names
 	// Contacts maps contacts of From that have migrated to their version 2 identifiers.
 	Contacts map[string]string
+}
+
+// Unmigration is a recovery fork of a version 1 chain over its device-signed migrate.
+type Unmigration struct {
+	From, To string   // the version 1 identifier, and the version 2 one the migrate named
+	At       uint64   // the first replaced seq
+	HeadSeq  uint64   // the version 1 head before the fork
+	Entries  [][]byte // the recovery-signed entry, and anything after it
+	// Handle is the version 1 handle the chain names after the fork. It goes back to From
+	// if To still uses it; if To has renamed since, the name is freed.
+	Handle string
 }
 
 // HandleHold is how long, in seconds, a name an identity stops using stays held for it,
