@@ -243,6 +243,7 @@ func (c *community) routes(mux *http.ServeMux) {
 		"POST groups/register":            c.authed(c.groupRegister(true)),
 		"POST groups/unregister":          c.authed(c.groupRegister(false), movedOK),
 		"GET groups/{group}/commits":      c.authed(c.member(c.groupCommits), movedOK),
+		"POST groups/undo":                c.authed(c.member(c.groupUndo)),
 		"GET groups/{group}/info":         c.authed(c.groupInfo, movedOK),
 		"GET groups/{group}/tree":         c.authed(c.groupTree, movedOK),
 		"POST tree/upload":                c.authed(c.treeUpload, movedOK),

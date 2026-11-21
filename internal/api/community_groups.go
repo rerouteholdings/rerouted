@@ -537,7 +537,110 @@ func (c *community) groupCommits(w http.ResponseWriter, r *http.Request, sess cs
 			items[i]["proof"] = wire.Raw(cm.Proof)
 		}
 	}
-	writeBody(w, http.StatusOK, map[string]any{"items": items})
+	res := map[string]any{"items": items}
+	// The undos, so a member that missed the notice still recognizes one (SPEC §16.5).
+	undos, err := c.st.Undos(r.Context(), g.Group, uint64(after+1))
+	if err != nil {
+		c.hs.unavailableRead(w, "reading undos", err)
+		return
+	}
+	if len(undos) > 0 {
+		list := make([]wire.Raw, len(undos))
+		for i, u := range undos {
+			list[i] = u
+		}
+		res["undos"] = list
+	}
+	writeBody(w, http.StatusOK, res)
+}
+
+// ---- POST groups/undo (SPEC §16.5, Undoing a refused commit) ----
+
+// groupUndo sets a group back to the epoch of a commit every member refused, on a
+// commit-undo signed by the owner or a member with administrate. The server can't undo a
+// commit by itself: it needs that signature.
+func (c *community) groupUndo(w http.ResponseWriter, r *http.Request, sess csess) {
+	var req struct {
+		Undo wire.Raw `json:"undo"`
+	}
+	if !readBody(w, r, &req) {
+		return
+	}
+	ctx := r.Context()
+	sig, err := wire.DecodeSignedV2(req.Undo)
+	if err != nil || sig.T != "commit-undo" {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "undo: a signed commit-undo")
+		return
+	}
+	var body struct {
+		Community wire.Bytes `json:"community"`
+		Group     wire.Bytes `json:"group"`
+		Epoch     uint64     `json:"epoch"`
+		Hash      wire.Bytes `json:"hash"`
+		By        string     `json:"by"`
+		TS        int64      `json:"ts"`
+	}
+	if err := sig.OpenClosed(&body); err != nil || len(body.Hash) != sha256.Size {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "undo: {community, group, epoch, hash, by, ts}")
+		return
+	}
+	if body.By != sess.id {
+		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "the undo has to be signed by the session's identity")
+		return
+	}
+	signer, err := c.appendKeys(ctx, sess)(body.By, sig.K)
+	if err != nil {
+		if errors.Is(err, cchain.ErrNotDevice) {
+			writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "not signed by a current device of yours")
+			return
+		}
+		c.cerr(w, err)
+		return
+	}
+	if sig.VerifyComposite("commit-undo", signer.Pub) != nil {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadSignature, "undo")
+		return
+	}
+	st := c.snapshot()
+	if st == nil || !bytes.Equal(body.Community, st.ID) {
+		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "the undo is for another community")
+		return
+	}
+	if st.Owner != sess.id && !st.Has(sess.id, cchain.Administrate) {
+		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "only the owner, or a member with administrate, can undo a commit")
+		return
+	}
+	g, ok := c.ownGroup(w, ctx, body.Group)
+	if !ok {
+		return
+	}
+	if g.Replaced != nil {
+		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "that group has been replaced")
+		return
+	}
+	enc, _ := sig.Encode()
+	notice, _ := wire.Marshal(map[string]any{"t": "commit-undo", "group": wire.Bytes(body.Group), "undo": wire.Raw(enc)})
+	it, err := c.st.Undo(ctx, store.CUndo{Group: body.Group, Epoch: body.Epoch, Hash: body.Hash, Undo: enc, Notice: store.CItem{TS: now(), Notice: notice}})
+	switch {
+	case errors.Is(err, store.ErrExists):
+		writeBody(w, http.StatusOK, map[string]any{}) // the same undo again
+		return
+	case errors.Is(err, store.ErrConflict):
+		writeError(w, http.StatusConflict, wire.ErrCodeStaleEpoch, "a commit for the next epoch is in: a member applied the undone one")
+		return
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "no commit with that hash for that epoch")
+		return
+	case errors.Is(err, store.ErrGone):
+		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "that commit was sequenced before this server kept what undoing needs: re-create the group")
+		return
+	case err != nil:
+		c.hs.unavailableRead(w, "undoing a commit", err)
+		return
+	}
+	c.hs.log.Info("community commit undone", "community", c.name, "group", wire.B64(body.Group), "epoch", body.Epoch, "by", sess.id)
+	c.pushItem(ctx, it)
+	writeBody(w, http.StatusOK, map[string]any{})
 }
 
 // treeAccess: devices registered for the group, or, for the members group, code access.
@@ -736,7 +839,7 @@ func (c *community) hubStep(ctx context.Context, in hubIn) (wire.Signed, string)
 		return wire.Signed{}, wire.ErrCodeReplaced
 	case errors.Is(err, store.ErrConflict):
 		return c.retried(ctx, in.group, in.epoch, in.request)
-	case errors.Is(err, store.ErrOverQuota):
+	case errors.Is(err, store.ErrOverQuota), errors.Is(err, store.ErrGone): // ErrGone: an undone commit (SPEC §16.5)
 		return wire.Signed{}, wire.ErrCodeNotAllowed
 	case err != nil:
 		c.hs.log.Error("accepting a commit", "err", err)

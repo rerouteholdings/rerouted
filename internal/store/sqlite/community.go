@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS cm_media    (name TEXT NOT NULL, id BLOB NOT NULL, au
 CREATE TABLE IF NOT EXISTS cm_icons    (name TEXT NOT NULL, hash BLOB NOT NULL, mime TEXT NOT NULL, data BLOB NOT NULL, uploaded INTEGER NOT NULL, PRIMARY KEY (name, hash));
 CREATE TABLE IF NOT EXISTS cm_reads    (name TEXT NOT NULL, id TEXT NOT NULL, channel INTEGER NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY (name, id, channel));
 CREATE TABLE IF NOT EXISTS cm_replaced (grp BLOB PRIMARY KEY, name TEXT NOT NULL, new_grp BLOB NOT NULL);
+CREATE TABLE IF NOT EXISTS cm_epochs   (grp BLOB NOT NULL, epoch INTEGER NOT NULL, key BLOB NOT NULL, info BLOB, tree BLOB, tree_size INTEGER NOT NULL DEFAULT 0, ts INTEGER NOT NULL, PRIMARY KEY (grp, epoch));
+CREATE TABLE IF NOT EXISTS cm_undos    (grp BLOB NOT NULL, epoch INTEGER NOT NULL, hash BLOB NOT NULL, undo BLOB NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (grp, epoch, hash));
 CREATE TABLE IF NOT EXISTS cm_reports  (n INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, rid BLOB NOT NULL, ts INTEGER NOT NULL, reporter TEXT NOT NULL, body BLOB NOT NULL, at BLOB, UNIQUE (name, rid));
 `
 
@@ -590,6 +592,15 @@ func (c communities) Accept(ctx context.Context, a store.CAccept) error {
 	if epoch != a.Epoch || awaiting {
 		return store.ErrConflict
 	}
+	// An undone commit can't come back (SPEC §16.5).
+	sum := sha256.Sum256(a.Commit.Data)
+	var undone int
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM cm_undos WHERE grp = ? AND epoch = ? AND hash = ?", a.Group, a.Epoch, sum[:]).Scan(&undone); err != nil {
+		return err
+	}
+	if undone > 0 {
+		return store.ErrGone
+	}
 	if j := a.Join; j != nil {
 		var member int
 		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM cm_members WHERE name = ? AND id = ?", name, j.ID).Scan(&member); err != nil {
@@ -624,6 +635,11 @@ func (c communities) Accept(ctx context.Context, a store.CAccept) error {
 	}
 	if _, err := tx.ExecContext(ctx, "INSERT INTO cm_commits (grp, epoch, data, receipt, request, proof, ts) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		a.Group, a.Epoch, a.Commit.Data, a.Commit.Receipt, a.Commit.Request, a.Commit.Proof, a.Commit.TS); err != nil {
+		return err
+	}
+	// The epoch's state before the commit, for an undo (SPEC §16.5).
+	if _, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO cm_epochs (grp, epoch, key, info, tree, tree_size, ts) SELECT grp, epoch, key, info, tree, tree_size, ? FROM cm_groups WHERE grp = ?",
+		a.Commit.TS, a.Group); err != nil {
 		return err
 	}
 	// A commit without a GroupInfo clears the old one: the old epoch's GroupInfo next to
@@ -664,6 +680,82 @@ func (c communities) Commits(ctx context.Context, group []byte, from uint64) ([]
 			return nil, err
 		}
 		out = append(out, cm)
+	}
+	return out, rows.Err()
+}
+
+func (c communities) Undo(ctx context.Context, u store.CUndo) (store.CItem, error) {
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return store.CItem{}, err
+	}
+	defer tx.Rollback()
+	var name string
+	var epoch uint64
+	if err := tx.QueryRowContext(ctx, "SELECT name, epoch FROM cm_groups WHERE grp = ?", u.Group).Scan(&name, &epoch); err != nil {
+		return store.CItem{}, notFound(err)
+	}
+	var n int
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM cm_undos WHERE grp = ? AND epoch = ? AND hash = ?", u.Group, u.Epoch, u.Hash).Scan(&n); err != nil {
+		return store.CItem{}, err
+	}
+	if n > 0 {
+		return store.CItem{}, store.ErrExists // the same undo again
+	}
+	if epoch != u.Epoch+1 {
+		if epoch > u.Epoch+1 {
+			return store.CItem{}, store.ErrConflict
+		}
+		return store.CItem{}, store.ErrNotFound
+	}
+	var data []byte
+	if err := tx.QueryRowContext(ctx, "SELECT data FROM cm_commits WHERE grp = ? AND epoch = ?", u.Group, u.Epoch).Scan(&data); err != nil {
+		return store.CItem{}, notFound(err)
+	}
+	if sum := sha256.Sum256(data); !bytes.Equal(sum[:], u.Hash) {
+		return store.CItem{}, store.ErrNotFound
+	}
+	res, err := tx.ExecContext(ctx, "UPDATE cm_groups SET epoch = e.epoch, key = e.key, awaiting = 0, info = e.info, tree = e.tree, tree_size = e.tree_size FROM (SELECT epoch, key, info, tree, tree_size FROM cm_epochs WHERE grp = ? AND epoch = ?) AS e WHERE cm_groups.grp = ?", u.Group, u.Epoch, u.Group)
+	if err != nil {
+		return store.CItem{}, err
+	}
+	if k, _ := res.RowsAffected(); k == 0 {
+		return store.CItem{}, store.ErrGone // accepted before this server kept epoch states
+	}
+	for _, q := range []string{"DELETE FROM cm_commits WHERE grp = ? AND epoch = ?", "DELETE FROM cm_tree_uses WHERE grp = ? AND epoch = ? + 1"} {
+		if _, err := tx.ExecContext(ctx, q, u.Group, u.Epoch); err != nil {
+			return store.CItem{}, err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT INTO cm_undos (grp, epoch, hash, undo, ts) VALUES (?, ?, ?, ?, ?)", u.Group, u.Epoch, u.Hash, u.Undo, u.Notice.TS); err != nil {
+		return store.CItem{}, err
+	}
+	// The notice goes into the inbox in the same step, so it's ahead of the next commit.
+	it := u.Notice
+	r, err := tx.ExecContext(ctx, "INSERT INTO cm_inbox (name, ts, grp, notice) VALUES (?, ?, ?, ?)", name, it.TS, u.Group, it.Notice)
+	if err != nil {
+		return store.CItem{}, err
+	}
+	if it.Cursor, err = r.LastInsertId(); err != nil {
+		return store.CItem{}, err
+	}
+	it.Group = u.Group
+	return it, tx.Commit()
+}
+
+func (c communities) Undos(ctx context.Context, group []byte, from uint64) ([][]byte, error) {
+	rows, err := c.db.QueryContext(ctx, "SELECT undo FROM cm_undos WHERE grp = ? AND epoch >= ? ORDER BY epoch, ts", group, from)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out [][]byte
+	for rows.Next() {
+		var b []byte
+		if err := rows.Scan(&b); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
 	}
 	return out, rows.Err()
 }
@@ -975,6 +1067,8 @@ func (c communities) Prune(ctx context.Context, before int64) error {
 	for _, q := range []string{
 		"DELETE FROM cm_inbox WHERE ts < ?",
 		"DELETE FROM cm_commits WHERE ts < ?",
+		"DELETE FROM cm_epochs WHERE ts < ?",
+		"DELETE FROM cm_undos WHERE ts < ?",
 		"DELETE FROM cm_sent WHERE ts < ?",
 	} {
 		if _, err := tx.ExecContext(ctx, q, before); err != nil {

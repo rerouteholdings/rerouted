@@ -656,7 +656,7 @@ func TestCommunityEveryEndpointRouted(t *testing.T) {
 	})
 	endpoints := []string{"GET preview", "POST auth/challenge", "POST auth/session", "POST auth/logout", "POST create", "POST join",
 		"POST join/request", "GET join/requests", "POST join/approve", "POST join/decline", "POST leave", "GET chain", "POST chain/append",
-		"POST keypackages/upload", "GET keypackages/count", "POST keypackages/claim", "POST groups/create", "POST groups/epoch-key",
+		"POST keypackages/upload", "GET keypackages/count", "POST keypackages/claim", "POST groups/create", "POST groups/epoch-key", "POST groups/undo",
 		"POST groups/register", "POST groups/unregister", "GET groups/AAAA/commits", "GET groups/AAAA/info", "GET groups/AAAA/tree",
 		"POST tree/upload", "POST send", "GET inbox", "POST inbox/ack", "GET channels/1/messages", "POST history/put", "GET history/list",
 		"GET history/get", "GET members", "GET members/tr:aaaaaaaaaaaaaaaaaaaaaaaa/chain", "POST media/upload", "GET media/AAAA", "POST voice/move", "POST messages/delete", "POST members/kick",

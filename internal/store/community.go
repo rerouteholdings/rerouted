@@ -85,6 +85,15 @@ type CJoin struct {
 	Cap      int    // the member cap
 }
 
+// CUndo is an undo of a group's commit for Epoch, whose SHA-256 is Hash.
+type CUndo struct {
+	Group  []byte
+	Epoch  uint64
+	Hash   []byte
+	Undo   []byte // the signed commit-undo
+	Notice CItem  // TS and Notice: the commit-undo notice for the group's devices
+}
+
 // CItem is one inbox item in a community: a delivery to a group's registered devices, a
 // Welcome or notice to one device or identity, or a notice to every member.
 type CItem struct {
@@ -228,10 +237,19 @@ type Communities interface {
 	// replaced.
 	ReplaceGroup(ctx context.Context, g CGroup, old []byte) error
 	// Accept applies a hub step. ErrConflict if the group isn't at a.Epoch or awaits a
-	// key, ErrReplaced if it has been replaced.
+	// key, ErrReplaced if it has been replaced, ErrGone for a commit undone at that epoch.
 	Accept(ctx context.Context, a CAccept) error
 	SetKey(ctx context.Context, group []byte, epoch uint64, reg, next []byte) error
 	Commits(ctx context.Context, group []byte, from uint64) ([]CCommit, error)
+	// Undo sets a group back to the epoch of a commit every member refused (SPEC §16.5):
+	// the group must be at u.Epoch+1, with the commit for u.Epoch hashing to u.Hash. It
+	// stores u.Notice for the group's devices in the same step, and returns it with its
+	// cursor. ErrExists for the same undo again, ErrConflict once a commit for u.Epoch+1
+	// is in, ErrNotFound for no such commit, and ErrGone for a commit accepted before
+	// this server kept each epoch's state.
+	Undo(ctx context.Context, u CUndo) (CItem, error)
+	// Undos lists the commit-undos for epochs from `from` on, in epoch order.
+	Undos(ctx context.Context, group []byte, from uint64) ([][]byte, error)
 	// Register lets a device receive a group's traffic from now on.
 	Register(ctx context.Context, name string, group []byte, id string, dev []byte) error
 	Unregister(ctx context.Context, group []byte, id string, dev []byte) error

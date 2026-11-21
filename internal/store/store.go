@@ -23,6 +23,8 @@ var (
 	ErrExists = errors.New("store: exists with different content")
 	// ErrReplaced is a write to a community group that another has replaced (SPEC §16.5).
 	ErrReplaced = errors.New("store: replaced")
+	// ErrGone is something this server no longer has, or never kept.
+	ErrGone = errors.New("store: gone")
 )
 
 // Store is everything a homeserver keeps.
