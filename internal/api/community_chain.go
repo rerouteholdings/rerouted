@@ -181,15 +181,15 @@ func (c *community) revokeRemovedDevices(ctx context.Context, id string, st *cha
 	}
 }
 
-// refreshChains re-fetches the chain of every identity with a live session at least once a
-// day (spec/api/community.md), and revokes the devices removed from it.
+// refreshChains re-fetches the chain of every identity with a live session at least once an
+// hour (SPEC §16.2.2, spec/api/community.md), and revokes the devices removed from it.
 func (c *community) refreshChains(ctx context.Context) {
 	ids, err := c.st.SessionIDs(ctx, c.name, now())
 	if err != nil {
 		return
 	}
 	for _, id := range ids {
-		if t, ok := c.fetched.Load(id); ok && t.(int64) > now()-24*3600 {
+		if t, ok := c.fetched.Load(id); ok && t.(int64) > now()-chainRefresh {
 			continue
 		}
 		home := ""
@@ -202,31 +202,57 @@ func (c *community) refreshChains(ctx context.Context) {
 	}
 }
 
+// chainRefresh is how often, in seconds, a live session's chain is fetched again.
+const chainRefresh = 3600
+
 // ---- signers' keys (SPEC §16.2.2, "Which device keys count") ----
 
 // appendKeys is cchain.Keys for an entry appended now: by must be the session's identity,
-// and k a current device of it, re-fetching the chain once if it isn't.
+// and k a current device of it on a copy of its chain fetched from its home as the append
+// arrives, not a cached one (SPEC §16.2.2). A home that can't be reached gets 503, and the
+// signer tries again later. A device the fresh copy shows removed loses its sessions.
 func (c *community) appendKeys(ctx context.Context, sess csess) cchain.Keys {
 	return func(by string, k []byte) (cchain.Signer, error) {
 		if by != sess.id {
 			return cchain.Signer{}, cchain.ErrNotDevice
 		}
-		ch, err := c.identityChain(ctx, by, sess.home, false)
-		if err == nil && !ch.st.HasDevice(k) {
-			ch, err = c.identityChain(ctx, by, sess.home, true)
-		}
+		ch, err := c.freshChain(ctx, by, sess.home)
 		if err != nil {
-			if errors.Is(err, store.ErrNotFound) {
+			var es *fed.ErrStatus
+			if errors.Is(err, store.ErrNotFound) || errors.As(err, &es) && (es.Status == http.StatusNotFound || es.Status == http.StatusGone) {
 				return cchain.Signer{}, cchain.ErrNotDevice
 			}
-			return cchain.Signer{}, err
+			c.hs.log.Info("fetching a signer's chain for a community append", "id", by, "home", sess.home, "err", err)
+			return cchain.Signer{}, &cchain.Error{Status: http.StatusServiceUnavailable, Code: wire.ErrCodeUnavailable, Msg: "the signer's homeserver can't be reached: try again later"}
 		}
 		pub := ch.st.DevicePub(k)
 		if pub == nil {
+			c.revokeRemovedDevices(ctx, by, ch.st)
 			return cchain.Signer{}, cchain.ErrNotDevice
 		}
 		return cchain.Signer{Pub: pub, Home: ch.st.Home}, nil
 	}
+}
+
+// freshChain is an identity's chain as its home has it now: the copy in this server's store
+// when the identity lives here, under the community's name or the homeserver's, and
+// otherwise fetched, never a cached copy.
+func (c *community) freshChain(ctx context.Context, id, home string) (*chain2, error) {
+	if home == "" || home == c.srv.cfg.Name {
+		return c.identityChain(ctx, id, home, false)
+	}
+	if home == c.hs.cfg.Name {
+		st, raw, err := c.hs.identity(ctx, id)
+		if err == nil && st.Home == home {
+			return &chain2{st, raw}, nil
+		}
+	}
+	st, raw, err := c.srv.fetchRemote(ctx, id, home, true)
+	if err != nil {
+		return nil, err
+	}
+	c.fetched.Store(id, now())
+	return &chain2{st, raw}, nil
 }
 
 // importKeys is cchain.Keys for a whole chain moving in (SPEC §16.2.3 set-home): as a client

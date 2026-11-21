@@ -144,7 +144,7 @@ func (e *cmEnv) signIn(u *v2User) *cmUser {
 	var ch struct {
 		Nonce wire.Bytes `json:"nonce"`
 	}
-	if c := e.call("POST", "auth/challenge", "", map[string]any{"id": u.id, "key": edOf(u.dev), "home": "chat.test"}, &ch); c != 200 {
+	if c := e.call("POST", "auth/challenge", "", map[string]any{"id": u.id, "key": edOf(u.dev), "home": u.server}, &ch); c != 200 {
 		e.t.Fatalf("community challenge: %d", c)
 	}
 	server := "chat.test"
