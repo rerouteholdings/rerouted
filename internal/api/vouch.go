@@ -252,10 +252,12 @@ func fromHomeFor(v int, raw [][]byte, from string, now int64, grace bool) bool {
 
 // checkMoves is the first-fetch check (SPEC §6.5): every device-signed set-home in a chain
 // we have no copy of, and that no later recovery-signed entry vouches for, is confirmed
-// with the home before it. A home that answers 404 or 410 is skipped; one that returns the
-// chain without the entry fails it, and so, for now, does one that can't be reached: an
-// unanswered question isn't a yes. A home that's gone for good means the move
-// needs the recovery code (SPEC §6.6).
+// with the home before it. One that returns the chain without the entry fails it, and so,
+// for now, does one that can't be reached: an unanswered question isn't a yes. In wire
+// version 2, a 404 or 410 counts as unreachable: an honest home keeps a tombstone, so only
+// a home whose domain lapsed, or that lost its data, forgets an identity that lived there.
+// Wire version 1 still skips such a home. A home that's gone for good means the move
+// needs the recovery code (SPEC §6.5, §6.6).
 func (s *Server) checkMoves(ctx context.Context, id string, raw [][]byte, from string) error {
 	_, err := s.confirmMoves(ctx, id, raw, from, len(raw))
 	return err
@@ -283,8 +285,8 @@ func (s *Server) confirmMoves(ctx context.Context, id string, raw [][]byte, from
 		}
 		theirs, err := s.askHome(ctx, prevHome[i], id)
 		var status *fed.ErrStatus
-		if err != nil && errors.As(err, &status) && (status.Status == 404 || status.Status == 410) {
-			continue // no longer knows the identity: nothing to ask
+		if err != nil && errors.As(err, &status) && (status.Status == 404 || status.Status == 410) && s.wv != wire.V2 {
+			continue // wire version 1: no longer knows the identity, nothing to ask
 		}
 		if err != nil {
 			return false, fmt.Errorf("entry %d moves the account away from %s, which couldn't be asked to confirm it: try again later", i, prevHome[i])
