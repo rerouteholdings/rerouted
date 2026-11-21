@@ -607,7 +607,8 @@ func (s *Server) checkReservation(ctx context.Context, raw wire.Raw, id, dest st
 	if _, err := s.fed.ServerDoc(ctx, dest); err != nil {
 		return http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "couldn't reach " + dest + " to check its reservation"
 	}
-	if s.fed.VerifyServerSigned(ctx, dest, sig, "move-reservation", now()) != nil {
+	// A reservation is dated its exp minus 10 minutes, for the key and its revoked time (SPEC §5.1).
+	if s.fed.VerifyServerSigned(ctx, dest, sig, "move-reservation", body.Exp-reservationTTL) != nil {
 		return http.StatusBadRequest, wire.ErrCodeBadSignature, "the reservation isn't signed by " + dest
 	}
 	return 0, "", ""

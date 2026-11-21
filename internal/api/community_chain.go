@@ -576,7 +576,8 @@ func (c *community) checkMoveReservation(ctx context.Context, raw wire.Raw, id [
 	if _, err := c.srv.fed.ServerDoc(ctx, dest); err != nil {
 		return http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "couldn't reach " + dest + " to check its reservation"
 	}
-	if c.srv.fed.VerifyServerSigned(ctx, dest, sig, typeCommunityReservation, now()) != nil {
+	// A reservation is dated its exp minus 10 minutes, for the key and its revoked time (SPEC §5.1).
+	if c.srv.fed.VerifyServerSigned(ctx, dest, sig, typeCommunityReservation, body.Exp-reservationTTL) != nil {
 		return http.StatusBadRequest, wire.ErrCodeBadSignature, "the reservation isn't signed by " + dest
 	}
 	return 0, "", ""

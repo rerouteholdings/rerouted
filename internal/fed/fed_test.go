@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -400,5 +401,74 @@ func TestSignV2RoundTrip(t *testing.T) {
 	again := againKeys.Current()
 	if again.KID != key.KID || again.V2.KID != key.V2.KID || !again.V2.Priv.Public().Equal(key.V2.Priv.Public()) {
 		t.Fatalf("keys reloaded differently: %v", err)
+	}
+}
+
+// Server key rules (SPEC §5.1, §8.3): a key revoked at or before a request's ts doesn't
+// verify it, nor does a key that claims more than 400 days. A key ID the cached document
+// doesn't list makes the receiver fetch it again, so a rotated key works at once, and a
+// key the document stops listing stops working once the cached copy is an hour old.
+func TestServerKeyRules(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(nil)
+	now := time.Now().Unix()
+	var keys []any
+	var mu sync.Mutex
+	doc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		b, _ := wire.Marshal(map[string]any{"name": "a.test", "keys": keys})
+		mu.Unlock()
+		w.Write(b)
+	}))
+	defer doc.Close()
+	set := func(k ...any) { mu.Lock(); keys = k; mu.Unlock() }
+	key := func(kid string, nbf, exp, revoked int64) map[string]any {
+		m := map[string]any{"kid": kid, "pub": wire.Bytes(pub), "nbf": nbf, "exp": exp}
+		if revoked != 0 {
+			m["revoked"] = revoked
+		}
+		return m
+	}
+	f := New("b.test", nil, map[string]string{"a.test": doc.URL})
+	f.HTTP = doc.Client()
+	n := byte(0)
+	request := func(kid string) []byte {
+		n++
+		sig, _ := wire.SignKID("s2s", s2sRequest{From: "a.test", To: "b.test", Path: "ping", TS: now, Nonce: append(make([]byte, 15), n), Body: wire.Raw(`{}`)}, priv, kid)
+		enc, _ := sig.Encode()
+		return enc
+	}
+	ctx := context.Background()
+	set(key("ok", now-60, now+3600, 0), key("revoked", now-60, now+3600, now), key("later-revoked", now-60, now+3600, now+60),
+		key("long", now-60, now-60+401*24*3600, 0), key("capped", now-60, now-60+400*24*3600, 0))
+	for kid, want := range map[string]bool{"ok": true, "revoked": false, "later-revoked": true, "long": false, "capped": true} {
+		if _, _, err := f.Verify(ctx, request(kid), "ping"); (err == nil) != want {
+			t.Errorf("key %s: %v, want verified %v", kid, err, want)
+		}
+	}
+	age := func(d time.Duration) {
+		f.mu.Lock()
+		c := f.docs["a.test"]
+		c.fetched = time.Now().Add(-d)
+		f.docs["a.test"] = c
+		f.mu.Unlock()
+	}
+	// A new key the cached copy doesn't list: fetched again, unless that copy is under a
+	// minute old, so junk key IDs can't make us fetch on every request.
+	set(key("ok", now-60, now+3600, 0), key("new", now-60, now+3600, 0))
+	if _, _, err := f.Verify(ctx, request("new"), "ping"); err == nil {
+		t.Fatal("fetched the document again seconds after the last fetch")
+	}
+	age(2 * time.Minute)
+	if _, _, err := f.Verify(ctx, request("new"), "ping"); err != nil {
+		t.Fatalf("a rotated key: %v", err)
+	}
+	// The document stops listing "ok": the cached copy counts for an hour, then not.
+	set(key("new", now-60, now+3600, 0))
+	if _, _, err := f.Verify(ctx, request("ok"), "ping"); err != nil {
+		t.Fatalf("the cached copy stopped counting early: %v", err)
+	}
+	age(docTTL + time.Second)
+	if _, _, err := f.Verify(ctx, request("ok"), "ping"); err == nil {
+		t.Fatal("a key the server stopped listing verified after an hour")
 	}
 }

@@ -87,12 +87,23 @@ type Doc struct {
 		Client string `json:"client,omitempty"`
 		S2S    string `json:"s2s"`
 	} `json:"apis"`
-	Keys []struct {
-		KID string     `json:"kid"`
-		Pub wire.Bytes `json:"pub"`
-		NBF int64      `json:"nbf"`
-		EXP int64      `json:"exp"`
-	} `json:"keys"`
+	Keys []DocKey `json:"keys"`
+}
+
+// DocKey is one of a server's keys, as its document lists it (SPEC §5.1).
+type DocKey struct {
+	KID     string     `json:"kid"`
+	Pub     wire.Bytes `json:"pub"`
+	NBF     int64      `json:"nbf"`
+	EXP     int64      `json:"exp"`
+	Revoked int64      `json:"revoked,omitempty"`
+}
+
+// validAt reports whether the key counts for something signed at time t: within nbf and
+// exp, before any revoked time, and with a lifetime under the cap. A key that claims more
+// than 400 days is ignored (SPEC §5.1).
+func (k DocKey) validAt(t int64) bool {
+	return t >= k.NBF && t <= k.EXP && k.EXP-k.NBF <= int64(serverkey.MaxLifetime/time.Second) && (k.Revoked == 0 || t < k.Revoked)
 }
 
 // Version is the wire version a Fed speaks unless it says otherwise (SPEC §20.1).
@@ -277,33 +288,69 @@ func (f *Fed) fetchDoc(ctx context.Context, name string) (Doc, error) {
 
 // KeyFor finds a server's wire version 1 public key by key ID, valid at time t.
 func (f *Fed) KeyFor(ctx context.Context, server, kid string, t int64) (ed25519.PublicKey, error) {
-	d, err := f.ServerDoc(ctx, server)
+	k, err := f.docKey(ctx, server, kid, t, ed25519.PublicKeySize)
 	if err != nil {
-		return nil, &UnavailableError{err}
+		return nil, err
 	}
-	for _, k := range d.Keys {
-		if k.KID == kid && t >= k.NBF && t <= k.EXP && len(k.Pub) == ed25519.PublicKeySize {
-			return ed25519.PublicKey(k.Pub), nil
-		}
-	}
-	return nil, fmt.Errorf("%s has no valid key %q", server, kid)
+	return ed25519.PublicKey(k.Pub), nil
 }
 
 // CompositeKeyFor finds a server's composite public key (wire version 2) by key ID, valid
 // at time t (SPEC §5.1). A version 1 key under that ID doesn't count.
 func (f *Fed) CompositeKeyFor(ctx context.Context, server, kid string, t int64) (*wire.CompositePublicKey, error) {
+	k, err := f.docKey(ctx, server, kid, t, wire.CompositePublicKeySize)
+	if err != nil {
+		return nil, err
+	}
+	pub, err := wire.ParseCompositePublicKey(k.Pub)
+	if err != nil {
+		return nil, fmt.Errorf("%s has no valid key %q", server, kid)
+	}
+	return pub, nil
+}
+
+// kidRefetch is how old a cached document has to be before a key ID it doesn't list makes
+// us fetch it again: a server that just rotated signs with a key our copy may not have.
+const kidRefetch = time.Minute
+
+// docKey finds the key kid of the given size in server's document, valid at time t. Only a
+// document fetched within the last hour counts (docTTL), so a key the server has stopped
+// listing stops working here within the hour (SPEC §8.3). A key ID the cached copy doesn't
+// list makes us fetch the document again, at most once a minute per server.
+func (f *Fed) docKey(ctx context.Context, server, kid string, t int64, size int) (DocKey, error) {
 	d, err := f.ServerDoc(ctx, server)
 	if err != nil {
-		return nil, &UnavailableError{err}
+		return DocKey{}, &UnavailableError{err}
 	}
-	for _, k := range d.Keys {
-		if k.KID == kid && t >= k.NBF && t <= k.EXP && len(k.Pub) == wire.CompositePublicKeySize {
-			if pub, err := wire.ParseCompositePublicKey(k.Pub); err == nil {
-				return pub, nil
+	find := func(d Doc) (DocKey, bool, bool) {
+		for _, k := range d.Keys {
+			if k.KID == kid && len(k.Pub) == size {
+				return k, true, k.validAt(t)
 			}
 		}
+		return DocKey{}, false, false
 	}
-	return nil, fmt.Errorf("%s has no valid key %q", server, kid)
+	k, listed, ok := find(d)
+	if !listed && f.docAge(server) >= kidRefetch {
+		if d, err := f.fetchDoc(ctx, server); err == nil {
+			k, _, ok = find(d)
+		}
+	}
+	if !ok {
+		return DocKey{}, fmt.Errorf("%s has no valid key %q", server, kid)
+	}
+	return k, nil
+}
+
+// docAge is how long ago server's cached document was fetched.
+func (f *Fed) docAge(server string) time.Duration {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.docs[server]
+	if !ok {
+		return 0
+	}
+	return time.Since(c.fetched)
 }
 
 // ErrServerSignature is a signature that doesn't verify with the key it names.
