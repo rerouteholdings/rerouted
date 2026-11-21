@@ -687,6 +687,10 @@ func (s *Server) allowed(ctx context.Context, d delivery, to, origin string) (bo
 	case err == nil && c.State == store.StateBlocked:
 		return false, nil
 	}
+	// A Welcome never passes by the groups allowlist, only from the recipient's own identity
+	// (above) or a contact, pending outgoing included (SPEC §10.3). Group IDs aren't secret,
+	// so passing one by its group would let anyone who knows the ID offer a group of their
+	// own under it to a device that's waiting for it.
 	if d.MLS == "welcome" {
 		return s.contactOrRequested(ctx, to, d.From)
 	}
