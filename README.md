@@ -38,7 +38,7 @@ rerouted implements every wire version 1 and version 2 endpoint in the spec's Ap
 | Area | Spec | What rerouted does |
 |---|---|---|
 | Encoding | §4 | I-JSON (the Internet JSON profile) with duplicate-name, UTF-8, and integer checks; strict base64url; and the JSON Canonicalization Scheme (JCS) for everything signed or hashed |
-| Discovery | §5, §8.1 | The server document and handle documents. Reserved handles can't be registered. Handle changes: a new name under the handle domain has to be free, and a name an identity stops using, by a rename or a move away, is held for it for 30 days, then freed unless the operator keeps it (`keep-handle`). |
+| Discovery | §5, §8.1 | The server document and handle documents. Reserved handles can't be registered. Handle changes: a new name under the handle domain has to be free, and a name an identity stops using, by a rename or a move away, is held for it for 30 days, then freed unless the operator keeps it (`keep-handle`). Server keys rotate on their own: a successor is published when a key is 300 days old, and signs a week later (`rerouted keys`). |
 | Identities | §6 | Identity chains and the fork rule, vouching, tombstones, recovery with the recovery key, alerts on device changes, and moves between homeservers |
 | Devices | §7 | Two-way device approval with link proofs, including approval codes a new device scans (listed with `GET link/proofs`), wrapped account keys, versioned account data, and backups |
 | Contacts | §9 | Registration and contact requests by invite code; accept, decline, cancel, remove, block, and unblock; and the rate limits |
@@ -58,6 +58,7 @@ What isn't built yet:
 - Registration codes with use counts or expiry dates. There's one code, `REROUTED_REGISTRATION_CODE`.
 - Combining presence updates for each destination server. A small server may send each one right away (SPEC §13.2).
 - A rate limit on `recover` for each identity and address.
+- Undoing a community commit that a rerouted before 0.2.0-rc.3 sequenced. It didn't keep the epoch's state that undoing needs, so `POST groups/undo` answers `404 not-found` for it, and the community's groups are re-created instead (SPEC §16.5).
 
 ## Try it locally
 
