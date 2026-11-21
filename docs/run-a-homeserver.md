@@ -10,7 +10,7 @@ You need:
 
 - A Linux server with systemd and a public IP address, on x86_64 (amd64) or arm64. The packages are for Debian 12 or later, Ubuntu 22.04 or later, Fedora, and Arch Linux. These steps use Debian or Ubuntu commands.
 - A domain name you control. This guide uses `chat.example`; replace it with yours everywhere.
-- Caddy 2 installed on the server, with nothing else listening on ports 80 and 443.
+- Caddy 2.10 or later installed on the server, with nothing else listening on ports 80 and 443. Earlier versions don't offer the hybrid post-quantum key exchange `X25519MLKEM768`, which Tieroute requires servers to offer (SPEC §3). If you set `curves` in a `tls` directive, keep `x25519mlkem768` in it.
 - About 20 minutes.
 
 The server's firewall needs TCP ports 80 and 443 open to everyone. Caddy uses port 80 to get certificates from Let's Encrypt.

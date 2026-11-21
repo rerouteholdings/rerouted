@@ -88,9 +88,10 @@ type fetchResult struct {
 	doc      *docSummary
 	raw      []byte
 	status   int
-	certEnd  time.Time // the leaf certificate's NotAfter, for https
-	date     time.Time // the Date header
-	midpoint time.Time // halfway through the request, to compare Date with
+	certEnd  time.Time   // the leaf certificate's NotAfter, for https
+	curve    tls.CurveID // the key exchange the TLS handshake settled on, for https
+	date     time.Time   // the Date header
+	midpoint time.Time   // halfway through the request, to compare Date with
 }
 
 // fetch GETs url. dialIP, if set, connects to that address instead of the URL's host's,
@@ -129,6 +130,7 @@ func (c *checkup) fetch(rawURL, dialIP, host string) (*fetchResult, error) {
 	r.raw, _ = io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.TLS != nil && len(resp.TLS.PeerCertificates) > 0 {
 		r.certEnd = resp.TLS.PeerCertificates[0].NotAfter
+		r.curve = resp.TLS.CurveID
 	}
 	if d, err := http.ParseTime(resp.Header.Get("Date")); err == nil {
 		r.date = d
@@ -332,6 +334,15 @@ func (c *checkup) checkPublic(cfg *config.Config, localDoc *docSummary) {
 		c.fail("https", "%s lists other keys than the local listener: the proxy reaches another rerouted", docURL)
 	default:
 		c.pass("https", "%s serves this server's document", docURL)
+	}
+	// Hybrid key exchange: SPEC §3 makes it a MUST on what servers offer. Go offers it
+	// first, so a TLS endpoint that has it picks it.
+	switch {
+	case r.certEnd.IsZero():
+	case r.curve == tls.X25519MLKEM768:
+		c.pass("tls", "offers the hybrid post-quantum key exchange X25519MLKEM768")
+	default:
+		c.warn("tls", "the TLS endpoint picked %s, not X25519MLKEM768: SPEC §3 requires offering the hybrid key exchange. Caddy 2.10 and later offer it unless a curves setting leaves it out", r.curve)
 	}
 	if !r.certEnd.IsZero() {
 		left := r.certEnd.Sub(c.now())

@@ -87,6 +87,7 @@ Changing Caddy needs root. As another user, `init` writes nothing under `/etc/ca
 | `listener` | Nothing answers with this server's document on `REROUTED_LISTEN` (fail). |
 | `dns` | The name doesn't resolve, or one of its addresses doesn't reach this server over HTTPS (fail). Each A and AAAA record is checked separately, by comparing the keys in the document it serves with the local listener's, so a stale record shows up. Without a wildcard record for handles, it warns. |
 | `https` | The server document isn't served at `REROUTED_PUBLIC_URL`, or the proxy reaches another rerouted (fail). |
+| `tls` | The TLS endpoint in front of rerouted doesn't pick the hybrid post-quantum key exchange `X25519MLKEM768` (warn). SPEC §3 requires offering it. Caddy 2.10 and later offer it by default, unless a `curves` setting leaves it out. |
 | `certificate` | The certificate expires in less than 14 days (warn). Caddy renews at 30 days, so this means renewal is failing. |
 | `clock` | This machine's clock is more than 30 s off the time in the HTTPS `Date` header (warn), or more than 5 minutes (fail): other servers refuse signatures that far off (SPEC §8.4). |
 | `ntp` | systemd says the clock isn't synchronized (warn). |
