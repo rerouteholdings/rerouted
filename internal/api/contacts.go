@@ -297,7 +297,8 @@ func (s *Server) claimFor(w http.ResponseWriter, r *http.Request, target, claima
 		writeError(w, http.StatusGone, wire.ErrCodeMigrated, migratedMsg) // SPEC §6.8
 		return
 	}
-	allowed := target == claimant || s.isContactOrRequested(r.Context(), target, claimant)
+	contact := target != claimant && s.isContactOrRequested(r.Context(), target, claimant)
+	allowed := target == claimant || contact
 	if !allowed && group != nil {
 		// Group IDs aren't secret, so these claims are rate-limited (SPEC §11.4).
 		if allowed, err = s.st.Contacts().GroupAllowed(r.Context(), target, group); err != nil {
@@ -314,8 +315,10 @@ func (s *Server) claimFor(w http.ResponseWriter, r *http.Request, target, claima
 		return
 	}
 	// A contact can claim too, but not without limit: each claim uses up a one-time key
-	// package, and once they're gone the reusable last-resort one stands in. Starting chats takes a few claims a day, not dozens.
-	if target != claimant && group == nil && !s.limits.allow("claim|"+claimant+"|"+target, 50, 24*3600, now(), true) {
+	// package, and once they're gone the reusable last-resort one stands in. Starting chats
+	// takes a few claims a day, not dozens. A contact's claim counts whether or not it names
+	// a group, or naming any group would skip the limit (SPEC §11.4).
+	if contact && !s.limits.allow("claim|"+claimant+"|"+target, 50, 24*3600, now(), true) {
 		writeError(w, http.StatusTooManyRequests, wire.ErrCodeRateLimited, "")
 		return
 	}

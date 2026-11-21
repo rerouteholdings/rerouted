@@ -137,3 +137,24 @@ func TestCancelRemoveBlock(t *testing.T) {
 		t.Fatalf("blocking a non-identifier: %d", c)
 	}
 }
+
+// A contact's key-package claims count against the contacts' limit of 50 a day whether or
+// not they name a group (SPEC §11.4): naming any group used to skip it.
+func TestContactClaimLimitWithGroup(t *testing.T) {
+	ts := testServer(t)
+	kat, ravi := newV2User(t, ts, "kat", "chat.test"), newV2User(t, ts, "ravi", "chat.test")
+	contacts2(t, ravi, kat)
+	group := randBytes(32)
+	for i := range 50 {
+		body := map[string]any{"id": kat.id}
+		if i%2 == 0 {
+			body["group"] = group
+		}
+		if c := call2(t, ts, "POST", "keypackages/claim", ravi.token, body, nil); c != 200 {
+			t.Fatalf("claim %d: %d", i+1, c)
+		}
+	}
+	if c := call2(t, ts, "POST", "keypackages/claim", ravi.token, map[string]any{"id": kat.id, "group": group}, nil); c != 429 {
+		t.Fatalf("the 51st claim, naming a group: %d, want 429", c)
+	}
+}
