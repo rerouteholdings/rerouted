@@ -136,12 +136,12 @@ func (s *Server) recoverAccount(w http.ResponseWriter, r *http.Request) {
 	for _, dev := range removed {
 		s.closeDevice(e.ID, dev)
 	}
+	s.log.Info("account recovered", "id", e.ID, "seq", st.Seq)
+	// Every remaining device hears about it: someone used the recovery code (SPEC §6.4.1).
+	s.chainAlarm(r.Context(), e.ID, "alarm", enc)
 	if st.Home != s.cfg.Name {
 		s.dropPush(r.Context(), e.ID) // a recovery-signed move away
 	}
-	s.log.Info("account recovered", "id", e.ID, "seq", st.Seq)
-	// Every remaining device hears about it: someone used the recovery code (SPEC §6.4.1).
-	s.logged("sending a recovery alert", s.notify(r.Context(), e.ID, map[string]any{"t": "chain-alert", "level": "alarm", "entry": wire.Raw(enc)}))
 	s.pushChain(r.Context(), e.ID)
 	writeBody(w, http.StatusOK, map[string]any{"seq": st.Seq, "head": st.Head})
 }

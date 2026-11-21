@@ -495,16 +495,16 @@ func (s *Server) appendChain(w http.ResponseWriter, r *http.Request, sess sessio
 	for _, dev := range removed {
 		s.closeDevice(sess.id, dev)
 	}
-	if st.Home != s.cfg.Name {
-		s.dropPush(r.Context(), sess.id) // moved away: its new home sends its notifications
-	}
-	// Alerts (SPEC §6.4.1).
+	// Alerts (SPEC §6.4.1), before a move drops the push tokens.
 	if lvl := chain.Alert(applied); lvl != chain.AlertNone {
 		level := "alarm"
 		if lvl == chain.AlertNotice {
 			level = "notice"
 		}
-		s.logged("sending a chain alert", s.notify(r.Context(), sess.id, map[string]any{"t": "chain-alert", "level": level, "entry": wire.Raw(enc)}))
+		s.chainAlarm(r.Context(), sess.id, level, enc)
+	}
+	if st.Home != s.cfg.Name {
+		s.dropPush(r.Context(), sess.id) // moved away: its new home sends its notifications
 	}
 	s.pushChain(r.Context(), sess.id) // contacts learn about new or removed devices (SPEC §6.5)
 	writeBody(w, http.StatusOK, map[string]any{"seq": st.Seq, "head": st.Head})

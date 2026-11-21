@@ -471,3 +471,22 @@ func waitStats(t *testing.T, srv *Server, sent, failed int64) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+// A device-signed migrate is pushed to the version 1 identity's devices as an alarm, before
+// their push tokens are dropped (SPEC §6.8): a thief's migration reaches the owner's phone
+// even when the app isn't open.
+func TestPushMigrationAlarm(t *testing.T) {
+	ts, _, st, f, _ := pushServer(t)
+	kat := newUser(t, ts, "kat")
+	tok := hexToken(3)
+	if c := pushCall(t, ts, "POST", kat.token, map[string]any{"token": tok, "env": "sandbox"}); c != 204 {
+		t.Fatalf("register: %d", c)
+	}
+	kat.migrateTo(ts, "chat.test")
+	if got := f.next(); got.token != tok {
+		t.Fatalf("no push for the migration alarm: %+v", got)
+	}
+	if toks := apnsTokens(t, st, kat.id); len(toks) != 0 {
+		t.Fatalf("the version 1 tokens stayed: %+v", toks)
+	}
+}

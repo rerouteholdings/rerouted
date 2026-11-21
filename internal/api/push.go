@@ -54,10 +54,12 @@ type pusher struct {
 	sent, failed atomic.Int64
 }
 
-// pushJob is a delivery that landed in owner's inbox on srv.
+// pushJob is a delivery that landed in owner's inbox on srv. tokens, if set, are the
+// devices to notify, read before the identity's tokens were dropped.
 type pushJob struct {
-	srv   *Server
-	owner string
+	srv    *Server
+	owner  string
+	tokens []store.APNSToken
 }
 
 // newPusher starts the sender, or returns nil when push is off.
@@ -87,7 +89,31 @@ func (s *Server) pushNotify(owner string) {
 		return
 	}
 	select {
-	case s.pushes.q <- pushJob{s, owner}:
+	case s.pushes.q <- pushJob{srv: s, owner: owner}:
+	default:
+		s.pushes.failed.Add(1)
+		s.log.Warn("push notification dropped: the queue is full")
+	}
+}
+
+// chainAlarm tells owner's devices about a change to their chain that they didn't make
+// (SPEC §6.4.1): a chain-alert notice in the inbox, and a push notification, so a device
+// that isn't open hears of it too. Call it before the identity's push tokens are dropped,
+// as after a move or a migration: its devices get this one notification all the same.
+func (s *Server) chainAlarm(ctx context.Context, owner, level string, entry []byte) {
+	var toks []store.APNSToken
+	if s.pushes != nil && level == "alarm" {
+		var err error
+		if toks, err = s.st.Push().APNS(ctx, owner); err != nil {
+			s.log.Warn("reading push tokens", "err", err)
+		}
+	}
+	s.logged("sending a chain alert", s.notify(ctx, owner, map[string]any{"t": "chain-alert", "level": level, "entry": wire.Raw(entry)}))
+	if len(toks) == 0 {
+		return
+	}
+	select {
+	case s.pushes.q <- pushJob{s, owner, toks}:
 	default:
 		s.pushes.failed.Add(1)
 		s.log.Warn("push notification dropped: the queue is full")
@@ -110,12 +136,16 @@ func (p *pusher) work() {
 }
 
 func (p *pusher) handle(j pushJob) {
-	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
-	toks, err := p.st.APNS(ctx, j.owner)
-	cancel()
-	if err != nil {
-		p.log.Warn("reading push tokens", "err", err)
-		return
+	toks := j.tokens
+	if toks == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
+		var err error
+		toks, err = p.st.APNS(ctx, j.owner)
+		cancel()
+		if err != nil {
+			p.log.Warn("reading push tokens", "err", err)
+			return
+		}
 	}
 	for _, t := range toks {
 		// An app with a stream open is in the foreground, and already has the delivery.
