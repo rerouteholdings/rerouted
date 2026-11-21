@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"text/tabwriter"
 	"time"
 
@@ -34,6 +35,16 @@ func runKeys(g *globals, args []string) int {
 		fmt.Fprintln(os.Stderr, "config:", err)
 		return 2
 	}
+	// Run as root, the files it writes go to the data directory's owner, the server's user.
+	owner, _ := os.Stat(cfg.DataDir)
+	defer func() {
+		for _, pat := range []string{"server-key*.json", "community-key-*.json", "invite-key.json"} {
+			files, _ := filepath.Glob(filepath.Join(cfg.DataDir, pat))
+			for _, f := range files {
+				chownTree(f, owner)
+			}
+		}
+	}()
 	keys, err := serverkey.LoadOrCreate(cfg.DataDir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "keys:", err)
