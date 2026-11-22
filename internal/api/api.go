@@ -53,6 +53,7 @@ type Server struct {
 	v1        *Server      // on the version 2 Server, its version 1 sibling, for migrations (migrate.go)
 	comm      *communities // on the version 1 Server: the community servers it runs (community.go)
 	pushes    *pusher      // shared by both wire versions; nil when push notifications are off (push.go)
+	emoji     *emojiCache  // on the version 1 Server: custom emoji fetched for clients (emoji_proxy.go)
 
 	sendFailures atomic.Int64 // S2S requests that failed or were refused, for Stats
 }
@@ -72,6 +73,7 @@ func New(cfg *config.Config, key *serverkey.Keys, log *slog.Logger, st store.Sto
 		s.fire = newFirehose(s)
 	}
 	s.pushes = newPusher(cfg, st.Push(), log)
+	s.emoji = newEmojiCache()
 	// Wire version 2 shares the mux, the database (its own view of it), the rate limits,
 	// and the invite code key, so codes made on either API hash alike.
 	s.v2 = newServer(cfg, key, log.With("wire", 2), st.ForWire(wire.V2), wire.V2, s.limits)
@@ -188,6 +190,7 @@ var clientEndpoints = []string{
 	"POST presence",
 	"POST media/upload",
 	"GET media/{server}/{id}",
+	"GET emoji/{server}/{id}",
 	"POST profile",
 	"GET profile/{id}",
 	"POST media/upload-public",
@@ -265,6 +268,7 @@ func (s *Server) apiRoutes() {
 		"POST media/upload":          s.authed(s.mediaUpload),
 		"POST media/upload-public":   s.authed(s.mediaUploadPublic),
 		"GET media/{server}/{id}":    s.authed(s.mediaGet),
+		"GET emoji/{server}/{id}":    s.authed(s.emojiProxy),
 		"GET turn":                   s.authed(s.getTurn),
 		"POST report":                s.authed(s.postReport),
 		"GET account/keys":           s.authed(s.getAccountKeys),

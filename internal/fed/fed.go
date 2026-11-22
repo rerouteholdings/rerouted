@@ -83,9 +83,10 @@ type Doc struct {
 	Raw  []byte `json:"-"`
 	Name string `json:"name"`
 	APIs []struct {
-		V      uint   `json:"v"`
-		Client string `json:"client,omitempty"`
-		S2S    string `json:"s2s"`
+		V         uint   `json:"v"`
+		Client    string `json:"client,omitempty"`
+		S2S       string `json:"s2s"`
+		Community string `json:"community,omitempty"` // with the "community" role (SPEC §16.1)
 	} `json:"apis"`
 	Keys []DocKey `json:"keys"`
 }
