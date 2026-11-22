@@ -545,3 +545,66 @@ func TestCommunityJoinCodeCreatorInGroup(t *testing.T) {
 		t.Fatalf("a join on the code of a creator whose only registered device was removed: %d %s", c, cd)
 	}
 }
+
+// A member who can see a text channel but can't write in it can react there: a send with
+// react is checked against see, talk, and timeouts instead of the write list (SPEC §16.3).
+func TestCommunityReactWithoutWrite(t *testing.T) {
+	e := newCommunityEnv(t, func(*config.Config) {})
+	kat, ravi := e.user("kat"), e.user("ravi")
+	m := kat.create("chat.test", false)
+	code := newComposite(t)
+	kat.mustAppend(m.ch,
+		map[string]any{"op": "add-role", "id": 1, "rank": 10, "perms": []string{"talk"}, "name": sealed()},
+		map[string]any{"op": "assign-roles", "member": kat.id, "roles": []uint64{1}},
+		textChannel(1, []uint64{0}, []uint64{1}, 60), // announcements: everyone sees, role 1 writes
+		voiceChannel(2, 5, 1),
+		addCodeOp(code, 5))
+	if c, cd := ravi.codeJoin(m, code, nil); c != 200 {
+		t.Fatalf("join: %d %s", c, cd)
+	}
+	ravi.inbox()
+	react := func(extra map[string]any) cResult {
+		d := map[string]any{"id": randB(16), "kind": "mls", "group": m.group, "epoch": m.epoch, "mls": "app", "channel": 1, "react": true, "data": privMsg("r")}
+		for k, v := range extra {
+			if v == nil {
+				delete(d, k)
+			} else {
+				d[k] = v
+			}
+		}
+		return ravi.send(d)
+	}
+	if res := ravi.say(m, 1, "x"); res.Error != wire.ErrCodeNotAllowed {
+		t.Fatalf("writing without a write role: %+v", res)
+	}
+	res := react(nil)
+	if res.Status != "sent" || res.Seq != 1 {
+		t.Fatalf("a reaction without a write role: %+v", res)
+	}
+	got := false
+	for _, d := range deliveries(t, kat.inbox()) {
+		got = got || d.Channel == 1 && d.Seq == 1 && d.From == ravi.id
+	}
+	if !got {
+		t.Fatal("kat didn't get ravi's reaction")
+	}
+	// Slow mode applies as to any channel message.
+	if res := react(nil); res.Error != wire.ErrCodeRateLimited {
+		t.Fatalf("a second reaction in slow mode: %+v", res)
+	}
+	for name, extra := range map[string]map[string]any{
+		"on a voice channel":    {"channel": 2},
+		"as an ephemeral send":  {"ephemeral": true},
+		"without a channel":     {"channel": nil},
+		"on an unknown channel": {"channel": 99},
+	} {
+		if res := react(extra); res.Error != wire.ErrCodeNotAllowed {
+			t.Errorf("react %s: %+v", name, res)
+		}
+	}
+	// A timeout stops reactions too.
+	kat.mustAppend(m.ch, map[string]any{"op": "timeout", "member": ravi.id, "until": time.Now().Unix() + 600})
+	if res := react(nil); res.Error != wire.ErrCodeNotAllowed {
+		t.Fatalf("a timed-out member's reaction: %+v", res)
+	}
+}

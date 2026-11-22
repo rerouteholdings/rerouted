@@ -143,20 +143,23 @@ func (c *community) pushItem(ctx context.Context, it store.CItem) {
 // ---- POST send ----
 
 type cOutgoing struct {
-	ID        wire.Bytes   `json:"id"`
-	Kind      string       `json:"kind"`
-	Group     wire.Bytes   `json:"group"`
-	Epoch     uint64       `json:"epoch"`
-	MLS       string       `json:"mls"`
-	Channel   uint64       `json:"channel,omitempty"`
-	Ephemeral bool         `json:"ephemeral,omitempty"`
-	Data      wire.Bytes   `json:"data"`
-	Commit    wire.Raw     `json:"commit,omitempty"`
-	Info      wire.Bytes   `json:"info,omitempty"`
-	Tree      wire.Bytes   `json:"tree,omitempty"`
-	Welcomes  []cWelcome   `json:"welcomes,omitempty"`
-	To        []string     `json:"to,omitempty"`   // a standalone Welcome (mls "welcome"): who it adds
-	Devs      []wire.Bytes `json:"devs,omitempty"` // and the devices it's for
+	ID        wire.Bytes `json:"id"`
+	Kind      string     `json:"kind"`
+	Group     wire.Bytes `json:"group"`
+	Epoch     uint64     `json:"epoch"`
+	MLS       string     `json:"mls"`
+	Channel   uint64     `json:"channel,omitempty"`
+	Ephemeral bool       `json:"ephemeral,omitempty"`
+	// React marks a reaction from a member who can't write in the text channel (SPEC
+	// §16.3): checked against see, talk, and timeouts instead of the write list.
+	React    bool         `json:"react,omitempty"`
+	Data     wire.Bytes   `json:"data"`
+	Commit   wire.Raw     `json:"commit,omitempty"`
+	Info     wire.Bytes   `json:"info,omitempty"`
+	Tree     wire.Bytes   `json:"tree,omitempty"`
+	Welcomes []cWelcome   `json:"welcomes,omitempty"`
+	To       []string     `json:"to,omitempty"`   // a standalone Welcome (mls "welcome"): who it adds
+	Devs     []wire.Bytes `json:"devs,omitempty"` // and the devices it's for
 }
 
 type cWelcome struct {
@@ -313,6 +316,9 @@ func (c *community) sendOne(ctx context.Context, sess csess, o cOutgoing) cResul
 	}
 	res := cResult{ID: o.ID, Status: "sent"}
 	numbered := false
+	if o.React && (o.Channel == 0 || o.Ephemeral) {
+		return cReject(o.ID, wire.ErrCodeNotAllowed)
+	}
 	if o.Channel != 0 {
 		if o.MLS != "app" {
 			return cReject(o.ID, wire.ErrCodeBadRequest)
@@ -328,8 +334,13 @@ func (c *community) sendOne(ctx context.Context, sess csess, o cOutgoing) cResul
 		if !bytes.Equal(carrier, o.Group) || st.TimedOut(sess.id, now()) || !st.CanSee(sess.id, ch) {
 			return cReject(o.ID, wire.ErrCodeNotAllowed)
 		}
+		if o.React && ch.Kind != "text" {
+			return cReject(o.ID, wire.ErrCodeNotAllowed)
+		}
 		if ch.Kind == "text" {
-			if !st.CanWrite(sess.id, ch) {
+			// A reaction from a member who can't write needs only see (checked above) and
+			// talk. Members' clients make sure it is one: the server can't read it (§16.3).
+			if o.React && !st.Has(sess.id, cchain.Talk) || !o.React && !st.CanWrite(sess.id, ch) {
 				return cReject(o.ID, wire.ErrCodeNotAllowed)
 			}
 			// Slow mode: one message per member every N seconds (SPEC §16.7). Typing
