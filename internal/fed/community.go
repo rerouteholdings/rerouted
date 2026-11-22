@@ -3,11 +3,9 @@ package fed
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/rerouteholdings/rerouted/internal/version"
 	"github.com/rerouteholdings/rerouted/internal/wire"
@@ -30,10 +28,8 @@ func (f *Fed) CommunityBase(ctx context.Context, name string) (string, error) {
 		if a.V != wire.V2 || a.Community == "" {
 			continue
 		}
-		u, err := url.Parse(a.Community)
-		_, dev := f.Peers[name]
-		if err != nil || u.Host == "" || !strings.HasSuffix(u.Path, "/") || (u.Scheme != "https" && !(dev && u.Scheme == "http")) {
-			return "", fmt.Errorf("%s publishes a bad community base %q", name, a.Community)
+		if err := f.checkBase(name, a.Community); err != nil {
+			return "", err
 		}
 		return a.Community, nil
 	}

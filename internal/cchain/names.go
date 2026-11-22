@@ -1,11 +1,12 @@
 package cchain
 
 import (
-	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
+
+	"github.com/rerouteholdings/rerouted/internal/wire"
 )
 
 // The text rules for the community's readable name and description (SPEC §16.2.3, §16.4).
@@ -65,35 +66,7 @@ func validDesc(s string) bool {
 }
 
 // validServerName: a lowercase DNS name of at least two labels, never an IP literal (§5.1).
-func validServerName(s string) bool {
-	if len(s) == 0 || len(s) > 253 || strings.HasSuffix(s, ".") {
-		return false
-	}
-	labels := strings.Split(s, ".")
-	if len(labels) < 2 {
-		return false
-	}
-	for _, l := range labels {
-		if len(l) == 0 || len(l) > 63 || l[0] == '-' || l[len(l)-1] == '-' {
-			return false
-		}
-		for i := 0; i < len(l); i++ {
-			c := l[i]
-			if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-') {
-				return false
-			}
-		}
-	}
-	// The last label of a DNS name is never all digits: that would be an IPv4 literal.
-	tld := labels[len(labels)-1]
-	allDigits := true
-	for i := 0; i < len(tld); i++ {
-		if tld[i] < '0' || tld[i] > '9' {
-			allDigits = false
-		}
-	}
-	return !allDigits
-}
+func validServerName(s string) bool { return wire.ValidServerName(s) }
 
 // extPict reports Unicode's Extended_Pictographic property (emoji-data.txt). The property
 // is stable: its unassigned ranges are reserved for pictographs, so this table doesn't

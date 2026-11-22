@@ -12,7 +12,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -135,13 +134,8 @@ func (f *Fed) S2SBase(ctx context.Context, name string) (string, error) {
 		if int(a.V) != f.version() {
 			continue
 		}
-		u, err := url.Parse(a.S2S)
-		dev := false
-		if _, ok := f.Peers[name]; ok {
-			dev = true // dev peers may use plain http (SPEC §5.1)
-		}
-		if err != nil || u.Host == "" || !strings.HasSuffix(u.Path, "/") || (u.Scheme != "https" && !(dev && u.Scheme == "http")) {
-			return "", fmt.Errorf("%s publishes a bad s2s base %q", name, a.S2S)
+		if err := f.checkBase(name, a.S2S); err != nil {
+			return "", err
 		}
 		return a.S2S, nil
 	}
@@ -164,11 +158,13 @@ func (f *Fed) Speaks(ctx context.Context, name string) (bool, error) {
 
 // New makes a Fed for wire version 1. Set V for version 2.
 func New(name string, keys *serverkey.Keys, peers map[string]string) *Fed {
-	return &Fed{
+	f := &Fed{
 		Name: name, Keys: keys, Peers: peers, V: wire.V1,
-		HTTP: &http.Client{Timeout: 15 * time.Second, Transport: newTransport()},
 		docs: map[string]cachedDoc{}, nonces: map[string]int64{},
 	}
+	dev := func() bool { return len(f.Peers) > 0 } // dev peers exist only with REROUTED_DEV
+	f.HTTP = &http.Client{Timeout: 15 * time.Second, Transport: newTransportFor(dev), CheckRedirect: noRedirects}
+	return f
 }
 
 // newTransport is the HTTP transport for talking to other servers. Peers are few and
@@ -177,8 +173,12 @@ func New(name string, keys *serverkey.Keys, peers map[string]string) *Fed {
 // connections, so ours usually close first. HTTP/2 connections are checked with a ping
 // after 30 s without a frame, so a dead one is noticed before a request waits on it.
 // Requests go through the proxy that HTTPS_PROXY or HTTP_PROXY names, unless NO_PROXY
-// excludes the host.
-func newTransport() *http.Transport {
+// excludes the host. Outside dev mode, it connects only to public addresses (outbound.go).
+func newTransport() *http.Transport { return newTransportFor(nil) }
+
+// newTransportFor is newTransport, also reaching local addresses while dev reports true:
+// in dev mode, peers run on localhost (SPEC §5.1).
+func newTransportFor(dev func() bool) *http.Transport {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.Proxy = http.ProxyFromEnvironment
 	t.ForceAttemptHTTP2 = true
@@ -186,6 +186,7 @@ func newTransport() *http.Transport {
 	t.MaxIdleConnsPerHost = 16
 	t.IdleConnTimeout = 4 * time.Minute
 	t.HTTP2 = &http.HTTP2Config{SendPingTimeout: 30 * time.Second, PingTimeout: 10 * time.Second}
+	t.DialContext = publicDialer(dev)
 	return t
 }
 
@@ -204,6 +205,9 @@ func (f *Fed) base(name string) (url, host string) {
 }
 
 func (f *Fed) get(ctx context.Context, name, path string) ([]byte, error) {
+	if err := f.checkName(name); err != nil {
+		return nil, err
+	}
 	base, host := f.base(name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+path, nil)
 	if err != nil {
@@ -528,6 +532,10 @@ func (f *Fed) Verify(ctx context.Context, raw []byte, path string) (from string,
 		return "", nil, &SkewError{From: req.From, TS: req.TS, Now: now}
 	case len(req.Nonce) != 16:
 		return "", nil, errors.New("bad nonce")
+	case f.checkName(req.From) != nil:
+		// Checked before the sender's document is fetched: an unauthenticated request
+		// mustn't choose what this server connects to.
+		return "", nil, errors.New("request is from a bad server name")
 	}
 	if err := f.VerifyServerSigned(ctx, req.From, sig, "s2s", req.TS); err != nil {
 		return "", nil, err

@@ -19,7 +19,7 @@ func TestOutboundOffersHybridTLS(t *testing.T) {
 	srv.TLS = &tls.Config{CurvePreferences: []tls.CurveID{tls.X25519MLKEM768}}
 	srv.StartTLS()
 	defer srv.Close()
-	tr := newTransport()
+	tr := newTransportFor(func() bool { return true }) // the test server is on loopback
 	tr.TLSClientConfig = &tls.Config{RootCAs: srv.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs}
 	resp, err := (&http.Client{Transport: tr}).Get(srv.URL)
 	if err != nil {

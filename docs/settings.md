@@ -116,6 +116,8 @@ rerouted can send its outbound HTTP through a proxy. It reads the standard varia
 
 The proxy only carries outbound requests. The call relay and community voice channels use UDP, and stay direct. `rerouted checkup` also connects directly, since it checks how other servers reach this one.
 
+Federation never connects to loopback, private, link-local, or other non-public addresses, and doesn't follow redirects, so a name someone else supplies can't reach your own network. Dev mode is the exception, since its peers run on local addresses. The proxy itself can be on a private address. Behind a proxy, though, rerouted can't see where a request ends up, so set the proxy to refuse internal addresses too.
+
 ## Logging
 
 | Setting | Default | What it does |
