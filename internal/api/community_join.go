@@ -88,6 +88,15 @@ func (c *community) join(w http.ResponseWriter, r *http.Request, sess csess) {
 		refuse("joins need approval here: POST join/request")
 		return
 	}
+	// Members refuse a join whose code's creator has no leaf in the members group (SPEC
+	// §16.6, rule 3), so don't sequence one.
+	if in, err := c.inMembersGroup(ctx, code.Creator, cm.Group); err != nil {
+		c.hs.unavailableRead(w, "checking a code's creator", err)
+		return
+	} else if !in {
+		refuse("this code's creator is no longer in the members group: ask for a new code")
+		return
+	}
 	if st.Banned(sess.id, sess.home) {
 		refuse("banned")
 		return
@@ -152,6 +161,32 @@ func (c *community) join(w http.ResponseWriter, r *http.Request, sess csess) {
 	c.store(ctx, []store.CItem{c.groupItem(d, sess)})
 	c.hs.log.Info("community code join", "name", c.name, "id", sess.id)
 	writeBody(w, http.StatusOK, map[string]any{"receipt": wire.Raw(enc)})
+}
+
+// inMembersGroup reports whether id has a device registered for the members group that's
+// still current in the server's copy of its chain: the server's stand-in for a leaf there.
+func (c *community) inMembersGroup(ctx context.Context, id string, group []byte) (bool, error) {
+	regs, err := c.st.Regs(ctx, group)
+	if err != nil {
+		return false, err
+	}
+	var ch *chain2
+	for _, reg := range regs {
+		if reg.ID != id {
+			continue
+		}
+		if ch == nil {
+			if ch, err = c.identityChain(ctx, id, "", false); errors.Is(err, store.ErrNotFound) {
+				return false, nil
+			} else if err != nil {
+				return false, err
+			}
+		}
+		if ch.st.HasDevice(reg.Dev) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // POST join/request: ask to join a community that needs approval.

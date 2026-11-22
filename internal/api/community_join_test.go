@@ -498,3 +498,50 @@ func TestVectorJoinProof(t *testing.T) {
 		t.Fatal("a changed body verified")
 	}
 }
+
+// A code join is sequenced only while the code's creator has a device in the members group
+// (SPEC §16.6, rule 3): one registered there, and still current in its chain. Members would
+// refuse any other.
+func TestCommunityJoinCodeCreatorInGroup(t *testing.T) {
+	e := newCommunityEnv(t, func(*config.Config) {})
+	mia, ravi, theo := e.user("mia"), e.user("ravi"), e.user("theo")
+	_, m := joined(t, e, mia)
+	code := newComposite(t)
+	mia.mustAppend(m.ch, addCodeOp(code, 10))
+	reg := map[string]any{"group": m.group}
+
+	// mia's only device stops receiving the members group: her code is refused.
+	if c := e.call("POST", "groups/unregister", mia.tok, reg, nil); c != 204 {
+		t.Fatalf("unregister: %d", c)
+	}
+	if c, cd := ravi.codeJoin(m, code, nil); c != 403 || cd != wire.ErrCodeNotAllowed {
+		t.Fatalf("a join on the code of a creator with no device in the group: %d %s", c, cd)
+	}
+	if c := e.call("POST", "groups/register", mia.tok, reg, nil); c != 204 {
+		t.Fatalf("register: %d", c)
+	}
+	if c, cd := ravi.codeJoin(m, code, nil); c != 200 {
+		t.Fatalf("a join once the creator is back: %d %s", c, cd)
+	}
+
+	// Her registered device is now one her chain has removed.
+	phone := newComposite(t)
+	if c, er := mia.appendSigned(signed2(t, "chain-entry", mia.entry(addDevice(phone, "phone")), mia.dev)); c != 200 {
+		t.Fatalf("add-device: %d %+v", c, er)
+	}
+	pm := *mia.v2User
+	pm.dev = phone
+	p := e.signIn(&pm)
+	if c := e.call("POST", "groups/register", p.tok, reg, nil); c != 204 {
+		t.Fatalf("the phone registers: %d", c)
+	}
+	if c := e.call("POST", "groups/unregister", mia.tok, reg, nil); c != 204 {
+		t.Fatalf("the laptop unregisters: %d", c)
+	}
+	if c, er := mia.appendSigned(signed2(t, "chain-entry", mia.entry(map[string]any{"op": "remove-device", "key": edOf(phone)}), mia.dev)); c != 200 {
+		t.Fatalf("remove-device: %d %+v", c, er)
+	}
+	if c, cd := theo.codeJoin(m, code, nil); c != 403 || cd != wire.ErrCodeNotAllowed {
+		t.Fatalf("a join on the code of a creator whose only registered device was removed: %d %s", c, cd)
+	}
+}
