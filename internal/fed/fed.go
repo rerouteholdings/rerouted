@@ -426,7 +426,7 @@ type ErrStatus struct {
 
 // SkewError is an incoming request dated too far from our clock (SPEC §8.3, §8.4).
 type SkewError struct {
-	From    string // who the request says it's from (not verified: the check stops here)
+	From    string // who the request says it's from: a valid server name, but not verified
 	TS, Now int64
 }
 
@@ -524,6 +524,10 @@ func (f *Fed) Verify(ctx context.Context, raw []byte, path string) (from string,
 	}
 	now := f.now()
 	switch {
+	case f.checkName(req.From) != nil:
+		// Checked first: an unauthenticated request mustn't choose what this server
+		// connects to, or put an arbitrary name in what it keeps and logs.
+		return "", nil, errors.New("request is from a bad server name")
 	case req.To != f.Name:
 		return "", nil, fmt.Errorf("request is for %q", req.To)
 	case req.Path != path:
@@ -532,10 +536,6 @@ func (f *Fed) Verify(ctx context.Context, raw []byte, path string) (from string,
 		return "", nil, &SkewError{From: req.From, TS: req.TS, Now: now}
 	case len(req.Nonce) != 16:
 		return "", nil, errors.New("bad nonce")
-	case f.checkName(req.From) != nil:
-		// Checked before the sender's document is fetched: an unauthenticated request
-		// mustn't choose what this server connects to.
-		return "", nil, errors.New("request is from a bad server name")
 	}
 	if err := f.VerifyServerSigned(ctx, req.From, sig, "s2s", req.TS); err != nil {
 		return "", nil, err
