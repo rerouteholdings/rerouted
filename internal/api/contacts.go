@@ -441,7 +441,9 @@ func (s *Server) sendContactRequest(ctx context.Context, sess session, body cont
 // can be traced. An error is a storage failure, and the request should be retried.
 func (s *Server) receiveContactRequest(ctx context.Context, body contactRequestBody, reqRaw wire.Raw, chainRaw []wire.Raw, origin string) error {
 	from, to := body.From, body.To
-	drop := func(why string) { s.log.Info("contact request dropped", "origin", origin, "why", why) }
+	// Each request is logged, taken or dropped with the reason: the sender is never told
+	// (SPEC §9.3), so this is where an operator finds out why one didn't arrive.
+	drop := func(why string) { s.log.Info("contact request dropped", "from", from, "to", to, "origin", origin, "why", why) }
 	switch c, err := s.st.Contacts().Get(ctx, to, from); {
 	case err != nil && !errors.Is(err, store.ErrNotFound):
 		return err
@@ -482,6 +484,7 @@ func (s *Server) receiveContactRequest(ctx context.Context, body contactRequestB
 	if err != nil {
 		return err
 	}
+	s.log.Info("contact request received", "from", from, "to", to, "origin", origin)
 	return s.notify(ctx, to, map[string]any{"t": "contact-request", "request": reqRaw, "chain": chainRaw})
 }
 
