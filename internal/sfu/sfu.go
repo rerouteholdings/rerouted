@@ -28,6 +28,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/pion/ice/v4"
@@ -79,7 +80,8 @@ type Config struct {
 	PublicIPs []string
 	// Loopback includes loopback candidates: for development and tests.
 	Loopback bool
-	// IPFilter, if set, keeps only the local addresses it returns true for.
+	// IPFilter, if set, keeps only the local addresses it returns true for. Link-local
+	// addresses are always left out: no client reaches the SFU through one.
 	IPFilter func(net.IP) bool
 	// OnGone, if set, hears about a participant whose connection failed or closed on its
 	// own, after the SFU removed it. It isn't called for Leave.
@@ -118,11 +120,44 @@ type Participant struct {
 	Cast  []string
 }
 
+// noLinkLocal wraps an address filter so it also leaves out link-local addresses. Binding
+// a port on one can fail (a container's fe80:: address, say), and that would stop the SFU.
+func noLinkLocal(keep func(net.IP) bool) func(net.IP) bool {
+	return func(ip net.IP) bool {
+		if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return false
+		}
+		return keep == nil || keep(ip)
+	}
+}
+
+// muxTries and muxWait: binding the voice port on every address fails with "cannot assign
+// requested address" while a new IPv6 address is still tentative (duplicate address
+// detection, about a second after a container or interface comes up). So that's retried
+// for a few seconds before voice channels are turned off.
+var (
+	muxTries = 10
+	muxWait  = time.Second
+	newMux   = ice.NewMultiUDPMuxFromPort // tests replace it
+)
+
+func listenMux(port int, opts []ice.UDPMuxFromPortOption, log *slog.Logger) (*ice.MultiUDPMuxDefault, error) {
+	for try := 1; ; try++ {
+		mux, err := newMux(port, opts...)
+		if err == nil || !errors.Is(err, syscall.EADDRNOTAVAIL) || try >= muxTries {
+			return mux, err
+		}
+		log.Info("voice: an address isn't ready for the UDP port yet; trying again", "port", port, "err", err)
+		time.Sleep(muxWait)
+	}
+}
+
 // New makes an SFU.
 func New(cfg Config) (*SFU, error) {
 	if cfg.Log == nil {
 		cfg.Log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
+	cfg.IPFilter = noLinkLocal(cfg.IPFilter)
 	me := &webrtc.MediaEngine{}
 	fb := []webrtc.RTCPFeedback{{Type: "nack"}, {Type: "nack", Parameter: "pli"}, {Type: "ccm", Parameter: "fir"}}
 	if err := me.RegisterCodec(webrtc.RTPCodecParameters{
@@ -145,9 +180,7 @@ func New(cfg Config) (*SFU, error) {
 	se.SetIncludeLoopbackCandidate(cfg.Loopback)
 	se.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
 	se.SetNetworkTypes([]webrtc.NetworkType{webrtc.NetworkTypeUDP4, webrtc.NetworkTypeUDP6})
-	if cfg.IPFilter != nil {
-		se.SetIPFilter(cfg.IPFilter)
-	}
+	se.SetIPFilter(cfg.IPFilter)
 	if len(cfg.PublicIPs) > 0 {
 		if err := se.SetICEAddressRewriteRules(webrtc.ICEAddressRewriteRule{External: cfg.PublicIPs, AsCandidateType: webrtc.ICECandidateTypeHost, Mode: webrtc.ICEAddressRewriteReplace}); err != nil {
 			return nil, fmt.Errorf("sfu: public addresses: %w", err)
@@ -159,10 +192,8 @@ func New(cfg Config) (*SFU, error) {
 		if cfg.Loopback {
 			opts = append(opts, ice.UDPMuxFromPortWithLoopback())
 		}
-		if cfg.IPFilter != nil {
-			opts = append(opts, ice.UDPMuxFromPortWithIPFilter(cfg.IPFilter))
-		}
-		mux, err := ice.NewMultiUDPMuxFromPort(cfg.UDPPort, opts...)
+		opts = append(opts, ice.UDPMuxFromPortWithIPFilter(cfg.IPFilter))
+		mux, err := listenMux(cfg.UDPPort, opts, cfg.Log)
 		if err != nil {
 			return nil, fmt.Errorf("sfu: UDP port %d: %w", cfg.UDPPort, err)
 		}
