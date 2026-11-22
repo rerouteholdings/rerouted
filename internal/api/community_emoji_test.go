@@ -3,10 +3,15 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/rerouteholdings/rerouted/internal/cchain"
 	"github.com/rerouteholdings/rerouted/internal/config"
 	"github.com/rerouteholdings/rerouted/internal/wire"
 )
@@ -241,5 +246,59 @@ func TestCommunityEmoji(t *testing.T) {
 	}
 	if c, _ := e.emojiGet(id); c != 410 {
 		t.Fatalf("an emoji 30 days after the move: %d", c)
+	}
+}
+
+// community-emoji.json: the vector record parses as the community server reads it, verifies
+// under the composite key chain.json's genesis adds for its signer, and names the vector
+// blob, whose length and hash match.
+func TestVectorCommunityEmoji(t *testing.T) {
+	var cv struct {
+		Entries []struct {
+			Signed struct {
+				Signed string `json:"signed"`
+			} `json:"signed"`
+		} `json:"entries"`
+	}
+	var ev struct {
+		Community string `json:"community_id_hex"`
+		BlobID    string `json:"blob_id_hex"`
+		Blob      string `json:"blob_hex"`
+		Image     string `json:"image_hex"`
+		Record    struct {
+			Signed string `json:"signed"`
+		} `json:"record"`
+	}
+	for f, v := range map[string]any{"chain.json": &cv, "community-emoji.json": &ev} {
+		raw, err := os.ReadFile("../../testdata/vectors/v2/" + f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(raw, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var raws [][]byte
+	for _, e := range cv.Entries {
+		raws = append(raws, []byte(e.Signed.Signed))
+	}
+	st, err := decodeChainFor(wire.V2, raws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	em, perr := cchain.ParseEmoji([]byte(ev.Record.Signed))
+	if perr != nil {
+		t.Fatalf("parse: %v", perr)
+	}
+	pub := everDevice(raws, em.Sig.K)
+	if pub == nil || em.Sig.VerifyComposite(cchain.TypeEmoji, pub) != nil {
+		t.Fatal("the record doesn't verify under its signer's composite key")
+	}
+	blob, _ := hex.DecodeString(ev.Blob)
+	img, _ := hex.DecodeString(ev.Image)
+	sum := sha256.Sum256(blob)
+	if em.By != st.ID || hex.EncodeToString(em.Community) != ev.Community || hex.EncodeToString(em.Blob) != ev.BlobID ||
+		!bytes.Equal(em.SHA256, sum[:]) || em.Size != int64(len(img)) || int64(len(blob)) != em.Size+16 {
+		t.Fatalf("record: %+v", em)
 	}
 }
