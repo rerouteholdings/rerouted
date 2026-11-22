@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"net"
 	"net/http"
 	"slices"
 	"time"
@@ -22,6 +23,27 @@ import (
 )
 
 // ---- sessions (spec/api/community.md, Sessions) ----
+
+// Sign-in challenge limits, per hour (spec/api/community.md, Rate limits): challenges issued
+// for an identity, and refusals per claimed identity and key, and per caller address.
+const (
+	challengesPerID             = 30
+	refusedChallengesPerKey     = 10
+	refusedChallengesPerAddress = 100
+)
+
+// addressKey is the address a per-caller limit counts against: an IPv4 address, or an IPv6
+// address's /64, since one host often holds a whole /64.
+func addressKey(ip string) string {
+	a := net.ParseIP(ip)
+	if a == nil {
+		return ip
+	}
+	if v4 := a.To4(); v4 != nil {
+		return v4.String()
+	}
+	return a.Mask(net.CIDRMask(64, 128)).String() + "/64"
+}
 
 // nonceID keeps this community's sign-in nonces apart from the homeserver's and other
 // communities', in the same table.
@@ -40,9 +62,23 @@ func (c *community) authChallenge(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, wire.ErrCodeBadRequest, "")
 		return
 	}
-	if !c.hs.limits.allow("cm-challenge|"+c.name+"|"+req.ID, 30, 3600, now(), true) {
-		rateLimited(w, 120)
-		return
+	// Only challenges it issues count against the identity. Refusals count per claimed
+	// identity and key, and per caller address, so a removed device's retries, or a stranger
+	// who knows an identifier, can't keep the identity's own devices out (spec/api/community.md).
+	t := now()
+	issued := limit{"cm-challenge|" + c.name + "|" + req.ID, challengesPerID, 3600}
+	pair := limit{"cm-challenge-refused|" + c.name + "|" + req.ID + "|" + hex.EncodeToString(req.Key), refusedChallengesPerKey, 3600}
+	origin := limit{"cm-challenge-refused|" + c.name + "|@" + addressKey(clientIP(r)), refusedChallengesPerAddress, 3600}
+	for _, l := range []limit{pair, origin, issued} {
+		if !c.hs.limits.allow(l.key, l.max, l.window, t, false) {
+			rateLimited(w, 120)
+			return
+		}
+	}
+	refuse := func(status int, code, msg string) {
+		c.hs.limits.allow(pair.key, pair.max, pair.window, t, true)
+		c.hs.limits.allow(origin.key, origin.max, origin.window, t, true)
+		writeError(w, status, code, msg)
 	}
 	ctx := r.Context()
 	// A key it doesn't know means the chain may have changed: ask its home (spec/api/community.md).
@@ -57,24 +93,27 @@ func (c *community) authChallenge(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var es *fed.ErrStatus
 		if errors.As(err, &es) && (es.Status == http.StatusNotFound || es.Status == http.StatusGone) || errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "")
+			refuse(http.StatusNotFound, wire.ErrCodeNotFound, "")
 			return
 		}
-		writeError(w, http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "couldn't reach the identity's homeserver")
+		refuse(http.StatusServiceUnavailable, wire.ErrCodeUnavailable, "couldn't reach the identity's homeserver")
 		return
 	}
 	if ch.st.Home != req.Home {
-		writeError(w, http.StatusNotFound, wire.ErrCodeNotFound, "the chain names another homeserver")
+		refuse(http.StatusNotFound, wire.ErrCodeNotFound, "the chain names another homeserver")
 		return
 	}
 	c.revokeRemovedDevices(ctx, req.ID, ch.st)
 	if !ch.st.HasDevice(req.Key) {
-		writeError(w, http.StatusForbidden, wire.ErrCodeNotAllowed, "not a current device")
+		refuse(http.StatusForbidden, wire.ErrCodeNotAllowed, "not a current device")
+		return
+	}
+	if !c.hs.limits.allowAll(t, issued) {
+		rateLimited(w, 120)
 		return
 	}
 	nonce := make([]byte, 16)
 	rand.Read(nonce)
-	t := now()
 	if err := c.hs.st.Sessions().PutNonce(ctx, c.nonceID(req.ID), req.Key, nonce, t+60); err != nil {
 		c.hs.unavailableRead(w, "storing an auth challenge", err)
 		return
