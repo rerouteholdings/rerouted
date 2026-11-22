@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS cm_segments (name TEXT NOT NULL, channel INTEGER NOT 
 CREATE TABLE IF NOT EXISTS cm_deletes  (name TEXT NOT NULL, channel INTEGER NOT NULL, seq INTEGER NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (name, channel, seq));
 CREATE TABLE IF NOT EXISTS cm_media    (name TEXT NOT NULL, id BLOB NOT NULL, author TEXT NOT NULL, size INTEGER NOT NULL, sha256 BLOB NOT NULL, created INTEGER NOT NULL, state INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (name, id));
 CREATE TABLE IF NOT EXISTS cm_icons    (name TEXT NOT NULL, hash BLOB NOT NULL, mime TEXT NOT NULL, data BLOB NOT NULL, uploaded INTEGER NOT NULL, PRIMARY KEY (name, hash));
+CREATE TABLE IF NOT EXISTS cm_emoji    (name TEXT NOT NULL, id BLOB NOT NULL, sha256 BLOB NOT NULL, size INTEGER NOT NULL, data BLOB, uploader TEXT NOT NULL, uploaded INTEGER NOT NULL, record BLOB, named INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (name, id));
 CREATE TABLE IF NOT EXISTS cm_reads    (name TEXT NOT NULL, id TEXT NOT NULL, channel INTEGER NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY (name, id, channel));
 CREATE TABLE IF NOT EXISTS cm_replaced (grp BLOB PRIMARY KEY, name TEXT NOT NULL, new_grp BLOB NOT NULL);
 CREATE TABLE IF NOT EXISTS cm_epochs   (grp BLOB NOT NULL, epoch INTEGER NOT NULL, key BLOB NOT NULL, info BLOB, tree BLOB, tree_size INTEGER NOT NULL DEFAULT 0, ts INTEGER NOT NULL, PRIMARY KEY (grp, epoch));
@@ -1419,6 +1420,109 @@ func (c communities) PruneIcons(ctx context.Context, name string, keep []byte, b
 	}
 	n, err := res.RowsAffected()
 	return int(n), err
+}
+
+// ---- custom emoji (SPEC §16.9) ----
+
+func (c communities) PutEmojiBlob(ctx context.Context, name string, e store.CEmoji) error {
+	_, err := c.db.ExecContext(ctx, "INSERT INTO cm_emoji (name, id, sha256, size, data, uploader, uploaded) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		name, e.ID, e.SHA256, e.Size, e.Data, e.Uploader, e.Uploaded)
+	return err
+}
+
+func (c communities) EmojiBlob(ctx context.Context, name string, id []byte) (*store.CEmoji, error) {
+	e := store.CEmoji{ID: id}
+	err := c.rdb.QueryRowContext(ctx, "SELECT sha256, size, data, uploader, uploaded, record, deleted FROM cm_emoji WHERE name = ? AND id = ?", name, id).
+		Scan(&e.SHA256, &e.Size, &e.Data, &e.Uploader, &e.Uploaded, &e.Record, &e.Deleted)
+	if err != nil {
+		return nil, notFound(err)
+	}
+	return &e, nil
+}
+
+func (c communities) PutEmojiRecord(ctx context.Context, name string, id, record []byte, max int) error {
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var deleted, named int64
+	var cur []byte
+	if err := tx.QueryRowContext(ctx, "SELECT deleted, named, record FROM cm_emoji WHERE name = ? AND id = ?", name, id).Scan(&deleted, &named, &cur); err != nil {
+		return notFound(err)
+	}
+	if deleted != 0 {
+		return store.ErrNotFound
+	}
+	if cur == nil {
+		var n int
+		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM cm_emoji WHERE name = ? AND record IS NOT NULL", name).Scan(&n); err != nil {
+			return err
+		}
+		if n >= max {
+			return store.ErrOverQuota
+		}
+	}
+	if named == 0 {
+		if err := tx.QueryRowContext(ctx, "SELECT coalesce(max(named), 0) + 1 FROM cm_emoji WHERE name = ?", name).Scan(&named); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE cm_emoji SET record = ?, named = ? WHERE name = ? AND id = ?", record, named, name, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (c communities) DeleteEmoji(ctx context.Context, name string, id []byte, now int64) error {
+	res, err := c.db.ExecContext(ctx, "UPDATE cm_emoji SET record = NULL, deleted = ? WHERE name = ? AND id = ? AND record IS NOT NULL", now, name, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return store.ErrNotFound
+	}
+	return nil
+}
+
+func (c communities) EmojiRecords(ctx context.Context, name string) ([][]byte, error) {
+	rows, err := c.rdb.QueryContext(ctx, "SELECT record FROM cm_emoji WHERE name = ? AND record IS NOT NULL ORDER BY named", name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out [][]byte
+	for rows.Next() {
+		var r []byte
+		if err := rows.Scan(&r); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+func (c communities) DeleteAllEmoji(ctx context.Context, name string, now int64) (int, error) {
+	res, err := c.db.ExecContext(ctx, "UPDATE cm_emoji SET record = NULL, deleted = ? WHERE name = ? AND record IS NOT NULL", now, name)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	return int(n), err
+}
+
+func (c communities) PruneEmoji(ctx context.Context, name string, unnamedBefore, deletedBefore int64) (int, error) {
+	res, err := c.db.ExecContext(ctx, "DELETE FROM cm_emoji WHERE name = ? AND named = 0 AND uploaded < ?", name, unnamedBefore)
+	if err != nil {
+		return 0, err
+	}
+	a, _ := res.RowsAffected()
+	res, err = c.db.ExecContext(ctx, "UPDATE cm_emoji SET data = NULL WHERE name = ? AND deleted != 0 AND deleted < ? AND data IS NOT NULL", name, deletedBefore)
+	if err != nil {
+		return 0, err
+	}
+	b, _ := res.RowsAffected()
+	return int(a + b), nil
 }
 
 // ---- read positions (SPEC §16.4) ----

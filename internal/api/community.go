@@ -221,6 +221,11 @@ func (c *community) routes(mux *http.ServeMux) {
 		"GET preview":                     c.preview,
 		"GET icon/{hash}":                 c.iconGet,
 		"POST icon/upload":                c.authed(c.perm(cchain.Administrate, c.iconUpload)),
+		"GET emoji":                       c.authed(c.member(c.emojiList)),
+		"GET emoji/{id}":                  c.emojiBlobGet,
+		"POST emoji/upload":               c.authed(c.perm(cchain.Administrate, c.emojiUpload)),
+		"POST emoji/put":                  c.authed(c.perm(cchain.Administrate, c.emojiPut)),
+		"POST emoji/delete":               c.authed(c.perm(cchain.Administrate, c.emojiDelete)),
 		"POST auth/challenge":             c.open(c.authChallenge),
 		"POST auth/session":               c.open(c.authSession),
 		"POST auth/logout":                c.authed(c.authLogout, movedOK),
@@ -285,7 +290,7 @@ func (c *community) bodyIn(base string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			switch r.URL.Path {
-			case base + "media/upload", base + "tree/upload", base + "icon/upload":
+			case base + "media/upload", base + "tree/upload", base + "icon/upload", base + "emoji/upload":
 			default:
 				if mt := r.Header.Get("Content-Type"); !strings.HasPrefix(mt, wire.MediaType) {
 					writeError(w, http.StatusUnsupportedMediaType, wire.ErrCodeBadContentType, "use "+wire.MediaType)

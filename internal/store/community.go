@@ -155,6 +155,19 @@ type CMedia struct {
 	Expired bool // past the community's retention
 }
 
+// CEmoji is one custom emoji blob uploaded to a community (SPEC §16.9): encrypted bytes, and
+// the signed record that names it, if any.
+type CEmoji struct {
+	ID       []byte
+	SHA256   []byte
+	Size     int64  // bytes of the blob
+	Data     []byte // nil once the blob is gone (a tombstone)
+	Uploader string
+	Uploaded int64
+	Record   []byte // JCS of the signed community-emoji; nil when no current record names it
+	Deleted  int64  // when its record was deleted; 0 if it never was
+}
+
 // CReport is a report to a community's moderators (SPEC §16.7).
 type CReport struct {
 	N        int64 // its place in the list, for pagination
@@ -328,6 +341,23 @@ type Communities interface {
 	// PruneIcons deletes icons uploaded before `before`, except the one hashed keep (nil:
 	// none), the icon the community's current state names.
 	PruneIcons(ctx context.Context, name string, keep []byte, before int64) (int, error)
+
+	// Custom emoji (SPEC §16.9): small, so their bytes live in the database.
+	PutEmojiBlob(ctx context.Context, name string, e CEmoji) error
+	EmojiBlob(ctx context.Context, name string, id []byte) (*CEmoji, error) // ErrNotFound
+	// PutEmojiRecord names a blob with a record, replacing any record on it. ErrNotFound if
+	// the blob was never uploaded or was deleted; ErrOverQuota if it would make more than max
+	// current records.
+	PutEmojiRecord(ctx context.Context, name string, id, record []byte, max int) error
+	// DeleteEmoji clears a current record, at now. ErrNotFound if there's none.
+	DeleteEmoji(ctx context.Context, name string, id []byte, now int64) error
+	// EmojiRecords is every current record, in the order each blob was first named.
+	EmojiRecords(ctx context.Context, name string) ([][]byte, error)
+	// DeleteAllEmoji marks every current record deleted at now (a community that moved away).
+	DeleteAllEmoji(ctx context.Context, name string, now int64) (int, error)
+	// PruneEmoji drops blobs never named and uploaded before unnamedBefore, and the bytes of
+	// blobs deleted before deletedBefore, keeping them as tombstones.
+	PruneEmoji(ctx context.Context, name string, unnamedBefore, deletedBefore int64) (int, error)
 
 	// Read positions (SPEC §16.4): one per member and text channel, which only moves
 	// forward. A member's are dropped when they leave or are removed, and a channel's when
