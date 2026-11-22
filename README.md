@@ -46,9 +46,10 @@ rerouted implements every wire version 1 and version 2 endpoint in the spec's Ap
 | Groups | §11 | The hub, which orders a group's changes, with epoch keys and signed receipts; commits through a remote hub; missed commits; and hub handoff |
 | Presence and profiles | §13 | Presence for mutual contacts only, and signed profiles with checked profile pictures |
 | Files | §14 | Uploads up to 64 MiB under a quota for each identity, fetched through the recipient's own homeserver and deleted after 30 days |
+| Custom emoji | §12.2 | Fetched for clients from community servers (`GET emoji/{server}/{id}`): answers over 262,160 bytes are refused, each identity gets 3,600 requests an hour, each community server is asked at most 1,800 times an hour, and blobs are cached in memory for 24 hours (64 MiB in all), with a 404 or 410 remembered for 10 minutes |
 | Calls | §15.1 | Time-limited credentials for a TURN (Traversal Using Relays around NAT) relay |
 | Reports | §17 | Reports kept for the operator, and optionally forwarded to the reported identity's homeserver |
-| Community servers | §16 | Every endpoint in the community server API, for any number of server names with one community each: the community chain, the hub for the community's groups, channel sequence numbers, history segments, read positions, files, reports, and voice channels through an SFU (selective forwarding unit) on Pion WebRTC. [Settings](docs/settings.md#community-servers) explains how to turn them on. |
+| Community servers | §16 | Every endpoint in the community server API, for any number of server names with one community each: the community chain, the hub for the community's groups, channel sequence numbers, history segments, read positions, files, custom emoji, reports, and voice channels through an SFU (selective forwarding unit) on Pion WebRTC. [Settings](docs/settings.md#community-servers) explains how to turn them on. |
 
 What isn't built yet:
 
