@@ -83,6 +83,44 @@ sudo rerouted auto-updates on
 
 An upgrade doesn't restart rerouted right away, because a restart ends every community voice call. The package asks rerouted to restart once no voice calls are active, and systemd starts the new version. [Monitoring](monitoring.md#restart-after-an-upgrade) explains how. On Arch Linux, update rerouted with the rest of the system, with `sudo pacman -Syu`.
 
+## Install on NixOS
+
+On NixOS, rerouted comes as a flake, `https://rerouteholdings.llc/reroute/linux/rerouted/rerouted-nix.tar.gz`, with a package for x86_64 and arm64 and a NixOS module that runs it as a service. It installs the release tarball, with its checksum. Each release's own copy is in its folder, such as `https://rerouteholdings.llc/reroute/linux/rerouted/0.2.0-rc.7/`, beside `rerouted.nix`, the package by itself, for `pkgs.callPackage`.
+
+1. Add the flake as an input of your system's flake, and turn on the service. `settings` are rerouted's environment variables, from [Settings](settings.md). Set `REROUTED_REGISTRATION_CODE` and any other secrets in `environmentFile` instead, since `settings` end up in the Nix store:
+
+   ```nix
+   {
+     inputs.rerouted.url = "https://rerouteholdings.llc/reroute/linux/rerouted/rerouted-nix.tar.gz";
+
+     outputs = { nixpkgs, rerouted, ... }: {
+       nixosConfigurations.YOUR_HOST = nixpkgs.lib.nixosSystem {
+         system = "x86_64-linux";
+         modules = [
+           ./configuration.nix
+           rerouted.nixosModules.default
+           {
+             services.rerouted = {
+               enable = true;
+               settings = {
+                 REROUTED_NAME = "chat.example";
+                 REROUTED_HANDLES = "chat.example";
+                 REROUTED_REGISTRATION = "invite";
+               };
+               environmentFile = "/var/lib/rerouted-secrets/rerouted.env";
+             };
+           }
+         ];
+       };
+     };
+   }
+   ```
+
+2. Run `sudo nixos-rebuild switch`. rerouted creates its data directory in `/var/lib/rerouted` and its keys when it first starts. Its settings are in `/etc/rerouted/rerouted.env`, where rerouted's own commands, such as `sudo rerouted checkup`, find them.
+3. Set up Caddy or another reverse proxy yourself, with NixOS's `services.caddy`; `rerouted init` can't change a NixOS system's files. [Certificates on demand](settings.md#certificates-on-demand) describes what the proxy asks rerouted.
+
+To update, run `nix flake update rerouted`, then `sudo nixos-rebuild switch`. A change to `settings` restarts rerouted, which ends any community voice calls.
+
 ## Install without the packages
 
 On another Linux system, install the release tarball by hand. You update it yourself, the same way.
